@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, User, GraduationCap, ArrowRight, UserCheck, Shield, Calendar, Sparkles } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
@@ -7,17 +7,15 @@ import './SearchOverlay.css';
 const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate }) => {
   const { studentsList, staffList, rolesList } = useSchoolData();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState({ students: [], staff: [], classes: [], events: [] });
 
-  useEffect(() => {
+  const results = useMemo(() => {
     if (query.trim() === '') {
-      setResults({ students: [], staff: [], classes: [], events: [] });
-      return;
+      return { students: [], staff: [], classes: [], events: [] };
     }
 
     const lowerQuery = query.toLowerCase();
     
-    setResults({
+    return {
       students: studentsList.filter(s => 
         s.name.toLowerCase().includes(lowerQuery) || 
         s.grade.toLowerCase().includes(lowerQuery) ||
@@ -38,7 +36,7 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate 
         e.title.toLowerCase().includes(lowerQuery) || 
         (e.location && e.location.toLowerCase().includes(lowerQuery))
       ).slice(0, 3)
-    });
+    };
   }, [query, studentsList, staffList, classes, events]);
 
   const handleResultClick = (path) => {

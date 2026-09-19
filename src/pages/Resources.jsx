@@ -53,6 +53,8 @@ const RESOURCE_CLASS_GROUPS = [
   }
 ];
 
+const CATEGORIES = ['All', 'Mathematics', 'Science', 'Literature', 'History', 'Arts', 'Computer Science'];
+
 const FORMAT_TYPES = ['All Types', 'PDF', 'Video', 'Link', 'Doc'];
 
 const ResourceCard = ({ resource, view, onToggleBookmark, onDownload }) => {

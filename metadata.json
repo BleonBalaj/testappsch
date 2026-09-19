@@ -1,0 +1,6 @@
+{
+  "name": "testappsch",
+  "description": "Comprehensive school management and student dashboard featuring schedule, assignments, mood tracking, and staff directories.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
