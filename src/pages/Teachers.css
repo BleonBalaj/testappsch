@@ -1,0 +1,147 @@
+.teachers-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.teachers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.teacher-card {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+}
+
+.teacher-info-section {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.teacher-avatar {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.teacher-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 30px;
+  background: hsl(var(--secondary));
+  border: 3px solid hsl(var(--accent));
+  object-fit: cover;
+}
+
+.rating-badge {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-color: hsla(var(--primary), 0.3);
+}
+
+.teacher-details h3 {
+  font-size: 1.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.teacher-subject {
+  color: hsl(var(--accent));
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.teacher-meta {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+.teacher-contact-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 200px;
+}
+
+.contact-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  color: hsl(var(--foreground));
+  background: hsla(var(--secondary), 0.3);
+  border: 1px solid hsla(var(--border), 0.2);
+  transition: transform 0.2s ease;
+}
+
+.contact-pill:hover {
+  transform: scale(1.02);
+  background: hsla(var(--secondary), 0.5);
+}
+
+.teacher-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.btn-small {
+  padding: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 1000px) {
+  .teacher-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  
+  .teacher-contact-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  
+  .teacher-actions {
+    flex-direction: row;
+    width: 100%;
+  }
+  
+  .btn-small {
+    flex: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .teacher-info-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

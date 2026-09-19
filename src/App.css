@@ -1,0 +1,179 @@
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Blur sidebar when any modal/search is active */
+.app-container:has(.modal-overlay) .sidebar,
+.app-container:has(.search-overlay.open) .sidebar {
+  filter: blur(8px) brightness(0.6);
+  pointer-events: none;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 2rem;
+  overflow-y: auto;
+  max-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* Global Bottom Fade Effect */
+.main-content::after {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: auto;
+  right: 0;
+  width: calc(100% - var(--sidebar-width, 250px));
+  height: 70px;
+  background: linear-gradient(to bottom, transparent, hsl(var(--background) / 0.95));
+  pointer-events: none;
+  z-index: 1000;
+  transition: width 0.3s ease;
+}
+
+/* Adjust fade width when sidebar is collapsed */
+.app-container:has(.sidebar.collapsed) .main-content::after {
+  width: calc(100% - 80px);
+}
+
+.main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  gap: 2rem;
+}
+
+.header-search {
+  flex: 1;
+  max-width: 500px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 20px;
+}
+
+.header-search input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: hsl(var(--foreground));
+  font-size: 1rem;
+  outline: none;
+}
+
+.header-search input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.notification-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-theme='light'] .notification-btn {
+  background: #ffffff;
+  border: 1px solid hsla(270, 20%, 85%, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.date-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.35rem;
+  border-radius: 20px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+}
+
+.date-display .date-icon {
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+[data-theme='light'] .date-display {
+  background: #ffffff;
+  border: 1px solid hsla(270, 20%, 85%, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Disable bottom fade on messages page so input is never blocked or dimmed */
+.app-container:has(.messages-page) .main-content::after,
+.app-container:has(.full-messages-view) .main-content::after {
+  display: none !important;
+}
+
+.main-content:has(.full-messages-view),
+.main-content:has(.messages-page) {
+  padding: 1rem 1.5rem !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+
+.page-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-container.full-messages-view {
+  height: 100% !important;
+  max-height: 100% !important;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+
+.placeholder-page {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  text-align: center;
+}
+
+.placeholder-page h1 {
+  font-size: 2.5rem;
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .main-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .header-search {
+    max-width: none;
+  }
+}

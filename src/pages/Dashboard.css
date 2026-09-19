@@ -1,0 +1,672 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.dashboard-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+}
+
+.hero-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.hero-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.mood-widget {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 20px;
+}
+
+.mood-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mood-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mood-options button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+  background: hsla(var(--background), 0.3);
+  border: 1px solid hsla(var(--border), 0.5);
+  transition: all 0.2s;
+}
+
+.mood-options button:hover {
+  background: hsla(var(--foreground), 0.1);
+  transform: scale(1.1);
+}
+
+.mood-options button.active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: transparent;
+  box-shadow: 0 4px 15px hsla(var(--primary), 0.4);
+}
+
+.focus-section {
+  margin-top: -0.5rem;
+}
+
+.focus-card {
+  padding: 1rem 1.5rem;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, hsla(var(--primary), 0.05), hsla(var(--accent), 0.05));
+  border: 1px solid hsla(var(--primary), 0.1);
+}
+
+.focus-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: hsl(var(--primary));
+}
+
+.focus-header h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.quote-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.quote-text {
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-style: italic;
+  line-height: 1.4;
+  color: hsl(var(--foreground));
+}
+
+.quote-author {
+  font-size: 0.9rem;
+  color: hsl(var(--muted-foreground));
+  font-weight: 700;
+}
+
+.icon-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.bulletin-section {
+  width: 100%;
+}
+
+.bulletin-card {
+  padding: 1.25rem 1.5rem;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bulletin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bulletin-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: hsl(var(--foreground));
+}
+
+.bulletin-title h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.megaphone-icon {
+  color: hsl(var(--primary));
+}
+
+.bulletin-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  color: hsl(var(--primary));
+}
+
+.bulletin-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.bulletin-item {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bulletin-tag-pill {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.bulletin-tag-pill.high { background: hsla(var(--destructive), 0.15); color: hsl(var(--destructive)); }
+.bulletin-tag-pill.medium { background: hsla(var(--primary), 0.15); color: hsl(var(--primary)); }
+.bulletin-tag-pill.low { background: hsla(var(--accent), 0.15); color: hsl(var(--accent)); }
+
+.bulletin-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  line-height: 1.35;
+}
+
+.bulletin-meta {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: auto;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-card {
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-info h3 {
+  font-size: 1.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.stat-info p {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.stat-trend {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: hsl(var(--mood-happy));
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: hsla(var(--mood-happy), 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 20px;
+}
+
+.dashboard-content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 1.5rem;
+}
+
+.content-card {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.text-btn {
+  color: hsl(var(--primary));
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: opacity 0.2s;
+}
+
+.text-btn:hover {
+  opacity: 0.8;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.avatar-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: hsl(var(--secondary));
+}
+
+.avatar-small img {
+  width: 100%;
+  height: 100%;
+}
+
+.activity-details p {
+  font-size: 0.9rem;
+  color: hsl(var(--foreground));
+}
+
+.activity-details span {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Kanban Board */
+.kanban-board {
+  flex: 1;
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.kanban-column {
+  flex: 1;
+  min-width: 200px;
+  background: hsla(var(--background), 0.3);
+  border-radius: 1rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border: 1px dashed hsla(var(--border), 0.5);
+}
+
+.kanban-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kanban-column-header h4 {
+  font-size: 0.95rem;
+  color: hsl(var(--foreground));
+}
+
+.task-count {
+  background: hsla(var(--muted), 0.8);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.kanban-column-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 100px;
+}
+
+.kanban-task {
+  padding: 0.75rem;
+  background: hsl(var(--card));
+  border: 1px solid hsla(var(--border), 0.5);
+  border-radius: 0.75rem;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  user-select: none;
+}
+
+.kanban-task:active {
+  cursor: grabbing;
+}
+
+.drag-handle {
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+}
+
+.task-content-text {
+  font-size: 0.85rem;
+  color: hsl(var(--foreground));
+  line-height: 1.3;
+}
+
+.badge {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Bottom Layout Grid */
+.dashboard-bottom-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+}
+
+/* Quick Notes Widget */
+.quick-notes-card {
+  grid-column: 1; /* Reset from previous 1 / -1 */
+}
+
+.notes-input-area {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.notes-input-area input {
+  flex: 1;
+  background: hsla(var(--background), 0.5);
+  border: 1px solid hsla(var(--border), 0.5);
+  padding: 0.75rem 1.25rem;
+  border-radius: 1.5rem;
+  color: hsl(var(--foreground));
+  outline: none;
+  font-size: 0.95rem;
+}
+
+.notes-input-area input:focus {
+  border-color: hsl(var(--primary));
+}
+
+.notes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.note-item {
+  background: hsla(var(--secondary), 0.3);
+  border: 1px solid hsla(var(--border), 0.3);
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.note-content p {
+  color: hsl(var(--foreground));
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+}
+
+.note-content span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.delete-btn {
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.delete-btn:hover {
+  color: hsl(var(--destructive));
+  background: hsla(var(--destructive), 0.1);
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-content {
+  width: 100%;
+  max-width: 500px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-content textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 1rem;
+  border-radius: 12px;
+  background: hsla(var(--background), 0.5);
+  color: hsl(var(--foreground));
+  border: 1px solid hsla(var(--border), 0.3);
+  outline: none;
+  font-family: inherit;
+  resize: none;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+/* Teacher Specific Styles */
+.grade-btn {
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  background: hsla(var(--primary), 0.1);
+  border: 1px solid hsla(var(--primary), 0.2);
+  margin-left: auto;
+}
+
+.grade-btn:hover {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.classes-today-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.class-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem;
+  border-radius: 16px;
+}
+
+.class-time {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+  min-width: 90px;
+}
+
+.class-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.class-info h4 {
+  font-size: 0.95rem;
+  margin-bottom: 0.15rem;
+}
+
+.class-info span {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.class-status-badge {
+  padding: 0.35rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.class-row.completed { border-left: 4px solid hsl(var(--mood-happy)); }
+.class-row.completed .class-status-badge { background: hsla(var(--mood-happy), 0.1); color: hsl(var(--mood-happy)); }
+
+.class-row.next { border-left: 4px solid hsl(var(--primary)); background: hsla(var(--primary), 0.05); }
+.class-row.next .class-status-badge { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+
+.class-row.upcoming { border-left: 4px solid hsl(var(--accent)); }
+.class-row.upcoming .class-status-badge { background: hsla(var(--accent), 0.1); color: hsl(var(--accent)); }
+
+@media (max-width: 768px) {
+  .dashboard-content-grid, .dashboard-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .dashboard-content-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+
+/* Events Widget */
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.event-item {
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  background: hsla(var(--background), 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.event-item:hover {
+  background: hsla(var(--secondary), 0.3);
+  transform: translateX(5px);
+}
+
+.event-info h4 {
+  font-size: 1.05rem;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.25rem;
+}
+
+.event-meta {
+  display: flex;
+  gap: 1rem;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
