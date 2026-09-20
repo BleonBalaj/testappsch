@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Trash2, Edit, Check, X, Flag, Tag,
@@ -21,10 +21,11 @@ const PRIORITY_META = {
   medium: { label: 'Medium', color: 'hsl(var(--mood-neutral))', icon: '🟡' },
   high:   { label: 'High',   color: 'hsl(var(--mood-sad))',     icon: '🔴' },
 };
-const CATEGORIES = ['All', 'Grading', 'Prep', 'Admin', 'Meeting', 'Personal', 'Other'];
+const STAFF_CATEGORIES = ['All', 'Grading', 'Prep', 'Admin', 'Meeting', 'Personal', 'Other'];
+const STUDENT_CATEGORIES = ['All', 'Homework', 'Study', 'Project', 'Exams', 'Personal', 'Reading'];
 
 /* ─── Custom Select Component ────────────────────────────── */
-const CustomSelect = ({ value, onChange, options, placeholder }) => {
+const CustomSelect = ({ value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = options.find(o => o.value === value) || options[0];
 
@@ -69,12 +70,15 @@ const CustomSelect = ({ value, onChange, options, placeholder }) => {
 };
 
 /* ─── Add/Edit Modal ─────────────────────────────────────── */
-const TaskModal = ({ task, onSave, onClose }) => {
+const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = STUDENT_CATEGORIES }) => {
+  const defaultCategory = userRole === 'student' ? 'Homework' : 'Admin';
   const [form, setForm] = useState(task || {
     content: '', status: 'todo', priority: 'medium',
-    category: 'Admin', due: '', notes: '',
+    category: defaultCategory, due: '', notes: '', role: userRole
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const availableCategories = categories.filter(c => c !== 'All');
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -86,16 +90,16 @@ const TaskModal = ({ task, onSave, onClose }) => {
         onClick={e => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h3>{task ? '✏️ Edit Task' : '✨ New Task'}</h3>
+          <h3>{task ? '✏️ Edit Task' : (userRole === 'student' ? '✨ New Homework / Task' : '✨ New Task')}</h3>
           <button className="icon-btn" onClick={onClose}><X size={20}/></button>
         </div>
 
         <div className="task-form">
           <div className="form-field">
-            <label>Task<span className="required">*</span></label>
+            <label>{userRole === 'student' ? 'Assignment / Task' : 'Task'}<span className="required">*</span></label>
             <input
               className="tf-input"
-              placeholder="What needs to be done?"
+              placeholder={userRole === 'student' ? "e.g., Read Physics Chapter 4, submit draft..." : "What needs to be done?"}
               value={form.content}
               onChange={e => set('content', e.target.value)}
               autoFocus
@@ -125,7 +129,7 @@ const TaskModal = ({ task, onSave, onClose }) => {
               <CustomSelect 
                 value={form.category} 
                 onChange={v => set('category', v)}
-                options={CATEGORIES.filter(c => c !== 'All').map(c => ({ value: c, label: c }))}
+                options={availableCategories.map(c => ({ value: c, label: c }))}
               />
             </div>
             <div className="form-field">
@@ -135,14 +139,14 @@ const TaskModal = ({ task, onSave, onClose }) => {
           </div>
           <div className="form-field">
             <label>Notes</label>
-            <textarea className="tf-input tf-textarea" placeholder="Add any notes…" value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} />
+            <textarea className="tf-input tf-textarea" placeholder={userRole === 'student' ? "Page numbers, rubrics, study partners..." : "Add any notes…"} value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} />
           </div>
         </div>
 
         <div className="modal-footer">
           <button className="btn-secondary glass" onClick={onClose}>Cancel</button>
           <button className="btn-primary" disabled={!form.content.trim()} onClick={() => onSave(form)}>
-            <Check size={16}/> {task ? 'Update' : 'Add Task'}
+            <Check size={16}/> {task ? 'Update' : (userRole === 'student' ? 'Save Task' : 'Add Task')}
           </button>
         </div>
       </motion.div>
@@ -235,7 +239,7 @@ const KanbanCol = ({ status, tasks, onEdit, onDelete, onMove }) => {
 };
 
 /* ─── Main Tasks Page ────────────────────────────────────── */
-const Tasks = () => {
+const Tasks = ({ userRole = 'student' }) => {
   const { tasks, addTask, updateTask, deleteTask, moveTask } = useTasks();
   const [view, setView]         = useState('list');   // list | kanban
   const [modal, setModal]       = useState(null);     // null | 'new' | task obj
@@ -245,13 +249,22 @@ const Tasks = () => {
   const [searchQ, setSearchQ]   = useState('');
   const [sortBy, setSortBy]     = useState('due');
 
+  const categories = userRole === 'student' ? STUDENT_CATEGORIES : STAFF_CATEGORIES;
+
   const handleSave = (form) => {
     if (modal === 'new') addTask(form);
     else updateTask(modal.id, form);
     setModal(null);
   };
 
-  const filtered = tasks
+  const roleBaseTasks = useMemo(() => {
+    if (userRole === 'student') {
+      return tasks.filter(t => t.role === 'student' || (!t.role && (t.category === 'Homework' || t.category === 'Study' || t.category === 'Project' || t.category === 'Exams' || t.category === 'Reading' || t.category === 'Personal')));
+    }
+    return tasks.filter(t => t.role !== 'student');
+  }, [tasks, userRole]);
+
+  const filtered = roleBaseTasks
     .filter(t => filterCat    === 'All' || t.category === filterCat)
     .filter(t => filterPri    === 'All' || t.priority === filterPri)
     .filter(t => filterStatus === 'All' || t.status   === filterStatus)
@@ -264,9 +277,9 @@ const Tasks = () => {
     return 0;
   });
 
-  const doneCount    = tasks.filter(t => t.status === 'done').length;
-  const totalCount   = tasks.length;
-  const overdueTasks = tasks.filter(t => t.due && new Date(t.due) < new Date() && t.status !== 'done');
+  const doneCount    = roleBaseTasks.filter(t => t.status === 'done').length;
+  const totalCount   = roleBaseTasks.length;
+  const overdueTasks = roleBaseTasks.filter(t => t.due && new Date(t.due) < new Date() && t.status !== 'done');
 
   return (
     <motion.div className="tasks-page" initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}>
@@ -275,12 +288,16 @@ const Tasks = () => {
       <div className="tasks-header">
         <div>
           <h1 className="gradient-text" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            My Tasks <CheckSquare size={32} style={{ color: 'hsl(var(--primary))' }} />
+            {userRole === 'student' ? 'My Tasks & Homework' : 'Task Manager'} <CheckSquare size={32} style={{ color: 'hsl(var(--primary))' }} />
           </h1>
-          <p>Stay on top of everything, one task at a time.</p>
+          <p>
+            {userRole === 'student'
+              ? 'Stay on top of coursework assignments, exam prep, reading goals, and study habits.'
+              : 'Stay on top of everything, one task at a time.'}
+          </p>
         </div>
         <button className="btn-primary" onClick={() => setModal('new')}>
-          <Plus size={18}/> New Task
+          <Plus size={18}/> {userRole === 'student' ? 'New Task / Homework' : 'New Task'}
         </button>
       </div>
 
@@ -332,7 +349,7 @@ const Tasks = () => {
           <CustomSelect 
             value={filterCat} 
             onChange={setFilterCat}
-            options={CATEGORIES.map(c => ({ value: c, label: c === 'All' ? 'All Categories' : c }))}
+            options={categories.map(c => ({ value: c, label: c === 'All' ? 'All Categories' : c }))}
           />
           <CustomSelect 
             value={filterPri} 
@@ -429,6 +446,8 @@ const Tasks = () => {
             task={modal === 'new' ? null : modal}
             onSave={handleSave}
             onClose={() => setModal(null)}
+            userRole={userRole}
+            categories={categories}
           />
         )}
       </AnimatePresence>

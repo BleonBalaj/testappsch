@@ -532,6 +532,32 @@
   font-size: 0.92rem;
 }
 
+/* Current User Row Highlight (for students) */
+.current-user-row {
+  border: 1.5px solid hsl(var(--primary)) !important;
+  background: hsla(var(--primary), 0.08) !important;
+  box-shadow: 0 4px 18px hsla(var(--primary), 0.15) !important;
+}
+
+[data-theme='light'] .current-user-row {
+  background: hsla(270, 60%, 96%, 1) !important;
+  border-color: hsl(var(--primary)) !important;
+}
+
+.you-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0.12rem 0.45rem;
+  border-radius: 6px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground, #ffffff));
+  margin-left: 0.35rem;
+}
+
 @media (max-width: 768px) {
   .podium-step {
     width: 110px;

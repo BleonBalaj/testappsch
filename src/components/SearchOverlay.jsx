@@ -2,11 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, User, GraduationCap, ArrowRight, UserCheck, Shield, Calendar, Sparkles } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { Avatar } from './Avatar';
 import './SearchOverlay.css';
 
-const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate }) => {
+const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate, userRole = 'admin' }) => {
   const { studentsList, staffList, rolesList } = useSchoolData();
   const [query, setQuery] = useState('');
+  const isStudent = userRole === 'student';
 
   const results = useMemo(() => {
     if (query.trim() === '') {
@@ -16,12 +18,12 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate 
     const lowerQuery = query.toLowerCase();
     
     return {
-      students: studentsList.filter(s => 
+      students: isStudent ? [] : studentsList.filter(s => 
         s.name.toLowerCase().includes(lowerQuery) || 
         s.grade.toLowerCase().includes(lowerQuery) ||
         (s.tags && s.tags.some(t => t.toLowerCase().includes(lowerQuery)))
       ).slice(0, 3),
-      staff: staffList.filter(t => 
+      staff: isStudent ? [] : staffList.filter(t => 
         t.name.toLowerCase().includes(lowerQuery) || 
         (t.subject && t.subject.toLowerCase().includes(lowerQuery)) ||
         (t.department && t.department.toLowerCase().includes(lowerQuery)) ||
@@ -37,7 +39,7 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate 
         (e.location && e.location.toLowerCase().includes(lowerQuery))
       ).slice(0, 3)
     };
-  }, [query, studentsList, staffList, classes, events]);
+  }, [query, studentsList, staffList, classes, events, isStudent]);
 
   const handleResultClick = (path) => {
     onNavigate(path);
@@ -68,7 +70,7 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate 
           <input 
             autoFocus
             type="text" 
-            placeholder="Search students, staff & faculty, classes, or events..." 
+            placeholder={isStudent ? "Search your classes, timetable, campus events..." : "Search students, staff & faculty, classes, or events..."} 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -92,7 +94,7 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate 
                     return (
                       <div key={member.id} className="result-item bouncy" onClick={() => handleResultClick('staff')}>
                         <div className="avatar-xs">
-                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.name}`} alt={member.name} />
+                          <Avatar alt={member.name} />
                         </div>
                         <div className="result-info">
                           <span className="name">{member.name}</span>
@@ -111,7 +113,7 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate 
                   {results.students.map(student => (
                     <div key={student.id} className="result-item bouncy" onClick={() => handleResultClick('students')}>
                       <div className="avatar-xs">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} alt={student.name} />
+                        <Avatar alt={student.name} />
                       </div>
                       <div className="result-info">
                         <span className="name">{student.name}</span>

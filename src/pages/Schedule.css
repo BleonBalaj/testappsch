@@ -22,7 +22,22 @@
 .title-group {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.header-title-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: hsla(var(--primary), 0.15);
+  color: hsl(var(--primary));
+  border: 1px solid hsla(var(--primary), 0.3);
+  box-shadow: 0 4px 14px hsla(var(--primary), 0.2);
+  flex-shrink: 0;
 }
 
 .count-pill {
@@ -117,6 +132,88 @@
 
 .reset-week-btn:hover {
   background: hsla(var(--accent), 0.3);
+}
+
+/* ── Schedule Segmented Toggle (In the same row as date frame button) ── */
+.schedule-segmented-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 16px;
+  background: hsla(var(--card), 0.7);
+  border: 1px solid hsla(var(--border), 0.7);
+}
+
+[data-theme='light'] .schedule-segmented-toggle {
+  background: #ffffff;
+  border: 1px solid hsla(270, 20%, 88%, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.segmented-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 11px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.segmented-tab:hover {
+  background: hsla(var(--foreground), 0.06);
+  color: hsl(var(--foreground));
+}
+
+.segmented-tab.active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground, #ffffff));
+  box-shadow: 0 3px 12px hsla(var(--primary), 0.35);
+}
+
+.segmented-counter {
+  padding: 0.12rem 0.45rem;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: hsla(0, 0%, 100%, 0.2);
+  color: inherit;
+}
+
+.segmented-tab:not(.active) .segmented-counter {
+  background: hsla(var(--foreground), 0.08);
+  color: hsl(var(--muted-foreground));
+}
+
+.student-badge-pill {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  border-radius: 12px;
+  background: hsla(var(--primary), 0.15);
+  color: hsl(var(--primary));
+  border: 1px solid hsla(var(--primary), 0.3);
+}
+
+/* Enrolled Class Tag */
+.enrolled-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  background: hsla(var(--mood-happy), 0.16);
+  color: hsl(var(--mood-happy));
+  border: 1px solid hsla(var(--mood-happy), 0.3);
 }
 
 /* Schedule Filter Controls */
@@ -448,13 +545,16 @@
 }
 
 .event-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.7rem;
   font-weight: 800;
   text-transform: uppercase;
-  padding: 0.2rem 0.5rem;
+  padding: 0.2rem 0.55rem;
   background: hsla(var(--primary), 0.15);
   color: hsl(var(--primary));
-  border: 1px solid hsla(var(--primary), 0.2);
+  border: 1px solid hsla(var(--primary), 0.25);
   border-radius: 6px;
   letter-spacing: 0.5px;
 }

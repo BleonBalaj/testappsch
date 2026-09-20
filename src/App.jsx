@@ -15,6 +15,7 @@ import Leaderboard from './pages/Leaderboard';
 import Events from './pages/Events';
 import Resources from './pages/Resources';
 import MoodInsights from './pages/MoodInsights';
+import Transcript from './pages/Transcript';
 import SearchOverlay from './components/SearchOverlay';
 import NotificationContainer from './components/Notification';
 import QuickAction from './components/QuickAction';
@@ -29,8 +30,18 @@ function App() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [userRole, setUserRole] = useState('admin'); // 'admin' or 'teacher'
+  const [userRole, setUserRole] = useState(() => localStorage.getItem('lumi-role') || 'student'); // 'student', 'teacher', or 'admin'
   const mainContentRef = useRef(null);
+
+  const handleSetUserRole = (newRole) => {
+    setUserRole(newRole);
+    localStorage.setItem('lumi-role', newRole);
+    if (newRole === 'student' && ['staff', 'teachers', 'students', 'student-overview', 'resources'].includes(currentPath)) {
+      setCurrentPath('dashboard');
+    } else if (newRole !== 'student' && currentPath === 'transcript') {
+      setCurrentPath('dashboard');
+    }
+  };
 
   const [studentReturnPath, setStudentReturnPath] = useState('students');
 
@@ -77,6 +88,13 @@ function App() {
   ];
 
   const renderPage = () => {
+    // Access control: Students are not permitted to access Staff Directory, Resource Hub, or Student Directory
+    if (userRole === 'student') {
+      if (['staff', 'teachers', 'students', 'student-overview', 'resources'].includes(currentPath)) {
+        return <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
+      }
+    }
+
     switch (currentPath) {
       case 'dashboard':
         return <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
@@ -95,18 +113,24 @@ function App() {
       case 'teachers':
         return <Staff userRole={userRole} onNavigate={setCurrentPath} />;
       case 'classes':
-        return <Classes onClassSelect={(classData) => {
-          setSelectedClass(classData);
-          setCurrentPath('class-overview');
-        }} />;
+        return <Classes 
+          userRole={userRole}
+          onClassSelect={(classData) => {
+            setSelectedClass(classData);
+            setCurrentPath('class-overview');
+          }} 
+        />;
       case 'class-overview':
         return <ClassOverview 
           classData={selectedClass} 
+          userRole={userRole}
           onBack={() => setCurrentPath('classes')}
           onStudentSelect={(s) => { 
-            setSelectedStudent(s); 
-            setStudentReturnPath('class-overview');
-            setCurrentPath('student-overview'); 
+            if (userRole !== 'student') {
+              setSelectedStudent(s); 
+              setStudentReturnPath('class-overview');
+              setCurrentPath('student-overview'); 
+            }
           }}
         />;
       case 'student-overview':
@@ -115,25 +139,30 @@ function App() {
           onBack={() => setCurrentPath(studentReturnPath || 'students')}
         />;
       case 'tasks':
-        return <Tasks />;
+        return <Tasks userRole={userRole} />;
+      case 'transcript':
+        return userRole === 'student' ? <Transcript userRole={userRole} /> : <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
       case 'leaderboard':
         return (
           <Leaderboard 
+            userRole={userRole}
             onStudentSelect={(s) => {
-              setSelectedStudent(s);
-              setStudentReturnPath('leaderboard');
-              setCurrentPath('student-overview');
+              if (userRole !== 'student') {
+                setSelectedStudent(s); 
+                setStudentReturnPath('leaderboard');
+                setCurrentPath('student-overview');
+              }
             }} 
           />
         );
       case 'events':
-        return <Events />;
+        return <Events userRole={userRole} />;
       case 'schedule':
-        return <Schedule />;
+        return <Schedule userRole={userRole} />;
       case 'messages':
         return <Messages userRole={userRole} />;
       case 'settings':
-        return <Settings addNotification={addNotification} userRole={userRole} setUserRole={setUserRole} />;
+        return <Settings addNotification={addNotification} userRole={userRole} setUserRole={handleSetUserRole} />;
       case 'resources':
         return <Resources />;
       case 'mood-insights':
@@ -153,10 +182,14 @@ function App() {
             {currentPath !== 'messages' && (
               <header className="main-header">
                 <div className="header-search glass" onClick={() => setIsSearchOpen(true)}>
-                  <input type="text" placeholder="Search for students, staff, classes, events..." readOnly />
+                  <input 
+                    type="text" 
+                    placeholder={userRole === 'student' ? 'Search your classes, assignments, campus events...' : 'Search for students, staff, classes, events...'} 
+                    readOnly 
+                  />
                 </div>
                 <div className="header-actions">
-                  <button className="notification-btn bouncy" onClick={() => addNotification('info', 'No new alerts at this time ✨')} title="Notifications">🔔</button>
+                  <button className="notification-btn bouncy" onClick={() => addNotification('info', userRole === 'student' ? 'No urgent homework alerts today ✨' : 'No new alerts at this time ✨')} title="Notifications">🔔</button>
                   <div className="date-display">
                     <Calendar size={15} className="date-icon" />
                     <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
@@ -176,6 +209,7 @@ function App() {
             classes={classes}
             events={events}
             onNavigate={setCurrentPath}
+            userRole={userRole}
           />
 
           <NotificationContainer 

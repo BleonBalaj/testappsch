@@ -65,7 +65,7 @@ const EventCard = ({ event, onToggleStar }) => (
   </motion.div>
 );
 
-const Events = () => {
+const Events = ({ userRole = 'student' }) => {
   const [eventsList, setEventsList] = useState(INITIAL_EVENTS);
   const [filter, setFilter] = useState('All');
   const [isNewEventOpen, setIsNewEventOpen] = useState(false);
@@ -81,10 +81,14 @@ const Events = () => {
     attendees: 50
   });
   
-  const types = ['All', 'Academic', 'Sports', 'Arts', 'Staff', 'Meeting'];
+  const types = userRole === 'student' 
+    ? ['All', 'Academic', 'Sports', 'Arts', 'Starred'] 
+    : ['All', 'Academic', 'Sports', 'Arts', 'Staff', 'Meeting'];
 
   const filteredEvents = filter === 'All' 
-    ? eventsList 
+    ? (userRole === 'student' ? eventsList.filter(e => e.type !== 'Staff') : eventsList)
+    : filter === 'Starred'
+    ? eventsList.filter(e => e.starred)
     : eventsList.filter(e => e.type === filter);
 
   const toggleStar = (id) => {
@@ -136,10 +140,17 @@ const Events = () => {
       <header className="page-header">
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text">Campus Events Calendar 📅</h1>
+            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+              {userRole === 'student' ? 'Campus & Academic Events' : 'Campus Events Calendar'}
+              <CalendarIcon size={32} style={{ color: 'hsl(var(--primary))' }} />
+            </h1>
             <span className="count-pill glass">{filteredEvents.length} Events</span>
           </div>
-          <p>School-wide events, assemblies, holidays, and extracurricular schedules.</p>
+          <p>
+            {userRole === 'student'
+              ? 'Stay informed with school-wide assemblies, academic dates, science fairs, and extracurriculars.'
+              : 'School-wide events, assemblies, holidays, and extracurricular schedules.'}
+          </p>
         </div>
 
         <div className="header-actions">
@@ -147,10 +158,12 @@ const Events = () => {
             <Download size={18} />
             Export Events
           </button>
-          <button className="btn-primary" onClick={() => setIsNewEventOpen(true)}>
-            <Plus size={18} />
-            New Event
-          </button>
+          {userRole !== 'student' && (
+            <button className="btn-primary" onClick={() => setIsNewEventOpen(true)}>
+              <Plus size={18} />
+              New Event
+            </button>
+          )}
         </div>
       </header>
 

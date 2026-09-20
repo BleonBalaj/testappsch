@@ -4,9 +4,11 @@ import {
   Search, UserPlus, Mail, Phone, BookOpen, Clock, Star, 
   Shield, GraduationCap, HeartHandshake, Award, Briefcase, 
   Sparkles, Plus, Edit3, Trash2, X, Check, Lock, Filter, 
-  Download, MapPin, Calendar, FileText, UserCheck, ChevronRight
+  Download, MapPin, Calendar, FileText, UserCheck, ChevronRight,
+  UserSquare2
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { Avatar } from '../components/Avatar';
 import './Staff.css';
 
 // Helper for rendering role icon
@@ -34,7 +36,7 @@ const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectPro
     >
       <div className="staff-card-top">
         <div className="staff-avatar-wrap">
-          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${staff.name}`} alt={staff.name} />
+          <Avatar alt={staff.name} />
           <div className="rating-badge glass">
             <Star size={12} fill="hsl(var(--primary))" color="hsl(var(--primary))" />
             <span>{staff.rating || '5.0'}</span>
@@ -284,7 +286,10 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
       <header className="page-header">
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text">Staff & Faculty Directory 👥</h1>
+            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+              Staff & Faculty Directory
+              <UserSquare2 size={32} style={{ color: 'hsl(var(--primary))' }} />
+            </h1>
             <span className="count-pill glass">{filteredStaff.length} Members</span>
           </div>
           <p>Explore educators, administrators, and specialized faculty supporting LumiSchool.</p>
@@ -846,11 +851,9 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
 
               <div className="profile-drawer-body">
                 <div className="profile-drawer-hero glass">
-                  <img 
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedProfile.name}`} 
-                    alt={selectedProfile.name} 
-                    className="drawer-avatar"
-                  />
+                  <div className="drawer-avatar">
+                    <Avatar alt={selectedProfile.name} />
+                  </div>
                   <div className="drawer-hero-info">
                     <h2>{selectedProfile.name}</h2>
                     <span 

@@ -124,7 +124,7 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  width: calc(50% - 4px);
+  width: calc(33.333% - 2.67px);
   height: calc(100% - 8px);
   background: hsl(var(--primary));
   border-radius: 10px;
@@ -304,3 +304,153 @@
     flex-direction: column;
   }
 }
+
+/* ── Student Mode Preview Hero Card ── */
+.student-preview-hero-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 1.75rem;
+  border-radius: 20px;
+  background: linear-gradient(135deg, hsla(var(--card), 0.9) 0%, hsla(var(--card), 0.7) 100%);
+  border: 1px solid hsla(var(--border), 0.7);
+  margin-bottom: 2rem;
+  transition: all 0.3s ease;
+}
+
+.student-preview-hero-card.preview-active {
+  background: linear-gradient(135deg, hsla(var(--primary), 0.12) 0%, hsla(var(--chart-2), 0.08) 100%);
+  border: 1px solid hsla(var(--primary), 0.4);
+  box-shadow: 0 8px 30px hsla(var(--primary), 0.15);
+}
+
+[data-theme='light'] .student-preview-hero-card.preview-active {
+  background: linear-gradient(135deg, #f5efff 0%, #ecfdf5 100%);
+  border: 1px solid hsla(270, 50%, 82%, 1);
+}
+
+.preview-hero-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+.preview-hero-icon-badge {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: hsla(var(--primary), 0.18);
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px hsla(var(--primary), 0.25);
+}
+
+.preview-hero-text {
+  flex: 1;
+}
+
+.preview-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.preview-hero-title-row h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+}
+
+.preview-badge-status {
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: hsla(var(--muted), 0.6);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsla(var(--border), 0.6);
+}
+
+.preview-badge-status.active {
+  background: hsla(var(--mood-happy), 0.18);
+  color: hsl(var(--mood-happy));
+  border-color: hsla(var(--mood-happy), 0.4);
+}
+
+.preview-hero-text p {
+  margin: 0 0 0.85rem 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+}
+
+.preview-feature-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.preview-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: hsla(var(--background), 0.6);
+  color: hsl(var(--foreground));
+  border: 1px solid hsla(var(--border), 0.5);
+}
+
+.preview-hero-action {
+  flex-shrink: 0;
+}
+
+.btn-student-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.4rem;
+  border-radius: 14px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground, #ffffff));
+  box-shadow: 0 4px 16px hsla(var(--primary), 0.35);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn-student-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px hsla(var(--primary), 0.45);
+}
+
+.btn-student-toggle.active {
+  background: hsla(var(--primary), 0.15);
+  color: hsl(var(--primary));
+  border: 1.5px solid hsl(var(--primary));
+  box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .student-preview-hero-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .btn-student-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

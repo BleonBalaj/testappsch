@@ -5,6 +5,7 @@ import {
   Edit, AlertCircle, UserMinus, BarChart2, BookMarked,
   ClipboardList, Calendar, X, Check, CheckCircle2, ShieldAlert
 } from 'lucide-react';
+import { Avatar } from '../components/Avatar';
 import './ClassOverview.css';
 
 /* ─── Mock Data ──────────────────────────────────────────── */
@@ -69,14 +70,6 @@ const gradeColor = (pct) => {
 };
 
 /* ─── Sub-components ─────────────────────────────────────── */
-
-const Avatar = ({ name, size = 36 }) => (
-  <img
-    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`}
-    alt={name}
-    style={{ width: size, height: size, borderRadius: '50%', background: 'hsla(var(--secondary),0.3)' }}
-  />
-);
 
 /* Grade Modal */
 const GradeModal = ({ assignment, students, grades, onSave, onClose }) => {
@@ -242,7 +235,7 @@ const TABS = [
   { id: 'attendance', label: 'Attendance', icon: ClipboardList },
 ];
 
-const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
+const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student' }) => {
   const [activeTab, setActiveTab]         = useState('gradebook');
   const [students, setStudents]           = useState(INITIAL_STUDENTS);
   const [assignments, setAssignments]     = useState(INITIAL_ASSIGNMENTS);
@@ -256,6 +249,10 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
   const [searchQ, setSearchQ]             = useState('');
 
   if (!classData) return null;
+
+  const availableTabs = userRole === 'student' 
+    ? TABS.filter(t => t.id !== 'roster')
+    : TABS;
 
   /* helpers */
   const saveGrades = (assignmentId, localScores) => {
@@ -308,9 +305,11 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
           <button className="back-btn bouncy" onClick={onBack}>
             <ArrowLeft size={16} /> All Classes
           </button>
-          <button className="btn-primary btn-sm" onClick={addStudent}>
-            <Plus size={15} /> Add Student
-          </button>
+          {userRole !== 'student' && (
+            <button className="btn-primary btn-sm" onClick={addStudent}>
+              <Plus size={15} /> Add Student
+            </button>
+          )}
         </div>
 
         {/* Row 2: class identity */}
@@ -349,7 +348,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
 
       {/* ── Horizontal Tabs ── */}
       <div className="co-tab-bar glass">
-        {TABS.map(tab => {
+        {availableTabs.map(tab => {
           const Icon = tab.icon;
           return (
             <button
@@ -374,14 +373,14 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
               <div className="co-widget glass">
                 <h4>Class Breakdown</h4>
                 <div className="breakdown-list">
-                  {['A','B','C','D','F'].map(letter => {
+                  {['A','B','C','D','F'].map((letter, idx) => {
                     const count = students.filter(s => {
                       const pct = calcFinalGrade(s.id, assignments, grades, weights);
                       return gradeLabel(pct) === letter || gradeLabel(pct).startsWith(letter);
                     }).length;
                     return (
                       <div key={letter} className="breakdown-row">
-                        <span className="grade-badge" style={{ background: `hsl(var(--chart-${Math.floor(Math.random()*5)+1}) / 0.2)` }}>{letter}</span>
+                        <span className="grade-badge" style={{ background: `hsl(var(--chart-${(idx % 5) + 1}) / 0.2)` }}>{letter}</span>
                         <div className="breakdown-bar-bg">
                           <div className="breakdown-bar" style={{ width: students.length ? `${(count/students.length)*100}%` : '0%', background: `hsl(var(--primary))` }} />
                         </div>
@@ -508,15 +507,17 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
           <motion.div key="gradebook" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
             {/* Toolbar */}
             <div className="co-toolbar">
-              <h3>Gradebook</h3>
-              <div className="co-toolbar-actions">
-                <button className="btn-secondary glass btn-sm" onClick={() => setWeightsModal(true)}>
-                  <Settings size={15}/> Set Weights
-                </button>
-                <button className="btn-primary btn-sm" onClick={() => setAddModal(true)}>
-                  <Plus size={15}/> Add Assignment
-                </button>
-              </div>
+              <h3>{userRole === 'student' ? 'Course Assignments & Grades' : 'Gradebook'}</h3>
+              {userRole !== 'student' && (
+                <div className="co-toolbar-actions">
+                  <button className="btn-secondary glass btn-sm" onClick={() => setWeightsModal(true)}>
+                    <Settings size={15}/> Set Weights
+                  </button>
+                  <button className="btn-primary btn-sm" onClick={() => setAddModal(true)}>
+                    <Plus size={15}/> Add Assignment
+                  </button>
+                </div>
+              )}
             </div>
             {/* Filters */}
             <div className="co-filters">
@@ -540,7 +541,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
                     <th>Date</th>
                     <th>Total Pts</th>
                     <th>Class Avg</th>
-                    <th>Actions</th>
+                    <th>{userRole === 'student' ? 'Status' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -561,12 +562,30 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
                               : <span className="muted">—</span>}
                           </td>
                           <td className="actions-cell">
-                            <button className="btn-grade glass bouncy" onClick={() => setGradeModal(a)}>
-                              <Edit size={14} /> Grade
-                            </button>
-                            <button className="icon-btn-destructive" onClick={() => deleteAssignment(a.id)}>
-                              <Trash2 size={14} />
-                            </button>
+                            {userRole === 'student' ? (
+                              <span style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '0.35rem', 
+                                padding: '0.3rem 0.7rem', 
+                                borderRadius: '8px', 
+                                fontSize: '0.78rem', 
+                                fontWeight: 700, 
+                                background: 'hsla(var(--mood-happy), 0.15)', 
+                                color: 'hsl(var(--mood-happy))' 
+                              }}>
+                                <CheckCircle2 size={13} /> Graded
+                              </span>
+                            ) : (
+                              <>
+                                <button className="btn-grade glass bouncy" onClick={() => setGradeModal(a)}>
+                                  <Edit size={14} /> Grade
+                                </button>
+                                <button className="icon-btn-destructive" onClick={() => deleteAssignment(a.id)}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
                           </td>
                         </motion.tr>
                       );
@@ -633,7 +652,10 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
         {/* ── MATERIALS ── */}
         {activeTab === 'materials' && (
           <motion.div key="materials" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
-            <div className="co-toolbar"><h3>Course Materials</h3><button className="btn-primary btn-sm"><Plus size={15}/> Upload</button></div>
+            <div className="co-toolbar">
+              <h3>Course Materials</h3>
+              {userRole !== 'student' && <button className="btn-primary btn-sm"><Plus size={15}/> Upload</button>}
+            </div>
             <div className="materials-grid">
               {['Syllabus Fall 2026','Lecture Slides – Week 4','Recommended Reading List','Study Guide'].map((title, i) => (
                 <div key={i} className="material-card glass bouncy">
@@ -650,7 +672,10 @@ const ClassOverview = ({ classData, onBack, onStudentSelect }) => {
         {/* ── ATTENDANCE ── */}
         {activeTab === 'attendance' && (
           <motion.div key="attendance" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
-            <div className="co-toolbar"><h3>Attendance</h3><button className="btn-primary btn-sm"><Plus size={15}/> Mark Today</button></div>
+            <div className="co-toolbar">
+              <h3>Attendance</h3>
+              {userRole !== 'student' && <button className="btn-primary btn-sm"><Plus size={15}/> Mark Today</button>}
+            </div>
             <div className="co-table glass">
               <table>
                 <thead><tr><th>Student</th><th>Present</th><th>Absent</th><th>Rate</th></tr></thead>

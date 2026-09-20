@@ -36,8 +36,10 @@ const MoodInsights = () => {
       <header className="page-header">
         <div className="header-content">
           <div className="title-with-icon">
-            <BarChart3 size={32} className="page-title-icon" />
-            <h1 className="gradient-text">Mood Insights</h1>
+            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+              Mood Insights
+              <BarChart3 size={32} style={{ color: 'hsl(var(--primary))' }} />
+            </h1>
           </div>
           <p>Analyze your real logged emotional well-being from the dashboard.</p>
         </div>

@@ -17,7 +17,8 @@ import {
   X,
   Check,
   Bookmark,
-  ChevronDown
+  ChevronDown,
+  Library
 } from 'lucide-react';
 import './Resources.css';
 
@@ -264,7 +265,10 @@ const Resources = () => {
       <header className="page-header">
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text">Resource Hub 📚</h1>
+            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+              Resource Hub
+              <Library size={32} style={{ color: 'hsl(var(--primary))' }} />
+            </h1>
             <span className="count-pill glass">{resources.length} Materials</span>
           </div>
           <p>Access study materials, curriculum guides, video lectures, and syllabi.</p>

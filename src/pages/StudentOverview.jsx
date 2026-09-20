@@ -7,6 +7,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { Avatar } from '../components/Avatar';
 import './StudentOverview.css';
 
 /* ─── Grade helpers ────────────────────────────────────── */
@@ -143,11 +144,7 @@ const StudentOverview = ({ student, onBack }) => {
         {/* Identity */}
         <div className="sov-identity">
           <div className="sov-avatar-wrap">
-            <img
-              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${liveStudent.name}`}
-              alt={liveStudent.name}
-              className="sov-avatar"
-            />
+            <Avatar alt={liveStudent.name} />
           </div>
           <div className="sov-identity-info">
             <div className="sov-name-row">

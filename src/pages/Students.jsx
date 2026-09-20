@@ -4,9 +4,10 @@ import {
   Search, UserPlus, Filter, MoreVertical, Mail, Phone, 
   MapPin, X, Check, Download, Trash2, Edit3, Award, Star, 
   GraduationCap, BookOpen, ShieldAlert, Archive, ArchiveRestore,
-  AlertTriangle, AlertCircle, CheckCircle2, RotateCcw
+  AlertTriangle, AlertCircle, CheckCircle2, RotateCcw, Users
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { Avatar } from '../components/Avatar';
 import './Students.css';
 
 const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchive, isAdmin }) => {
@@ -26,7 +27,7 @@ const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchiv
     >
       <div className="student-card-header">
         <div className="student-avatar-large">
-          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} alt={student.name} />
+          <Avatar alt={student.name} />
           <div className="student-points-badge bouncy">
             👑 {student.points || 500}
           </div>
@@ -238,7 +239,10 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
       <header className="page-header">
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text">Students Directory 📚</h1>
+            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+              Students Directory
+              <Users size={32} style={{ color: 'hsl(var(--primary))' }} />
+            </h1>
             <span className="count-pill glass">{filteredStudents.length} Shown</span>
           </div>
           <p>Track academic standing, status lifecycle, class assignments, and student profiles.</p>

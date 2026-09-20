@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LogOut, Bell, Shield, Palette, Sparkles, Volume2 } from 'lucide-react';
+import { 
+  LogOut, Bell, Shield, Palette, Sparkles, Volume2, 
+  GraduationCap, CheckCircle2, Eye, BookOpen, Lock, 
+  Calendar, CheckSquare, Settings as SettingsIcon, Camera
+} from 'lucide-react';
+import { Avatar } from '../components/Avatar';
 import './Settings.css';
 
 const Toggle = ({ active, onToggle, label }) => (
@@ -28,6 +33,16 @@ const Settings = ({ addNotification, userRole, setUserRole }) => {
     addNotification('success', `${label} ${!state ? 'enabled' : 'disabled'}! ✨`);
   };
 
+  const handleStudentModeToggle = () => {
+    if (userRole === 'student') {
+      setUserRole('admin');
+      addNotification('info', 'Student Mode exited. Switched to Super Admin 🛠️');
+    } else {
+      setUserRole('student');
+      addNotification('success', 'Student Mode enabled! Previewing student dashboard 🎓✨');
+    }
+  };
+
   const handleThemeToggle = () => {
     const newTheme = !lightTheme;
     setLightTheme(newTheme);
@@ -38,6 +53,8 @@ const Settings = ({ addNotification, userRole, setUserRole }) => {
       document.documentElement.removeAttribute('data-theme');
       localStorage.setItem('lumi-theme', 'dark');
     }
+    window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: newTheme ? 'light' : 'dark' } }));
+    window.dispatchEvent(new Event('userSettingsChanged'));
     addNotification('info', `Theme set to ${newTheme ? 'Light ☀️' : 'Dark 🌙'}`);
   };
 
@@ -53,52 +70,125 @@ const Settings = ({ addNotification, userRole, setUserRole }) => {
     >
       <header className="page-header">
         <div>
-          <h1 className="gradient-text">Settings ⚙️</h1>
-          <p>Personalize your LumiSchool experience.</p>
+          <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+            Settings
+            <SettingsIcon size={32} style={{ color: 'hsl(var(--primary))' }} />
+          </h1>
+          <p>Personalize your LumiSchool experience and switch role previews.</p>
         </div>
       </header>
+
+      {/* ── Student Mode Preview Hero Card ── */}
+      <section className={`student-preview-hero-card glass ${userRole === 'student' ? 'preview-active' : ''}`}>
+        <div className="preview-hero-content">
+          <div className="preview-hero-icon-badge">
+            <GraduationCap size={28} />
+          </div>
+          <div className="preview-hero-text">
+            <div className="preview-hero-title-row">
+              <h3>Student Mode Preview</h3>
+              <span className={`preview-badge-status ${userRole === 'student' ? 'active' : ''}`}>
+                {userRole === 'student' ? '● Active Student Preview' : 'Inactive'}
+              </span>
+            </div>
+            <p>
+              Toggle Student Mode to preview the tailored student experience. While active, navigation to Staff Directory, Student Directory, and Resource Hub is hidden, and the dashboard prioritizes personal homework tasks, enrolled timetable, campus notices, and the "My Classes" curriculum.
+            </p>
+            <div className="preview-feature-tags">
+              <span className="preview-pill"><CheckCircle2 size={12} /> Student Dashboard Only</span>
+              <span className="preview-pill"><Lock size={12} /> Hidden Staff / Student Directories</span>
+              <span className="preview-pill"><BookOpen size={12} /> "My Classes" Default Tab</span>
+              <span className="preview-pill"><Calendar size={12} /> Academic Calendar & Notices</span>
+              <span className="preview-pill"><CheckSquare size={12} /> Personal Tasks & Homework</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="preview-hero-action">
+          <button 
+            type="button" 
+            className={`btn-student-toggle ${userRole === 'student' ? 'active' : ''}`}
+            onClick={handleStudentModeToggle}
+          >
+            <Eye size={17} />
+            <span>{userRole === 'student' ? 'Exit Student Mode' : 'Enter Student Mode'}</span>
+          </button>
+        </div>
+      </section>
 
       <div className="settings-grid">
         <section className="settings-section glass">
           <h3>Profile Settings</h3>
           <div className="profile-edit">
             <div className="avatar-large">
-              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" />
-              <button className="edit-badge">📷</button>
+              <Avatar alt="User Profile" />
+              <button className="edit-badge" title="Change Profile Picture" aria-label="Change Profile Picture">
+                <Camera size={13} />
+              </button>
             </div>
             <div className="profile-inputs">
               <div className="input-group">
                 <label>Display Name</label>
-                <input type="text" defaultValue="Admin User" className="glass" />
+                <input 
+                  type="text" 
+                  key={`name-${userRole}`}
+                  defaultValue={userRole === 'student' ? 'Aria Montgomery' : userRole === 'teacher' ? 'Prof. James Wilson' : 'Admin User'} 
+                  className="glass" 
+                />
               </div>
               <div className="input-group">
                 <label>Email Address</label>
-                <input type="email" defaultValue="admin@lumischool.edu" className="glass" />
+                <input 
+                  type="email" 
+                  key={`email-${userRole}`}
+                  defaultValue={userRole === 'student' ? 'aria.montgomery@lumischool.edu' : userRole === 'teacher' ? 'j.wilson@lumischool.edu' : 'admin@lumischool.edu'} 
+                  className="glass" 
+                />
               </div>
               <div className="input-group">
-                <label>School</label>
-                <input type="text" defaultValue="LumiSchool Academy" className="glass" />
+                <label>{userRole === 'student' ? 'Grade & Program' : 'School'}</label>
+                <input 
+                  type="text" 
+                  key={`info-${userRole}`}
+                  defaultValue={userRole === 'student' ? 'Grade 10 Honors • Science & Arts' : 'LumiSchool Academy'} 
+                  className="glass" 
+                />
               </div>
               <div className="input-group">
-                <label>Active Role</label>
+                <label>Active Role / View Mode</label>
                 <div className="role-pills glass">
                   <button 
                     className={`role-pill ${userRole === 'admin' ? 'active' : ''}`}
-                    onClick={() => setUserRole('admin')}
+                    onClick={() => {
+                      setUserRole('admin');
+                      addNotification('info', 'Switched to Super Admin Mode 🛠️');
+                    }}
                   >
                     Super Admin
                   </button>
                   <button 
                     className={`role-pill ${userRole === 'teacher' ? 'active' : ''}`}
-                    onClick={() => setUserRole('teacher')}
+                    onClick={() => {
+                      setUserRole('teacher');
+                      addNotification('info', 'Switched to Teacher Mode 👨‍🏫');
+                    }}
                   >
                     Teacher
+                  </button>
+                  <button 
+                    className={`role-pill ${userRole === 'student' ? 'active' : ''}`}
+                    onClick={() => {
+                      setUserRole('student');
+                      addNotification('success', 'Switched to Student Mode 🎓');
+                    }}
+                  >
+                    Student
                   </button>
                   <motion.div 
                     className="role-pill-bg"
                     layoutId="role-pill-bg"
                     initial={false}
-                    animate={{ x: userRole === 'admin' ? '0%' : '100%' }}
+                    animate={{ x: userRole === 'admin' ? '0%' : userRole === 'teacher' ? '100%' : '200%' }}
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 </div>
@@ -106,10 +196,16 @@ const Settings = ({ addNotification, userRole, setUserRole }) => {
             </div>
           </div>
           <div className="role-dashboard-notice glass">
-            <span className="notice-icon">🏗️</span>
+            <span className="notice-icon">{userRole === 'student' ? '🎓' : userRole === 'teacher' ? '📚' : '🏗️'}</span>
             <div>
-              <strong>Role-Based Dashboards</strong>
-              <p>You are currently viewing the {userRole === 'admin' ? 'Admin' : 'Teacher'} dashboard. Switch roles to see personalized views.</p>
+              <strong>Role-Based Mode: {userRole === 'student' ? 'Student Mode (Preview Active)' : userRole === 'teacher' ? 'Teacher Mode' : 'Super Admin Mode'}</strong>
+              <p>
+                {userRole === 'student' 
+                  ? 'You are previewing the dedicated Student experience. Navigation to Staff Directory, Student Directory, and Resource Hub is hidden and access-restricted.'
+                  : userRole === 'teacher'
+                  ? 'You are viewing the Teacher dashboard with grading queues, assigned classes, and student submissions.'
+                  : 'You are viewing the Super Admin dashboard with school-wide analytics, staff management, and system operations.'}
+              </p>
             </div>
           </div>
         </section>

@@ -5,6 +5,7 @@ import {
   Sparkles, Filter, Users, BookOpen, Search, ChevronDown, 
   Check, X, ArrowUpRight 
 } from 'lucide-react';
+import { Avatar } from '../components/Avatar';
 import './Leaderboard.css';
 
 const STUDENTS_DATABASE = [
@@ -199,6 +200,30 @@ const STUDENTS_DATABASE = [
       cs501: { points: 300, badge: 'Web Accessibility Lead', trend: 'same' },
       bio201: { points: 320, badge: 'Marine Biology Fellow', trend: 'same' }
     }
+  },
+  {
+    id: 9,
+    name: 'Aria Montgomery',
+    avatar: 'Aria',
+    classId: '10a',
+    className: 'Class 10A (Sophomores)',
+    grade: '10',
+    overallPoints: 1240,
+    overallBadge: 'Honors Scholar',
+    trend: 'up',
+    subjects: {
+      math: { points: 410, badge: 'Honors Algebra Ace', trend: 'up' },
+      science: { points: 430, badge: 'Chemistry Distinction', trend: 'up' },
+      arts: { points: 390, badge: 'Creative Writing Honor', trend: 'up' },
+      tech: { points: 410, badge: 'Code & Logic Merit', trend: 'up' },
+      humanities: { points: 400, badge: 'History Essayist', trend: 'up' },
+      math301: { points: 410, badge: 'Math 301 Active', trend: 'up' },
+      hist202: { points: 400, badge: 'Hist 202 Honors', trend: 'up' },
+      phys401: { points: 430, badge: 'Physics Lab Active', trend: 'up' },
+      eng101: { points: 390, badge: 'Literature Honor', trend: 'up' },
+      cs501: { points: 410, badge: 'CS Algorithms Lead', trend: 'up' },
+      bio201: { points: 420, badge: 'Biology Research Merit', trend: 'up' }
+    }
   }
 ];
 
@@ -252,7 +277,7 @@ const PodiumStep = ({ student, rank, height, color, delay, onSelect }) => {
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: delay + 0.2 }}
       >
-        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} alt={student.name} />
+        <Avatar alt={student.name} />
         <div className="medal-icon" style={{ backgroundColor: color }}>
           {rank === 1 ? <Trophy size={16} color="white" /> : <Medal size={16} color="white" />}
         </div>
@@ -267,7 +292,8 @@ const PodiumStep = ({ student, rank, height, color, delay, onSelect }) => {
   );
 };
 
-const Leaderboard = ({ onStudentSelect }) => {
+const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
+  const isStudent = userRole === 'student';
   const [activeFilter, setActiveFilter] = useState('overall');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
@@ -370,6 +396,7 @@ const Leaderboard = ({ onStudentSelect }) => {
   }, [activeFilter]);
 
   const handleStudentClick = (student) => {
+    if (isStudent) return; // Students do not access administrative student overview
     if (onStudentSelect) {
       onStudentSelect({
         id: student.id,
@@ -400,7 +427,10 @@ const Leaderboard = ({ onStudentSelect }) => {
       <header className="page-header">
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text">Academic Leaderboard 🏆</h1>
+            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+              Academic Leaderboard
+              <Trophy size={32} style={{ color: 'hsl(var(--primary))' }} />
+            </h1>
             <span className="count-pill glass">Season 2026</span>
           </div>
           <p>Celebrating high academic achievements, subject mastery, and class excellence.</p>
@@ -532,31 +562,34 @@ const Leaderboard = ({ onStudentSelect }) => {
                 <span>All top enrolled students are featured on the podium above! Click any student to view their profile. 🌟</span>
               </div>
             ) : (
-              rest.map((student, index) => (
-                <motion.div 
-                  key={`${activeFilter}-${student.id}`} 
-                  className="ranking-row bouncy"
-                  initial={{ opacity: 0, x: -15 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 15 }}
-                  transition={{ duration: 0.2, delay: index * 0.04 }}
-                  onClick={() => handleStudentClick(student)}
-                  style={{ cursor: 'pointer' }}
-                  title={`View ${student.name}'s Profile`}
-                >
-                  <div className="rank-col">#{student.rank}</div>
-                  <div className="student-col">
-                    <div className="avatar-small">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} alt={student.name} />
-                    </div>
-                    <div className="student-info-col">
-                      <div className="student-name-row">
-                        <span className="student-name">{student.name}</span>
-                        <ArrowUpRight size={13} className="student-view-icon" />
+              rest.map((student, index) => {
+                const isCurrentUser = isStudent && student.name === 'Aria Montgomery';
+                return (
+                  <motion.div 
+                    key={`${activeFilter}-${student.id}`} 
+                    className={`ranking-row bouncy ${isCurrentUser ? 'current-user-row' : ''}`}
+                    initial={{ opacity: 0, x: -15 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 15 }}
+                    transition={{ duration: 0.2, delay: index * 0.04 }}
+                    onClick={() => handleStudentClick(student)}
+                    style={{ cursor: isStudent ? 'default' : 'pointer' }}
+                    title={isCurrentUser ? 'Your Ranking Profile' : (isStudent ? `${student.name}'s Academic Standing` : `View ${student.name}'s Profile`)}
+                  >
+                    <div className="rank-col">#{student.rank}</div>
+                    <div className="student-col">
+                      <div className="avatar-small">
+                        <Avatar alt={student.name} />
                       </div>
-                      {student.badge && <span className="student-badge-pill">{student.badge}</span>}
+                      <div className="student-info-col">
+                        <div className="student-name-row">
+                          <span className="student-name">{student.name}</span>
+                          {isCurrentUser && <span className="you-pill-badge">You</span>}
+                          {!isStudent && <ArrowUpRight size={13} className="student-view-icon" />}
+                        </div>
+                        {student.badge && <span className="student-badge-pill">{student.badge}</span>}
+                      </div>
                     </div>
-                  </div>
                   <div className="class-col muted">
                     {student.className.split(' ')[0]} {student.className.split(' ')[1]}
                   </div>
@@ -569,7 +602,7 @@ const Leaderboard = ({ onStudentSelect }) => {
                     {student.points} pts
                   </div>
                 </motion.div>
-              ))
+              ); })
             )}
           </AnimatePresence>
         </div>

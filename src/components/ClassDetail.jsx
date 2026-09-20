@@ -6,6 +6,7 @@ import {
   Sparkles, CheckCircle2 
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { Avatar } from './Avatar';
 import './ClassDetail.css';
 
 const MOCK_MATERIALS = [
@@ -14,9 +15,10 @@ const MOCK_MATERIALS = [
   { id: 'm3', name: 'Midterm Exam Review Packet.docx', size: '4.1 MB', date: 'Yesterday' }
 ];
 
-const ClassDetail = ({ isOpen, onClose, classInfo }) => {
+const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student' }) => {
   const { studentsList } = useSchoolData();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'materials'
+  const isStudent = userRole === 'student';
   
   // Attendance Roll Call state: { [studentId]: 'P' | 'L' | 'A' | 'E' }
   const [attendanceRecords, setAttendanceRecords] = useState({});
@@ -102,7 +104,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo }) => {
                 className={`class-tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
                 onClick={() => setActiveTab('attendance')}
               >
-                📋 Roll Call
+                {isStudent ? '📋 My Attendance' : '📋 Roll Call'}
               </button>
               <button 
                 type="button"
@@ -123,7 +125,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo }) => {
                     <h3>Lead Faculty</h3>
                     <div className="teacher-info-card">
                       <div className="avatar-med">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${classInfo.teacher}`} alt={classInfo.teacher} />
+                        <Avatar alt={classInfo.teacher} />
                       </div>
                       <div className="info">
                         <p className="name">{classInfo.teacher}</p>
@@ -141,7 +143,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo }) => {
                     <div className="student-compact-list">
                       {enrolledStudents.slice(0, 5).map((student) => (
                         <div key={student.id} className="student-compact-item" title={student.name}>
-                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} alt={student.name} />
+                          <Avatar alt={student.name} />
                         </div>
                       ))}
                       {enrolledStudents.length > 5 && (
@@ -171,77 +173,130 @@ const ClassDetail = ({ isOpen, onClose, classInfo }) => {
                 </div>
               )}
 
-              {/* TAB 2: LIVE ATTENDANCE ROLL CALL */}
+              {/* TAB 2: LIVE ATTENDANCE (ROLE-AWARE) */}
               {activeTab === 'attendance' && (
                 <div className="class-tab-pane">
-                  <div className="attendance-header-card">
-                    <div className="att-stats">
-                      <strong>Daily Roll Call</strong>
-                      <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-                    </div>
-                    <div className="att-rate-badge">
-                      <span>Rate:</span> <strong>{attendanceRate}%</strong>
-                    </div>
-                  </div>
-
-                  <div className="att-quick-actions">
-                    <button type="button" className="btn-secondary btn-sm" onClick={markAllPresent}>
-                      <UserCheck size={14} />
-                      Mark All Present
-                    </button>
-                  </div>
-
-                  <div className="attendance-student-list">
-                    {enrolledStudents.map((student) => {
-                      const currentStatus = attendanceRecords[student.id] || 'P';
-                      return (
-                        <div key={student.id} className="attendance-student-row">
-                          <div className="avatar-xs">
-                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} alt={student.name} />
-                          </div>
-                          <div className="att-name-col">
-                            <strong>{student.name}</strong>
-                            <span>Grade {student.grade || '10'}</span>
-                          </div>
-
-                          <div className="att-btn-group">
-                            <button 
-                              type="button"
-                              className={`att-pill-btn present ${currentStatus === 'P' ? 'active' : ''}`}
-                              onClick={() => handleStatusChange(student.id, 'P')}
-                              title="Present"
-                            >
-                              P
-                            </button>
-                            <button 
-                              type="button"
-                              className={`att-pill-btn late ${currentStatus === 'L' ? 'active' : ''}`}
-                              onClick={() => handleStatusChange(student.id, 'L')}
-                              title="Late"
-                            >
-                              L
-                            </button>
-                            <button 
-                              type="button"
-                              className={`att-pill-btn absent ${currentStatus === 'A' ? 'active' : ''}`}
-                              onClick={() => handleStatusChange(student.id, 'A')}
-                              title="Absent"
-                            >
-                              A
-                            </button>
-                            <button 
-                              type="button"
-                              className={`att-pill-btn excused ${currentStatus === 'E' ? 'active' : ''}`}
-                              onClick={() => handleStatusChange(student.id, 'E')}
-                              title="Excused"
-                            >
-                              E
-                            </button>
-                          </div>
+                  {isStudent ? (
+                    <div className="student-personal-attendance-view">
+                      <div className="attendance-header-card">
+                        <div className="att-stats">
+                          <strong>My Attendance Standing</strong>
+                          <span>Verified Course Enrollment Record</span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="att-rate-badge">
+                          <span>Rate:</span> <strong>97%</strong>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem', marginTop: '1rem' }}>
+                        <div className="glass" style={{ padding: '0.75rem', borderRadius: '12px', textAlign: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', fontWeight: 700 }}>Present</span>
+                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--mood-happy))' }}>28</p>
+                        </div>
+                        <div className="glass" style={{ padding: '0.75rem', borderRadius: '12px', textAlign: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', fontWeight: 700 }}>Late</span>
+                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--accent))' }}>1</p>
+                        </div>
+                        <div className="glass" style={{ padding: '0.75rem', borderRadius: '12px', textAlign: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', fontWeight: 700 }}>Unexcused</span>
+                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--mood-happy))' }}>0</p>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '1.25rem' }}>
+                        <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 0.65rem 0' }}>Recent Class Log</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                          {[
+                            { date: 'Today (Period 2)', status: 'Present (On-Time)', color: 'var(--mood-happy)' },
+                            { date: 'Yesterday (Period 2)', status: 'Present (On-Time)', color: 'var(--mood-happy)' },
+                            { date: 'Oct 14, 2026', status: 'Excused (Campus Event)', color: 'var(--accent)' },
+                            { date: 'Oct 13, 2026', status: 'Present (On-Time)', color: 'var(--mood-happy)' },
+                          ].map((log, i) => (
+                            <div key={i} className="glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', borderRadius: '10px' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{log.date}</span>
+                              <span style={{ fontSize: '0.74rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '6px', background: `hsla(${log.color}, 0.15)`, color: `hsl(${log.color})` }}>
+                                {log.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{ fontSize: '0.74rem', color: 'hsl(var(--muted-foreground))', marginTop: '0.75rem', textAlign: 'center' }}>
+                          Certified by {classInfo.teacher || 'Course Instructor'}.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="attendance-header-card">
+                        <div className="att-stats">
+                          <strong>Daily Roll Call</strong>
+                          <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                        </div>
+                        <div className="att-rate-badge">
+                          <span>Rate:</span> <strong>{attendanceRate}%</strong>
+                        </div>
+                      </div>
+
+                      <div className="att-quick-actions">
+                        <button type="button" className="btn-secondary btn-sm" onClick={markAllPresent}>
+                          <UserCheck size={14} />
+                          Mark All Present
+                        </button>
+                      </div>
+
+                      <div className="attendance-student-list">
+                        {enrolledStudents.map((student) => {
+                          const currentStatus = attendanceRecords[student.id] || 'P';
+                          return (
+                            <div key={student.id} className="attendance-student-row">
+                              <div className="avatar-xs">
+                                <Avatar alt={student.name} />
+                              </div>
+                              <div className="att-name-col">
+                                <strong>{student.name}</strong>
+                                <span>Grade {student.grade || '10'}</span>
+                              </div>
+
+                              <div className="att-btn-group">
+                                <button 
+                                  type="button"
+                                  className={`att-pill-btn present ${currentStatus === 'P' ? 'active' : ''}`}
+                                  onClick={() => handleStatusChange(student.id, 'P')}
+                                  title="Present"
+                                >
+                                  P
+                                </button>
+                                <button 
+                                  type="button"
+                                  className={`att-pill-btn late ${currentStatus === 'L' ? 'active' : ''}`}
+                                  onClick={() => handleStatusChange(student.id, 'L')}
+                                  title="Late"
+                                >
+                                  L
+                                </button>
+                                <button 
+                                  type="button"
+                                  className={`att-pill-btn absent ${currentStatus === 'A' ? 'active' : ''}`}
+                                  onClick={() => handleStatusChange(student.id, 'A')}
+                                  title="Absent"
+                                >
+                                  A
+                                </button>
+                                <button 
+                                  type="button"
+                                  className={`att-pill-btn excused ${currentStatus === 'E' ? 'active' : ''}`}
+                                  onClick={() => handleStatusChange(student.id, 'E')}
+                                  title="Excused"
+                                >
+                                  E
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -270,23 +325,34 @@ const ClassDetail = ({ isOpen, onClose, classInfo }) => {
 
             {/* Footer Actions */}
             <div className="class-detail-actions">
-              {activeTab === 'attendance' ? (
-                <button 
-                  type="button" 
-                  className={`btn-primary full-width ${isRollCallSaved ? 'saved' : ''}`}
-                  onClick={handleSaveAttendance}
-                >
-                  {isRollCallSaved ? <><Check size={18} /> Roll Call Saved!</> : <><ClipboardCheck size={18} /> Save Roll Call</>}
-                </button>
-              ) : (
+              {isStudent ? (
                 <button 
                   type="button" 
                   className="btn-primary full-width"
-                  onClick={() => setActiveTab('attendance')}
+                  onClick={() => setActiveTab('materials')}
                 >
-                  <ClipboardCheck size={18} />
-                  Take Class Attendance
+                  <FileText size={18} />
+                  View Course Materials ({MOCK_MATERIALS.length})
                 </button>
+              ) : (
+                activeTab === 'attendance' ? (
+                  <button 
+                    type="button" 
+                    className={`btn-primary full-width ${isRollCallSaved ? 'saved' : ''}`}
+                    onClick={handleSaveAttendance}
+                  >
+                    {isRollCallSaved ? <><Check size={18} /> Roll Call Saved!</> : <><ClipboardCheck size={18} /> Save Roll Call</>}
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    className="btn-primary full-width"
+                    onClick={() => setActiveTab('attendance')}
+                  >
+                    <ClipboardCheck size={18} />
+                    Take Class Attendance
+                  </button>
+                )
               )}
             </div>
           </motion.div>

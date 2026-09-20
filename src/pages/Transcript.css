@@ -1,0 +1,865 @@
+.transcript-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding-bottom: 4rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Guarded notice for non-students */
+.student-only-notice {
+  text-align: center;
+  padding: 4rem 2rem;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Export Toast Banner */
+.export-toast-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 14px;
+  background: hsla(var(--primary), 0.12);
+  border: 1px solid hsla(var(--primary), 0.3);
+  color: hsl(var(--foreground));
+  font-size: 0.92rem;
+}
+
+.toast-sparkle {
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+/* Official Transcript Sheet Container */
+.official-transcript-sheet {
+  border-radius: 24px;
+  padding: 2.5rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 12px 36px hsla(0, 0%, 0%, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  position: relative;
+}
+
+/* Institutional Header */
+.transcript-doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.school-brand-block {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.school-crest-badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: hsla(var(--primary), 0.15);
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid hsla(var(--primary), 0.3);
+  box-shadow: 0 4px 16px hsla(var(--primary), 0.2);
+  flex-shrink: 0;
+}
+
+.school-text-meta .school-name {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.school-sub {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  margin-top: 0.2rem;
+}
+
+.school-address {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.15rem;
+}
+
+.official-seal-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.seal-emblem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 10px;
+  background: hsla(var(--primary), 0.12);
+  color: hsl(var(--primary));
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  border: 1px solid hsla(var(--primary), 0.25);
+}
+
+.verification-code-tag {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  font-family: monospace;
+}
+
+.divider-line {
+  height: 1px;
+  background: hsla(var(--border), 0.7);
+  width: 100%;
+}
+
+/* Student Credentials Grid */
+.student-credentials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem 1.5rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 16px;
+  background: hsla(var(--background), 0.5);
+  border: 1px solid hsla(var(--border), 0.5);
+}
+
+.cred-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cred-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: hsl(var(--muted-foreground));
+}
+
+.cred-val {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.cred-val.highlight {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: hsl(var(--primary));
+}
+
+/* Quick Summary Stat Strip */
+.transcript-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.stat-pill-box {
+  padding: 1.1rem 1.25rem;
+  border-radius: 16px;
+  background: hsla(var(--card), 0.7);
+  border: 1px solid hsla(var(--border), 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: hsl(var(--muted-foreground));
+}
+
+.stat-number {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+  line-height: 1.1;
+}
+
+.stat-number.status-active {
+  color: hsl(var(--mood-happy, 142 70% 45%));
+}
+
+.stat-sub {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+/* Filters Bar */
+.transcript-filter-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: 16px;
+  background: hsla(var(--background), 0.6);
+  border: 1px solid hsla(var(--border), 0.6);
+}
+
+.search-filter-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 12px;
+  background: hsla(var(--card), 0.8);
+  border: 1px solid hsla(var(--border), 0.5);
+}
+
+.search-filter-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+}
+
+.filters-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.filter-select-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-select-group label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+.custom-filter-select {
+  padding: 0.45rem 0.85rem;
+  border-radius: 10px;
+  background: hsla(var(--card), 0.9);
+  color: hsl(var(--foreground));
+  border: 1px solid hsla(var(--border), 0.7);
+  font-size: 0.85rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.view-mode-toggle {
+  display: inline-flex;
+  padding: 0.25rem;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.view-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-btn.active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground, #ffffff));
+}
+
+/* Terms Historical Container */
+.terms-historical-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.term-block-card {
+  border-radius: 18px;
+  background: hsla(var(--background), 0.4);
+  border: 1px solid hsla(var(--border), 0.7);
+  overflow: hidden;
+}
+
+.term-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  background: hsla(var(--card), 0.85);
+  border-bottom: 1px solid hsla(var(--border), 0.7);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.term-title-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.term-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.term-name-row h3 {
+  font-size: 1.18rem;
+  font-weight: 800;
+  margin: 0;
+  color: hsl(var(--foreground));
+}
+
+.term-honor-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 8px;
+  background: hsla(var(--mood-neutral, 38 92% 50%), 0.15);
+  color: hsl(var(--mood-neutral, 38 92% 50%));
+  border: 1px solid hsla(var(--mood-neutral, 38 92% 50%), 0.3);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.term-status-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+
+.term-quick-metrics {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.term-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.m-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.m-val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+}
+
+/* Transcript Courses Table */
+.courses-table-wrapper {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.transcript-courses-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.transcript-courses-table th {
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: hsl(var(--muted-foreground));
+  background: hsla(var(--card), 0.5);
+  border-bottom: 1px solid hsla(var(--border), 0.6);
+}
+
+.transcript-courses-table td {
+  padding: 1rem 1rem;
+  border-bottom: 1px solid hsla(var(--border), 0.4);
+  color: hsl(var(--foreground));
+  vertical-align: middle;
+}
+
+.transcript-courses-table tr:hover {
+  background: hsla(var(--primary), 0.03);
+}
+
+.course-code {
+  font-weight: 700;
+  color: hsl(var(--primary));
+  font-size: 0.85rem;
+}
+
+.course-title-cell {
+  max-width: 300px;
+}
+
+.course-title-cell strong {
+  display: block;
+  font-size: 0.92rem;
+  color: hsl(var(--foreground));
+}
+
+.course-remarks-text {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.25rem;
+  line-height: 1.35;
+}
+
+.dept-tag {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  background: hsla(var(--secondary), 0.5);
+  color: hsl(var(--foreground));
+}
+
+.type-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: hsla(var(--primary), 0.12);
+  color: hsl(var(--primary));
+  border: 1px solid hsla(var(--primary), 0.2);
+}
+
+.grade-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.letter-grade-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 0.4rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.letter-grade-badge.grade-a {
+  background: hsla(142, 70%, 45%, 0.18);
+  color: hsl(142, 70%, 40%);
+  border: 1px solid hsla(142, 70%, 45%, 0.35);
+}
+
+.letter-grade-badge.grade-b {
+  background: hsla(38, 92%, 50%, 0.18);
+  color: hsl(38, 92%, 45%);
+  border: 1px solid hsla(38, 92%, 50%, 0.35);
+}
+
+.grade-pct {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.gpa-pts {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.date-given-cell {
+  font-size: 0.82rem;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.instructor-cell {
+  font-size: 0.82rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Empty state */
+.empty-transcript-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  gap: 0.75rem;
+}
+
+.empty-transcript-state h4 {
+  font-size: 1.15rem;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+/* Grading Legend Section */
+.grading-legend-section {
+  padding: 1.5rem;
+  border-radius: 16px;
+  background: hsla(var(--background), 0.5);
+  border: 1px solid hsla(var(--border), 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.legend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.legend-header h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  color: hsl(var(--foreground));
+}
+
+.legend-header .muted-text {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.grading-scale-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+}
+
+.scale-item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.65rem 0.8rem;
+  border-radius: 10px;
+  background: hsla(var(--card), 0.7);
+  border: 1px solid hsla(var(--border), 0.5);
+  font-size: 0.78rem;
+}
+
+.scale-grade {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: hsl(var(--primary));
+}
+
+.scale-range {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.scale-points {
+  font-size: 0.72rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.scale-desc {
+  font-size: 0.68rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.2rem;
+}
+
+/* Official Signature Block */
+.official-signature-block {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 2rem;
+  padding: 1.5rem 0 1rem 0;
+}
+
+.sig-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sig-line {
+  height: 2px;
+  background: hsl(var(--foreground));
+  opacity: 0.35;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+.sig-name {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: hsl(var(--foreground));
+}
+
+.sig-title {
+  font-size: 0.8rem;
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.sig-date {
+  font-size: 0.74rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.seal-watermark-center {
+  display: flex;
+  justify-content: center;
+}
+
+.watermark-seal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.5rem;
+  border-radius: 50%;
+  width: 140px;
+  height: 140px;
+  border: 2px dashed hsla(var(--primary), 0.4);
+  background: hsla(var(--primary), 0.05);
+  color: hsl(var(--primary));
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  gap: 0.2rem;
+}
+
+.seal-number {
+  font-size: 0.6rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Footer Disclaimer */
+.transcript-doc-footer {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  border-top: 1px solid hsla(var(--border), 0.5);
+  padding-top: 1.25rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 850px) {
+  .official-transcript-sheet {
+    padding: 1.5rem;
+  }
+  
+  .official-signature-block {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .watermark-seal {
+    width: 110px;
+    height: 110px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HIGH-PRECISION PRINT & PDF EXPORT STYLESHEET
+   ══════════════════════════════════════════════════════════════ */
+@media print {
+  /* Hide all app chrome, navigation, sidebars, and interactive controls */
+  body, html {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11pt !important;
+  }
+
+  .no-print,
+  .sidebar,
+  .top-navbar,
+  .quick-palette-toggle,
+  .mobile-nav-toggle,
+  .transcript-filter-controls,
+  .export-toast-banner {
+    display: none !important;
+  }
+
+  .transcript-page {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .official-transcript-sheet {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 1cm !important;
+    gap: 1.2rem !important;
+  }
+
+  .transcript-info-card {
+    padding: 0.8cm 1cm 0.4cm 1cm !important;
+  }
+
+  .transcript-records-card {
+    padding: 0.2cm 1cm 0.8cm 1cm !important;
+  }
+
+  .school-crest-badge {
+    background: #f1f5f9 !important;
+    color: #1e293b !important;
+    border-color: #94a3b8 !important;
+    box-shadow: none !important;
+  }
+
+  .school-text-meta .school-name {
+    color: #0f172a !important;
+  }
+
+  .seal-emblem {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .student-credentials-grid {
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .cred-label {
+    color: #64748b !important;
+  }
+
+  .cred-val {
+    color: #0f172a !important;
+  }
+
+  .cred-val.highlight {
+    color: #0f172a !important;
+  }
+
+  .stat-pill-box {
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  .stat-number {
+    color: #0f172a !important;
+  }
+
+  .term-block-card {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    page-break-inside: avoid;
+    margin-bottom: 1.2rem;
+  }
+
+  .term-block-header {
+    background: #f8fafc !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+  }
+
+  .term-name-row h3 {
+    color: #0f172a !important;
+  }
+
+  .term-honor-pill {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .transcript-courses-table {
+    border-collapse: collapse !important;
+  }
+
+  .transcript-courses-table th {
+    background: #f1f5f9 !important;
+    color: #334155 !important;
+    border-bottom: 2px solid #94a3b8 !important;
+  }
+
+  .transcript-courses-table td {
+    color: #0f172a !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+
+  .course-title-cell strong {
+    color: #0f172a !important;
+  }
+
+  .course-remarks-text {
+    color: #475569 !important;
+  }
+
+  .letter-grade-badge {
+    border: 1px solid #94a3b8 !important;
+    color: #0f172a !important;
+    background: #f8fafc !important;
+  }
+
+  .grading-legend-section {
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    page-break-inside: avoid;
+  }
+
+  .scale-item {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  .official-signature-block {
+    page-break-inside: avoid;
+  }
+
+  .watermark-seal {
+    border-color: #94a3b8 !important;
+    color: #475569 !important;
+  }
+
+  .sig-line {
+    background: #0f172a !important;
+  }
+
+  .sig-name {
+    color: #0f172a !important;
+  }
+}

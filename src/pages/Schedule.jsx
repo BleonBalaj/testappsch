@@ -1,15 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronLeft, ChevronRight, Clock, MapPin, User, Search, 
   Filter, Calendar, Download, Plus, X, Check, BookOpen, 
-  Sparkles, RotateCcw, Tag
+  Sparkles, RotateCcw, Tag, Layers, GraduationCap, CheckCircle2
 } from 'lucide-react';
 import ClassDetail from '../components/ClassDetail';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { Avatar } from '../components/Avatar';
 import './Schedule.css';
 
-const ScheduleItem = ({ item, delay, onClick }) => (
+const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
   <motion.div 
     className={`schedule-item glass bouncy ${item.isEvent ? 'event-type' : ''}`}
     initial={{ opacity: 0, x: 20 }}
@@ -24,9 +25,18 @@ const ScheduleItem = ({ item, delay, onClick }) => (
       <div className="schedule-header">
         <div className="header-left">
           <span className="class-time">{item.time}</span>
-          {item.isEvent && <span className="event-tag">Event 📅</span>}
+          {item.isEvent && (
+            <span className="event-tag">
+              <Calendar size={11} /> Event
+            </span>
+          )}
           {item.subjectCategory && !item.isEvent && (
             <span className="category-tag glass">{item.subjectCategory}</span>
+          )}
+          {activeTab === 'all-schedule' && userRole !== 'admin' && item.enrolled && !item.isEvent && (
+            <span className="enrolled-status-pill">
+              <CheckCircle2 size={11} /> {userRole === 'teacher' ? 'My Class' : 'Enrolled'}
+            </span>
           )}
         </div>
         <span className="class-room"><MapPin size={12} /> {item.room}</span>
@@ -40,7 +50,7 @@ const ScheduleItem = ({ item, delay, onClick }) => (
                 <Clock size={15} />
               </div>
             ) : (
-              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${item.teacher}`} alt={item.teacher} />
+              <Avatar alt={item.teacher} />
             )}
           </div>
           <span className="teacher-name">{item.isEvent ? `${item.attendees || 50} Registered` : item.teacher}</span>
@@ -52,40 +62,57 @@ const ScheduleItem = ({ item, delay, onClick }) => (
 
 const INITIAL_SCHEDULE = {
   'Monday': [
-    { id: 1, time: '08:30 - 10:00', subject: 'Mathematics', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--primary' },
-    { id: 2, time: '10:15 - 11:45', subject: 'Physics Mechanics', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2' },
-    { id: 3, time: '12:30 - 14:00', subject: 'English Literature', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent' },
-    { id: 4, time: '14:15 - 15:45', subject: 'World History', subjectCategory: 'Humanities', room: 'Room 201', teacher: 'Mr. David Clark', color: '--chart-1' },
+    { id: 1, time: '08:30 - 10:00', subject: 'Mathematics', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--primary', enrolled: true },
+    { id: 2, time: '10:15 - 11:45', subject: 'Physics Mechanics', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
+    { id: 3, time: '12:30 - 14:00', subject: 'English Literature', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
+    { id: 4, time: '14:15 - 15:45', subject: 'World History', subjectCategory: 'Humanities', room: 'Room 201', teacher: 'Mr. David Clark', color: '--chart-1', enrolled: true },
   ],
   'Tuesday': [
-    { id: 5, time: '08:30 - 10:00', subject: 'Chemistry Lab', subjectCategory: 'Science', room: 'Lab 2', teacher: 'Dr. Sarah Smith', color: '--chart-3' },
-    { id: 6, time: '10:15 - 11:45', subject: 'Biology & Genetics', subjectCategory: 'Science', room: 'Lab 3', teacher: 'Prof. James Wilson', color: '--chart-5' },
-    { id: 7, time: '13:00 - 14:30', subject: 'Debate & Public Speaking', subjectCategory: 'Humanities', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--primary' },
+    { id: 5, time: '08:30 - 10:00', subject: 'Chemistry Lab', subjectCategory: 'Science', room: 'Lab 2', teacher: 'Dr. Sarah Smith', color: '--chart-3', enrolled: false },
+    { id: 15, time: '10:15 - 11:45', subject: 'World History Seminar', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
+    { id: 6, time: '10:15 - 11:45', subject: 'Biology & Genetics', subjectCategory: 'Science', room: 'Lab 3', teacher: 'Prof. James Wilson', color: '--chart-5', enrolled: false },
+    { id: 7, time: '13:00 - 14:30', subject: 'Debate & Public Speaking', subjectCategory: 'Humanities', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--primary', enrolled: false },
+    { id: 16, time: '13:00 - 14:30', subject: 'Advanced Math Problem Session', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--primary', enrolled: true },
   ],
   'Wednesday': [
-    { id: 8, time: '09:00 - 10:30', subject: 'Computer Science & AI', subjectCategory: 'Technology', room: 'Lab 4', teacher: 'Mr. Alex Vance', color: '--chart-4' },
-    { id: 'e1', time: '11:00 - 15:00', subject: 'Science Fair Rehearsal', room: 'Auditorium', attendees: 45, color: '--primary', isEvent: true },
-    { id: 9, time: '15:15 - 16:30', subject: 'Calculus Seminar', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--accent' },
+    { id: 8, time: '09:00 - 10:30', subject: 'Computer Science & AI', subjectCategory: 'Technology', room: 'Lab 4', teacher: 'Mr. Alex Vance', color: '--chart-4', enrolled: false },
+    { id: 17, time: '09:00 - 10:30', subject: 'Advanced Mathematics', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--primary', enrolled: true },
+    { id: 'e1', time: '11:00 - 15:00', subject: 'Science Fair Rehearsal', room: 'Auditorium', attendees: 45, color: '--primary', isEvent: true, enrolled: true },
+    { id: 9, time: '15:15 - 16:30', subject: 'Calculus Seminar', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--accent', enrolled: false },
   ],
   'Thursday': [
-    { id: 10, time: '10:00 - 11:30', subject: 'Digital Art & Animation', subjectCategory: 'Arts', room: 'Studio 3', teacher: 'Ms. Clara Oswald', color: '--chart-1' },
-    { id: 11, time: '12:30 - 14:00', subject: 'Physics Mechanics', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2' },
-    { id: 12, time: '14:30 - 16:00', subject: 'Civics & Government', subjectCategory: 'Humanities', room: 'Room 205', teacher: 'Mr. David Clark', color: '--chart-3' },
+    { id: 10, time: '10:00 - 11:30', subject: 'Digital Art & Animation', subjectCategory: 'Arts', room: 'Studio 3', teacher: 'Ms. Clara Oswald', color: '--chart-1', enrolled: false },
+    { id: 18, time: '10:00 - 11:30', subject: 'World History', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
+    { id: 11, time: '12:30 - 14:00', subject: 'Physics Mechanics', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
+    { id: 12, time: '14:30 - 16:00', subject: 'Civics & Government', subjectCategory: 'Humanities', room: 'Room 205', teacher: 'Mr. David Clark', color: '--chart-3', enrolled: false },
   ],
   'Friday': [
-    { id: 13, time: '08:30 - 10:00', subject: 'Physical Education & Athletics', subjectCategory: 'Athletics', room: 'Main Gymnasium', teacher: 'Coach Mike Tyson', color: '--mood-happy' },
-    { id: 'e2', time: '13:00 - 16:00', subject: 'Annual Science Fair', room: 'Main Gym', attendees: 120, color: '--accent', isEvent: true },
-    { id: 14, time: '16:15 - 17:00', subject: 'Student Council Assembly', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--chart-2' },
+    { id: 13, time: '08:30 - 10:00', subject: 'Physical Education & Athletics', subjectCategory: 'Athletics', room: 'Main Gymnasium', teacher: 'Coach Mike Tyson', color: '--mood-happy', enrolled: true },
+    { id: 19, time: '10:15 - 11:45', subject: 'English Literature Analysis', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
+    { id: 'e2', time: '13:00 - 16:00', subject: 'Annual Science Fair', room: 'Main Gym', attendees: 120, color: '--accent', isEvent: true, enrolled: true },
+    { id: 14, time: '16:15 - 17:00', subject: 'Student Council Assembly', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--chart-2', isEvent: true, enrolled: true },
   ]
 };
 
-const Schedule = () => {
+const Schedule = ({ userRole = 'student' }) => {
   const { staffList } = useSchoolData();
   const [scheduleState, setScheduleState] = useState(INITIAL_SCHEDULE);
   const [selectedDay, setSelectedDay] = useState('Monday');
   const [selectedClass, setSelectedClass] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddSlotOpen, setIsAddSlotOpen] = useState(false);
+
+  // Default tab for student and teacher is 'my-schedule', for admin is 'all-schedule'
+  const [activeTab, setActiveTab] = useState(() => (userRole === 'admin' ? 'all-schedule' : 'my-schedule'));
+  const [prevRole, setPrevRole] = useState(userRole);
+
+  if (prevRole !== userRole) {
+    setPrevRole(userRole);
+    setActiveTab(userRole === 'admin' ? 'all-schedule' : 'my-schedule');
+  }
+
+  // Superadmins NEVER have a personal schedule tab; strictly locked to master campus schedule
+  const effectiveTab = userRole === 'admin' ? 'all-schedule' : activeTab;
 
   // Week navigation state
   const [weekOffset, setWeekOffset] = useState(0);
@@ -105,7 +132,8 @@ const Schedule = () => {
     room: 'Room 101',
     teacher: 'Dr. Sarah Smith',
     isEvent: false,
-    color: '--primary'
+    color: '--primary',
+    enrolled: true
   });
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -134,6 +162,26 @@ const Schedule = () => {
     return `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${year}`;
   }, [weekOffset]);
 
+  // Determine if an item belongs in My Schedule
+  const isItemInMySchedule = useCallback((item) => {
+    if (userRole === 'teacher') {
+      return item.teacher?.includes('Sarah Smith') || item.isEvent;
+    }
+    // For students and general users
+    return Boolean(item.enrolled || item.isEvent);
+  }, [userRole]);
+
+  // Day counts for My Schedule vs All Schedule
+  const myScheduleCount = useMemo(() => {
+    const dayItems = scheduleState[selectedDay] || [];
+    return dayItems.filter(isItemInMySchedule).length;
+  }, [scheduleState, selectedDay, isItemInMySchedule]);
+
+  const allScheduleCount = useMemo(() => {
+    const dayItems = scheduleState[selectedDay] || [];
+    return dayItems.length;
+  }, [scheduleState, selectedDay]);
+
   // Extract unique teachers and categories for filters
   const teachersList = useMemo(() => {
     const list = new Set();
@@ -157,10 +205,15 @@ const Schedule = () => {
     return ['all', ...Array.from(list)];
   }, [scheduleState]);
 
-  // Filter current schedule for the selected day
+  // Filter current schedule for the selected day and active tab
   const currentSchedule = useMemo(() => {
     const dayItems = scheduleState[selectedDay] || [];
     return dayItems.filter(item => {
+      // Tab filter
+      if (effectiveTab === 'my-schedule' && !isItemInMySchedule(item)) {
+        return false;
+      }
+
       const matchesSearch = 
         item.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.room && item.room.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -175,7 +228,7 @@ const Schedule = () => {
 
       return matchesSearch && matchesTeacher && matchesCategory && matchesType;
     }).sort((a, b) => a.time.localeCompare(b.time));
-  }, [scheduleState, selectedDay, searchTerm, teacherFilter, categoryFilter, typeFilter]);
+  }, [scheduleState, selectedDay, effectiveTab, isItemInMySchedule, searchTerm, teacherFilter, categoryFilter, typeFilter]);
 
   const handleClassClick = (item) => {
     if (item.isEvent) return;
@@ -206,23 +259,27 @@ const Schedule = () => {
       room: 'Room 101',
       teacher: 'Dr. Sarah Smith',
       isEvent: false,
-      color: '--primary'
+      color: '--primary',
+      enrolled: true
     });
   };
 
   // Export Timetable
   const handleExportTimetable = () => {
-    const rows = [["Day", "Time", "Subject", "Teacher", "Room", "Type"]];
+    const isMy = effectiveTab === 'my-schedule';
+    const rows = [["Day", "Time", "Subject", "Teacher", "Room", "Type", "Status"]];
     days.forEach(day => {
       const dayItems = scheduleState[day] || [];
-      dayItems.forEach(item => {
+      const filtered = isMy ? dayItems.filter(isItemInMySchedule) : dayItems;
+      filtered.forEach(item => {
         rows.push([
           day,
           item.time,
           item.subject,
           item.teacher || 'N/A',
           item.room,
-          item.isEvent ? 'Campus Event' : (item.subjectCategory || 'Class')
+          item.isEvent ? 'Campus Event' : (item.subjectCategory || 'Class'),
+          item.enrolled ? 'Enrolled' : 'All Campus'
         ]);
       });
     });
@@ -231,7 +288,8 @@ const Schedule = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `LumiSchool_Timetable_${weekDateString.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+    const prefix = isMy ? 'My_Schedule' : 'Master_Campus_Schedule';
+    link.setAttribute("download", `LumiSchool_${prefix}_${weekDateString.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -245,22 +303,57 @@ const Schedule = () => {
       <header className="page-header">
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text">Academic Schedule 🗓️</h1>
-            <span className="count-pill glass">{currentSchedule.length} Periods Today</span>
+            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+              {userRole === 'admin'
+                ? 'Campus Master Schedule'
+                : (effectiveTab === 'my-schedule'
+                    ? (userRole === 'student' ? 'My Class Timetable' : 'My Teaching Schedule')
+                    : 'Campus Master Schedule')}
+              <Calendar size={32} style={{ color: 'hsl(var(--primary))' }} />
+            </h1>
+            <span className="count-pill glass">
+              {userRole === 'admin'
+                ? `${currentSchedule.length} Master Periods Today`
+                : `${currentSchedule.length} Periods Today`}
+            </span>
           </div>
-          <p>Real-time timetable for classes, science labs, and campus events.</p>
+          <p>
+            {userRole === 'admin'
+              ? 'Master school-wide timetable for classes, science labs, faculty periods, and campus events.'
+              : (effectiveTab === 'my-schedule'
+                  ? (userRole === 'student'
+                      ? 'Personalized daily schedule, enrolled room assignments, instructor periods, and campus sessions.'
+                      : 'Personal teaching timetable and assigned campus sessions.')
+                  : 'Master school-wide timetable for classes, science labs, and campus events.')}
+          </p>
         </div>
 
         <div className="header-actions">
-          <button className="btn-secondary glass" onClick={handleExportTimetable} title="Export CSV Timetable">
-            <Download size={18} />
-            Export Schedule
-          </button>
-          
-          <button className="btn-primary" onClick={() => setIsAddSlotOpen(true)}>
-            <Plus size={18} />
-            Add Period / Event
-          </button>
+          {/* Segmented Schedule View Switcher - ONLY for Students and Teachers */}
+          {userRole !== 'admin' && (
+            <div className="schedule-segmented-toggle glass">
+              <button
+                type="button"
+                className={`segmented-tab ${effectiveTab === 'my-schedule' ? 'active' : ''}`}
+                onClick={() => setActiveTab('my-schedule')}
+                title={userRole === 'student' ? 'Show My Enrolled Classes & Events' : 'Show My Teaching Timetable'}
+              >
+                <Calendar size={14} />
+                <span>{userRole === 'student' ? 'My Schedule' : 'My Timetable'}</span>
+                <span className="segmented-counter">{myScheduleCount}</span>
+              </button>
+              <button
+                type="button"
+                className={`segmented-tab ${effectiveTab === 'all-schedule' ? 'active' : ''}`}
+                onClick={() => setActiveTab('all-schedule')}
+                title="Show Master Campus Schedule"
+              >
+                <Layers size={14} />
+                <span>All Campus</span>
+                <span className="segmented-counter">{allScheduleCount}</span>
+              </button>
+            </div>
+          )}
 
           {/* Interactive Week Navigator */}
           <div className="week-selector-card glass">
@@ -297,6 +390,18 @@ const Schedule = () => {
               <ChevronRight size={18} />
             </button>
           </div>
+
+          <button className="btn-secondary glass" onClick={handleExportTimetable} title="Export CSV Timetable">
+            <Download size={16} />
+            <span className="export-btn-text">{userRole === 'admin' || effectiveTab === 'all-schedule' ? 'Export Master' : 'Export Timetable'}</span>
+          </button>
+          
+          {userRole !== 'student' && (
+            <button className="btn-primary" onClick={() => setIsAddSlotOpen(true)}>
+              <Plus size={16} />
+              <span>Add Period</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -307,7 +412,7 @@ const Schedule = () => {
           <Search size={18} className="search-icon" />
           <input 
             type="text" 
-            placeholder="Search classes, teachers, subjects, rooms, or events..." 
+            placeholder={effectiveTab === 'my-schedule' ? "Search within my scheduled classes, rooms, or teachers..." : "Search all classes, teachers, subjects, rooms, or events..."} 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -390,7 +495,7 @@ const Schedule = () => {
       {/* Day Selector with Clean Shadows */}
       <div className="day-selector-container">
         {days.map(day => {
-          const count = (scheduleState[day] || []).length;
+          const count = (scheduleState[day] || []).filter(item => effectiveTab === 'my-schedule' ? isItemInMySchedule(item) : true).length;
           return (
             <button 
               key={day}
@@ -420,16 +525,31 @@ const Schedule = () => {
               <div className="empty-icon-wrap glass">
                 <Calendar size={32} />
               </div>
-              <h3>No scheduled periods found for {selectedDay}</h3>
-              <p>Try adjusting your search criteria or switch to another day of the week.</p>
-              {hasActiveFilters && (
+              <h3>
+                {effectiveTab === 'my-schedule'
+                  ? `No classes scheduled in your personal timetable for ${selectedDay}`
+                  : `No scheduled periods found for ${selectedDay}`}
+              </h3>
+              <p>
+                {effectiveTab === 'my-schedule'
+                  ? 'You have no enrolled classes or registered events for this day. Switch to "All Campus Schedule" to view what is happening campus-wide.'
+                  : 'Try adjusting your search criteria or switch to another day of the week.'}
+              </p>
+              {effectiveTab === 'my-schedule' && userRole !== 'admin' ? (
+                <button 
+                  className="btn-secondary glass btn-small"
+                  onClick={() => setActiveTab('all-schedule')}
+                >
+                  Browse All Campus Schedule
+                </button>
+              ) : hasActiveFilters ? (
                 <button 
                   className="btn-secondary glass btn-small"
                   onClick={() => { setSearchTerm(''); setTeacherFilter('all'); setCategoryFilter('all'); setTypeFilter('all'); }}
                 >
                   Reset Active Filters
                 </button>
-              )}
+              ) : null}
             </div>
           ) : (
             <AnimatePresence>
@@ -439,6 +559,8 @@ const Schedule = () => {
                   item={item} 
                   delay={index * 0.05} 
                   onClick={handleClassClick}
+                  activeTab={effectiveTab}
+                  userRole={userRole}
                 />
               ))}
             </AnimatePresence>
@@ -562,6 +684,21 @@ const Schedule = () => {
                   </div>
                 </div>
 
+                {userRole !== 'admin' && (
+                  <div className="input-group checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.25rem' }}>
+                    <input 
+                      type="checkbox" 
+                      id="enrolledCheck"
+                      checked={newSlotForm.enrolled}
+                      onChange={e => setNewSlotForm({ ...newSlotForm, enrolled: e.target.checked })}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="enrolledCheck" style={{ cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>
+                      {userRole === 'teacher' ? 'Include in personal teaching timetable' : 'Include in personal student timetable'}
+                    </label>
+                  </div>
+                )}
+
                 <div className="modal-footer-actions">
                   <button type="button" className="btn-secondary" onClick={() => setIsAddSlotOpen(false)}>
                     Cancel
@@ -580,9 +717,11 @@ const Schedule = () => {
         isOpen={isDetailOpen} 
         onClose={() => setIsDetailOpen(false)} 
         classInfo={selectedClass} 
+        userRole={userRole}
       />
     </div>
   );
 };
 
 export default Schedule;
+

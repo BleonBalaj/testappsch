@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Send, MoreVertical, Phone, Video, Smile, 
@@ -11,6 +11,7 @@ import {
   PlusCircle, FileDown, Eye
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { Avatar } from '../components/Avatar';
 import './Messages.css';
 
 const INITIAL_CHATS = [
@@ -374,13 +375,14 @@ const Messages = ({ userRole = 'admin' }) => {
   };
 
   // Start Direct Chat
-  const handleStartDirectChat = (user, type) => {
+  const handleStartDirectChat = useCallback((user, type) => {
     const existing = chats.find(c => c.name === user.name && !c.isGroup);
     if (existing) {
       setActiveChat(existing);
     } else {
+      const generatedId = Date.now();
       const newChatObj = {
-        id: Date.now(),
+        id: generatedId,
         name: user.name,
         role: type === 'staff' ? (user.roleName || user.department || 'Faculty') : `Student (${user.grade})`,
         roleType: type,
@@ -389,14 +391,14 @@ const Messages = ({ userRole = 'admin' }) => {
         unread: 0,
         online: true,
         starred: false,
-        members: [{ id: user.id || Date.now(), name: user.name, role: type, muted: false }],
+        members: [{ id: user.id || generatedId, name: user.name, role: type, muted: false }],
         sharedFiles: []
       };
       setChats(prev => [newChatObj, ...prev]);
       setActiveChat(newChatObj);
     }
     setIsNewChatOpen(false);
-  };
+  }, [chats]);
 
   // Create Group Channel
   const handleCreateGroupSubmit = (e) => {
@@ -500,7 +502,10 @@ const Messages = ({ userRole = 'admin' }) => {
         <div className="messages-header">
           <div className="messages-title-row">
             <div className="title-with-badge">
-              <h2>Messages 💬</h2>
+              <h2 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                Messages
+                <MessageSquare size={24} style={{ color: 'hsl(var(--primary))' }} />
+              </h2>
               <span className="msg-count-pill glass">
                 {chats.reduce((acc, c) => acc + (c.unread || 0), 0)} Unread
               </span>
@@ -582,7 +587,7 @@ const Messages = ({ userRole = 'admin' }) => {
                       <Hash size={22} />
                     </div>
                   ) : (
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${chat.name}`} alt={chat.name} />
+                    <Avatar alt={chat.name} />
                   )}
                   {chat.online && <span className="online-indicator"></span>}
                 </div>
@@ -617,7 +622,7 @@ const Messages = ({ userRole = 'admin' }) => {
                   <Hash size={26} />
                 </div>
               ) : (
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.name}`} alt={activeChat.name} />
+                <Avatar alt={activeChat.name} />
               )}
               {activeChat.online && <span className="online-indicator"></span>}
             </div>
@@ -728,7 +733,7 @@ const Messages = ({ userRole = 'admin' }) => {
               >
                 {msg.sender === 'them' && (
                   <div className="message-avatar">
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderName || activeChat.name}`} alt="Sender" />
+                    <Avatar alt={msg.senderName || activeChat.name} />
                   </div>
                 )}
 
@@ -810,7 +815,7 @@ const Messages = ({ userRole = 'admin' }) => {
                 animate={{ opacity: 1, y: 0 }}
               >
                 <div className="message-avatar">
-                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.name}`} alt={activeChat.name} />
+                  <Avatar alt={activeChat.name} />
                 </div>
                 <div className="message-bubble them typing-bubble">
                   <div className="typing-dots">
@@ -966,7 +971,7 @@ const Messages = ({ userRole = 'admin' }) => {
                     {(activeChat.members || []).map((member) => (
                       <div key={member.id} className="drawer-member-card glass">
                         <div className="member-avatar-box">
-                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.name}`} alt={member.name} />
+                          <Avatar alt={member.name} />
                           {member.muted && <span className="muted-badge" title="Student is Muted">🔇</span>}
                         </div>
 
@@ -1183,7 +1188,7 @@ const Messages = ({ userRole = 'admin' }) => {
                           onClick={() => handleStartDirectChat(user, user.userType)}
                         >
                           <div className="user-avatar-box">
-                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`} alt={user.name} />
+                            <Avatar alt={user.name} />
                           </div>
 
                           <div className="user-details">
@@ -1311,7 +1316,7 @@ const Messages = ({ userRole = 'admin' }) => {
                               }}
                             >
                               <div className="avatar-xs">
-                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`} alt={u.name} />
+                                <Avatar alt={u.name} />
                               </div>
                               <div className="pick-card-info">
                                 <strong>{u.name}</strong>
@@ -1357,11 +1362,7 @@ const Messages = ({ userRole = 'admin' }) => {
               onClick={e => e.stopPropagation()}
             >
               <div className="call-avatar-pulse">
-                <img 
-                  src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${callModal.user}`} 
-                  alt={callModal.user} 
-                  className="call-avatar"
-                />
+                <Avatar alt={callModal.user} className="call-avatar" />
                 <div className="pulse-ring"></div>
               </div>
 

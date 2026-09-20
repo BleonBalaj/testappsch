@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, UserPlus, BookOpen, CalendarPlus, UserCheck, Megaphone, Check } from 'lucide-react';
 import './QuickAction.css';
 
-const QuickAction = ({ addNotification, onNavigate, userRole = 'admin', currentPath }) => {
+const QuickAction = ({ _addNotification, onNavigate, userRole = 'admin', currentPath }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isAdmin = userRole === 'admin';
 
@@ -11,7 +11,14 @@ const QuickAction = ({ addNotification, onNavigate, userRole = 'admin', currentP
     return null;
   }
 
-  const actions = [
+  const isStudent = userRole === 'student';
+
+  const actions = isStudent ? [
+    { id: 'tasks', icon: Check, label: 'My Personal Tasks', color: 'hsl(var(--primary))', target: 'tasks' },
+    { id: 'schedule', icon: CalendarPlus, label: 'Class Timetable', color: 'hsl(var(--accent))', target: 'schedule' },
+    { id: 'events', icon: CalendarPlus, label: 'Academic Calendar', color: 'hsl(var(--chart-1))', target: 'events' },
+    { id: 'class', icon: BookOpen, label: 'My Classes', color: 'hsl(var(--chart-2))', target: 'classes' },
+  ] : [
     { id: 'student', icon: UserPlus, label: 'Add Student', color: 'hsl(var(--primary))', target: 'students' },
     { 
       id: 'staff', 

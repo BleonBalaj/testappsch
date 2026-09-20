@@ -14,12 +14,14 @@ import {
   CalendarDays,
   CheckSquare,
   Library,
-  BarChart3
+  BarChart3,
+  GraduationCap
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Avatar } from './Avatar';
 import './Sidebar.css';
 
-const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => {
+const SidebarItem = ({ icon: IconComponent, label, active, onClick, collapsed }) => {
   return (
     <motion.div
       className={`sidebar-item ${active ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
@@ -28,7 +30,7 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => {
       whileTap={{ scale: 0.98 }}
     >
       <div className="icon-wrapper">
-        <Icon size={22} />
+        {React.createElement(IconComponent, { size: 22 })}
       </div>
       {!collapsed && <span className="label">{label}</span>}
       {active && <motion.div className="active-indicator" layoutId="active-pill" />}
@@ -42,15 +44,16 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
+    { id: 'classes', label: 'Classes', icon: Book },
+    { id: 'transcript', label: 'Transcript', icon: GraduationCap, studentOnly: true },
+    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'students', label: 'Students', icon: Users },
-    { id: 'classes', label: 'Classes', icon: Book },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'staff', label: 'Staff Directory', icon: UserSquare2 },
     { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
+    { id: 'events', label: 'Events Center', icon: CalendarDays },
     { id: 'resources', label: 'Resource Hub', icon: Library },
     { id: 'mood-insights', label: 'Mood Insights', icon: BarChart3 },
-    { id: 'events', label: 'Events Center', icon: CalendarDays },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -62,6 +65,15 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
   };
 
   const isAdmin = userRole === 'admin';
+  const isStudent = userRole === 'student';
+
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.studentOnly && !isStudent) return false;
+    if (isStudent) {
+      return item.id !== 'students' && item.id !== 'staff' && item.id !== 'resources';
+    }
+    return true;
+  });
 
   return (
     <motion.aside 
@@ -91,7 +103,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
 
       <div className="sidebar-nav-wrap">
         <nav className="sidebar-nav">
-          {menuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <SidebarItem
               key={item.id}
               icon={item.icon}
@@ -108,14 +120,15 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
         <div className="sidebar-footer">
           <div className="user-profile">
             <div className="avatar">
-              <img 
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${isAdmin ? 'Felix' : 'ProfJames'}`} 
-                alt="User" 
-              />
+              <Avatar alt={isStudent ? 'Aria Montgomery' : isAdmin ? 'Admin User' : 'Prof. Wilson'} />
             </div>
             <div className="user-info">
-              <p className="user-name">{isAdmin ? 'Admin User' : 'Prof. Wilson'}</p>
-              <p className="user-role">{isAdmin ? 'Super Admin' : 'Senior Teacher'}</p>
+              <p className="user-name">
+                {isStudent ? 'Aria Montgomery' : isAdmin ? 'Admin User' : 'Prof. Wilson'}
+              </p>
+              <p className="user-role">
+                {isStudent ? 'Grade 10 • Student' : isAdmin ? 'Super Admin' : 'Senior Teacher'}
+              </p>
             </div>
           </div>
         </div>

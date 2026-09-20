@@ -8,20 +8,37 @@ function prefersReducedMotion() {
   } catch { return false; }
 }
 
-function readStarHsl() {
+function getThemeStarConfig() {
   try {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
     const raw = getComputedStyle(document.documentElement)
       .getPropertyValue('--star-color').trim();
-    const parts = raw.split(/\s+/);
-    if (parts.length < 3) return '0, 0%, 100%';
-    return `${parts[0]}, ${parts[1]}, ${parts[2]}`;
-  } catch { return '0, 0%, 100%'; }
+    
+    let fill = isLight ? '270, 38%, 32%' : '0, 0%, 100%';
+    if (raw) {
+      const parts = raw.split(/\s+/);
+      if (parts.length >= 3) {
+        fill = `${parts[0]}, ${parts[1]}, ${parts[2]}`;
+      }
+    }
+
+    return {
+      fill,
+      isLight,
+    };
+  } catch {
+    const isLight = document.documentElement?.getAttribute('data-theme') === 'light';
+    return {
+      fill: isLight ? '270, 38%, 32%' : '0, 0%, 100%',
+      isLight: !!isLight,
+    };
+  }
 }
 
 const StarryBackground = memo(function StarryBackground() {
   const canvasRef   = useRef(null);
   const rafRef      = useRef(null);
-  const fillRef     = useRef(null);
+  const configRef   = useRef(null);
   const visibleRef  = useRef(true);
 
   const reduceMotion = useMemo(() => prefersReducedMotion(), []);
@@ -51,17 +68,23 @@ const StarryBackground = memo(function StarryBackground() {
     if (canvas.width !== tw)  canvas.width  = tw;
     if (canvas.height !== th) canvas.height = th;
 
+    // Reset transform and completely clear the physical backing canvas buffer
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, cssW, cssH);
 
-    const fill = fillRef.current;
+    const config = configRef.current || getThemeStarConfig();
+    const { fill, isLight } = config;
     if (!fill) return;
 
     for (const s of stars) {
       ctx.beginPath();
       ctx.arc(s.x * cssW, s.y * cssH, s.radius, 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(${fill}, ${s.opacity})`;
+      // In light mode, provide balanced contrast so stars remain gently visible against the lilac canvas
+      const alpha = isLight 
+        ? Math.min(0.85, (s.opacity * 1.35) + 0.12)
+        : s.opacity;
+      ctx.fillStyle = `hsla(${fill}, ${alpha})`;
       ctx.fill();
     }
   }, [stars]);
@@ -78,26 +101,50 @@ const StarryBackground = memo(function StarryBackground() {
     if (reduceMotion) return;
 
     const refresh = () => {
-      fillRef.current = readStarHsl();
+      configRef.current = getThemeStarConfig();
       if (visibleRef.current) scheduleDraw();
     };
 
+    // Initial render
     refresh();
 
+    // Listen to direct DOM mutations on data-theme attribute on document.documentElement
+    const observer = new MutationObserver(() => {
+      refresh();
+      // Ensure layout recalculation and custom properties are painted cleanly
+      window.requestAnimationFrame(() => {
+        refresh();
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'class'],
+    });
+
     const onResize   = () => { if (visibleRef.current) scheduleDraw(); };
-    const onSettings = () => refresh();
+    const onTheme    = () => {
+      refresh();
+      window.requestAnimationFrame(refresh);
+    };
+    const onSettings = () => onTheme();
     const onVis      = () => {
       visibleRef.current = document.visibilityState === 'visible';
-      if (visibleRef.current) refresh();
+      if (visibleRef.current) onTheme();
     };
 
     window.addEventListener('resize',             onResize,   { passive: true });
+    window.addEventListener('themechange',        onTheme);
     window.addEventListener('userSettingsChanged', onSettings);
+    window.addEventListener('storage',            onSettings);
     document.addEventListener('visibilitychange',  onVis);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize',             onResize);
+      window.removeEventListener('themechange',        onTheme);
       window.removeEventListener('userSettingsChanged', onSettings);
+      window.removeEventListener('storage',            onSettings);
       document.removeEventListener('visibilitychange',  onVis);
       if (rafRef.current != null) {
         window.cancelAnimationFrame(rafRef.current);
@@ -119,6 +166,7 @@ const StarryBackground = memo(function StarryBackground() {
         height:        '100vh',
         pointerEvents: 'none',
         zIndex:        0,
+        transition:    'opacity 0.2s ease',
       }}
     />
   );
