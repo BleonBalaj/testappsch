@@ -21,7 +21,7 @@ const Toggle = ({ active, onToggle, label }) => (
   </div>
 );
 
-const Settings = ({ addNotification, userRole, setUserRole }) => {
+const Settings = ({ addNotification, userRole, setUserRole, onLogout }) => {
   const [notifications, setNotifications] = useState(true);
   const [animations, setAnimations] = useState(true);
   const [cuteMode, setCuteMode] = useState(true);
@@ -260,7 +260,17 @@ const Settings = ({ addNotification, userRole, setUserRole }) => {
             </button>
           </div>
           <div className="logout-section">
-            <button className="logout-btn-large glass" onClick={() => addNotification('info', 'Logging out... ✌️')}>
+            <button 
+              type="button"
+              className="logout-btn-large glass" 
+              onClick={() => {
+                if (onLogout) {
+                  onLogout();
+                } else {
+                  addNotification('info', 'Logging out... ✌️');
+                }
+              }}
+            >
               <LogOut size={20} />
               <span>Logout from LumiSchool</span>
             </button>

@@ -19,19 +19,58 @@ import Transcript from './pages/Transcript';
 import SearchOverlay from './components/SearchOverlay';
 import NotificationContainer from './components/Notification';
 import QuickAction from './components/QuickAction';
+import Login from './pages/Login';
 import { MoodProvider } from './context/MoodContext';
 import { SchoolDataProvider } from './context/SchoolDataContext';
 import { Calendar } from 'lucide-react';
 import './App.css';
 
 function App() {
-  const [currentPath, setCurrentPath] = useState('dashboard');
+  const getInitialPath = () => {
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      if (pathname === 'login' || window.location.hash === '#/login' || window.location.hash === '#login') {
+        return 'login';
+      }
+    }
+    return 'dashboard';
+  };
+
+  const [currentPath, setCurrentPath] = useState(getInitialPath);
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [userRole, setUserRole] = useState(() => localStorage.getItem('lumi-role') || 'student'); // 'student', 'teacher', or 'admin'
   const mainContentRef = useRef(null);
+
+  const handleNavigate = (path) => {
+    setCurrentPath(path);
+    if (typeof window !== 'undefined') {
+      if (path === 'login') {
+        window.history.pushState({}, '', '/login');
+      } else if (window.location.pathname.replace(/^\/+|\/+$/g, '') === 'login') {
+        window.history.pushState({}, '', '/');
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      if (pathname === 'login' || window.location.hash === '#/login' || window.location.hash === '#login') {
+        setCurrentPath('login');
+      } else if (currentPath === 'login') {
+        setCurrentPath('dashboard');
+      }
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, [currentPath]);
 
   const handleSetUserRole = (newRole) => {
     setUserRole(newRole);
@@ -162,22 +201,61 @@ function App() {
       case 'messages':
         return <Messages userRole={userRole} />;
       case 'settings':
-        return <Settings addNotification={addNotification} userRole={userRole} setUserRole={handleSetUserRole} />;
+        return (
+          <Settings 
+            addNotification={addNotification} 
+            userRole={userRole} 
+            setUserRole={handleSetUserRole} 
+            onLogout={() => handleNavigate('login')}
+          />
+        );
       case 'resources':
         return <Resources />;
       case 'mood-insights':
         return <MoodInsights />;
+      case 'login':
+        return (
+          <Login 
+            onLogin={(user) => {
+              if (user?.role) handleSetUserRole(user.role);
+              handleNavigate('dashboard');
+            }}
+            onNavigate={handleNavigate}
+            addNotification={addNotification}
+          />
+        );
       default:
-        return <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
+        return <Dashboard onNavigate={handleNavigate} userRole={userRole} />;
     }
   };
+
+  if (currentPath === 'login') {
+    return (
+      <SchoolDataProvider>
+        <MoodProvider>
+          <Login 
+            onLogin={(user) => {
+              if (user?.role) handleSetUserRole(user.role);
+              handleNavigate('dashboard');
+            }}
+            onNavigate={handleNavigate}
+            addNotification={addNotification}
+          />
+          <NotificationContainer 
+            notifications={notifications} 
+            removeNotification={removeNotification} 
+          />
+        </MoodProvider>
+      </SchoolDataProvider>
+    );
+  }
 
   return (
     <SchoolDataProvider>
       <MoodProvider>
         <div className="app-container">
           <StarryBackground />
-          <Sidebar currentPath={currentPath} onNavigate={setCurrentPath} userRole={userRole} />
+          <Sidebar currentPath={currentPath} onNavigate={handleNavigate} userRole={userRole} />
           <main className="main-content" ref={mainContentRef}>
             {currentPath !== 'messages' && (
               <header className="main-header">
@@ -208,7 +286,7 @@ function App() {
             onClose={() => setIsSearchOpen(false)} 
             classes={classes}
             events={events}
-            onNavigate={setCurrentPath}
+            onNavigate={handleNavigate}
             userRole={userRole}
           />
 
@@ -219,7 +297,7 @@ function App() {
 
           <QuickAction 
             addNotification={addNotification} 
-            onNavigate={setCurrentPath} 
+            onNavigate={handleNavigate} 
             userRole={userRole} 
             currentPath={currentPath}
           />

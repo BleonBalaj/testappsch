@@ -198,6 +198,27 @@
   color: hsl(var(--muted-foreground));
 }
 
+.sidebar-logout-btn {
+  margin-left: auto;
+  padding: 0.45rem;
+  border-radius: 10px;
+  background: hsla(var(--background), 0.5);
+  border: 1px solid hsla(var(--border), 0.8);
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-logout-btn:hover {
+  background: hsla(var(--primary), 0.18);
+  border-color: hsla(var(--primary), 0.4);
+  color: hsl(var(--primary));
+  transform: scale(1.08);
+}
+
 /* Collapsed States */
 .sidebar.collapsed {
   padding: 0; /* Remove container padding so wrap touches edges */

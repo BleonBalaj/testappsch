@@ -15,7 +15,8 @@ import {
   CheckSquare,
   Library,
   BarChart3,
-  GraduationCap
+  GraduationCap,
+  LogOut
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar } from './Avatar';
@@ -116,12 +117,12 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
         </nav>
       </div>
 
-      {!collapsed && (
-        <div className="sidebar-footer">
-          <div className="user-profile">
-            <div className="avatar">
-              <Avatar alt={isStudent ? 'Aria Montgomery' : isAdmin ? 'Admin User' : 'Prof. Wilson'} />
-            </div>
+      <div className="sidebar-footer">
+        <div className="user-profile">
+          <div className="avatar">
+            <Avatar alt={isStudent ? 'Aria Montgomery' : isAdmin ? 'Admin User' : 'Prof. Wilson'} />
+          </div>
+          {!collapsed && (
             <div className="user-info">
               <p className="user-name">
                 {isStudent ? 'Aria Montgomery' : isAdmin ? 'Admin User' : 'Prof. Wilson'}
@@ -130,9 +131,18 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
                 {isStudent ? 'Grade 10 • Student' : isAdmin ? 'Super Admin' : 'Senior Teacher'}
               </p>
             </div>
-          </div>
+          )}
+          <button 
+            type="button" 
+            className="sidebar-logout-btn bouncy" 
+            onClick={() => onNavigate && onNavigate('login')} 
+            title="Go to Login / Sign In"
+            aria-label="Login Page"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
-      )}
+      </div>
     </motion.aside>
   );
 };
