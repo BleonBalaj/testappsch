@@ -13,6 +13,7 @@
 
 .main-content {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   padding: 1.5rem 2rem;
@@ -20,6 +21,20 @@
   max-height: 100vh;
   position: relative;
   z-index: 1;
+}
+
+/* A light top veil echoes the stronger bottom fade without dimming controls. */
+.main-content::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: calc(100% - var(--sidebar-width, 250px));
+  height: 48px;
+  background: linear-gradient(to bottom, hsl(var(--background) / 0.42), transparent);
+  pointer-events: none;
+  z-index: 1000;
+  transition: width 0.3s ease;
 }
 
 /* Global Bottom Fade Effect */
@@ -39,6 +54,10 @@
 
 /* Adjust fade width when sidebar is collapsed */
 .app-container:has(.sidebar.collapsed) .main-content::after {
+  width: calc(100% - 80px);
+}
+
+.app-container:has(.sidebar.collapsed) .main-content::before {
   width: calc(100% - 80px);
 }
 
@@ -126,7 +145,9 @@
 
 /* Disable bottom fade on messages page so input is never blocked or dimmed */
 .app-container:has(.messages-page) .main-content::after,
-.app-container:has(.full-messages-view) .main-content::after {
+.app-container:has(.full-messages-view) .main-content::after,
+.app-container:has(.messages-page) .main-content::before,
+.app-container:has(.full-messages-view) .main-content::before {
   display: none !important;
 }
 
@@ -140,6 +161,7 @@
 
 .page-container {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -175,5 +197,22 @@
   
   .header-search {
     max-width: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .app-container {
+    --sidebar-width: 64px;
+  }
+
+  .main-content {
+    padding: 1rem 0.75rem;
+  }
+
+  .main-content::before,
+  .main-content::after,
+  .app-container:has(.sidebar.collapsed) .main-content::before,
+  .app-container:has(.sidebar.collapsed) .main-content::after {
+    width: calc(100% - 64px);
   }
 }

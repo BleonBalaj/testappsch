@@ -15,7 +15,7 @@ const MOCK_MATERIALS = [
   { id: 'm3', name: 'Midterm Exam Review Packet.docx', size: '4.1 MB', date: 'Yesterday' }
 ];
 
-const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student' }) => {
+const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreateLessonPlan, lessonLanguage = 'en' }) => {
   const { studentsList } = useSchoolData();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'materials'
   const isStudent = userRole === 'student';
@@ -83,7 +83,8 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student' }) => {
               </div>
               <div className="class-title-info">
                 <h2>{classInfo.subject}</h2>
-                <p>{classInfo.room} • {classInfo.time}</p>
+                <p>{classInfo.classLabel ? `Class ${classInfo.classLabel} · Period ${classInfo.period} · ` : ''}{classInfo.room} • {classInfo.time}</p>
+                {classInfo.scheduledDate && <p>{new Date(`${classInfo.scheduledDate}T12:00:00`).toLocaleDateString(lessonLanguage === 'sq' ? 'sq-AL' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>}
               </div>
               <button className="icon-btn-close" onClick={onClose}>
                 <X size={20} />
@@ -325,6 +326,17 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student' }) => {
 
             {/* Footer Actions */}
             <div className="class-detail-actions">
+              {!isStudent && onCreateLessonPlan && (
+                <button
+                  type="button"
+                  className="btn-secondary full-width"
+                  style={{ marginBottom: '0.65rem' }}
+                  onClick={onCreateLessonPlan}
+                >
+                  <FileText size={18} />
+                  {lessonLanguage === 'sq' ? 'Krijo plan mësimor' : 'Create lesson plan'}
+                </button>
+              )}
               {isStudent ? (
                 <button 
                   type="button" 

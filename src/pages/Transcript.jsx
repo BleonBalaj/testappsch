@@ -446,7 +446,7 @@ const Transcript = ({ userRole = 'student' }) => {
               <Building2 size={36} />
             </div>
             <div className="school-text-meta">
-              <h2 className="school-name">LumiSchool Academy of Excellence</h2>
+              <h2 className="school-name">Noesis Horizon</h2>
               <div className="school-sub">Accredited Secondary & Preparatory Institution • CEEB Code: 052-890</div>
               <div className="school-address">100 Academic Way, Cambridge, MA 02138 • registrar@lumischool.edu</div>
             </div>
@@ -762,7 +762,7 @@ const Transcript = ({ userRole = 'student' }) => {
 
         {/* Footer Disclaimer */}
         <div className="transcript-doc-footer">
-          <p>This electronic academic transcript is an official certified educational record issued by LumiSchool Academy. Alteration or falsification of this document is strictly prohibited under institutional accreditation guidelines. For third-party university or scholarship verification, contact registrar@lumischool.edu citing Verification Code: {STUDENT_PROFILE.verificationCode}.</p>
+          <p>This electronic academic transcript is a demonstration record for Noesis Horizon. For verification in a real deployment, contact the school registrar and cite Verification Code: {STUDENT_PROFILE.verificationCode}.</p>
         </div>
 
       </div>

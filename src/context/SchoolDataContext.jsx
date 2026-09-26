@@ -114,7 +114,7 @@ const INITIAL_STAFF = [
     phone: '+1 (555) 234-006',
     status: 'active',
     room: 'Tech Hub 102',
-    bio: 'Manages LumiSchool cloud infrastructure, student device portals, and digital robotics lab.',
+    bio: 'Manages Noesis Horizon cloud infrastructure, student device portals, and digital robotics lab.',
     joinDate: '2021-03-01'
   }
 ];

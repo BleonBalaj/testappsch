@@ -86,7 +86,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
     setTimeout(() => {
       setIsLoading(false);
       const user = {
-        name: fullName.trim() || (selectedRole === 'student' ? 'Aria Montgomery' : 'Prof. Wilson'),
+        name: fullName.trim() || (selectedRole === 'student' ? 'Aria Montgomery' : 'Noesis'),
         email: email.trim() || (selectedRole === 'student' ? 'aria.montgomery@lumischool.edu' : 'j.wilson@lumischool.edu'),
         role: selectedRole,
       };
@@ -164,7 +164,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
               <School size={28} />
             </div>
             <div className="brand-title-wrap">
-              <span className="brand-title gradient-text">LumiSchool</span>
+              <span className="brand-title gradient-text">Noesis Horizon</span>
             </div>
           </div>
 

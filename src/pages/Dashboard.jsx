@@ -211,13 +211,13 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       <header className="dashboard-hero">
         <motion.div className="hero-welcome" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
           <h1 className="gradient-text">
-            {isStudent ? 'Welcome back, Aria! 🎓✨' : isAdmin ? 'Welcome back, Admin Lumi! ✨' : 'Welcome back, Prof. Wilson! 📚'}
+            {isStudent ? 'Welcome back, Aria! 🎓✨' : isAdmin ? 'Welcome back, Noesis! ✨' : 'Welcome back, Noesis! 📚'}
           </h1>
           <p>
             {isStudent 
               ? 'Grade 10 Honors • Class 10A • Next up: Physics Mechanics at 10:15 AM (Lab 1)' 
               : isAdmin 
-              ? "Here's what's happening across LumiSchool today." 
+              ? "Here's what's happening across Noesis Horizon today."
               : "You have 3 classes scheduled for today."}
           </p>
         </motion.div>
@@ -254,7 +254,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             >
               <div className="modal-header">
                 <h3 style={{ color: 'hsl(var(--primary))' }}>
-                  {isStudent ? "How's your day, Aria? ✍️" : isAdmin ? "How's your day, Lumi? ✍️" : "How's your day, Professor? ✍️"}
+                  {isStudent ? "How's your day, Aria? ✍️" : "How's your day, Noesis? ✍️"}
                 </h3>
                 <button onClick={() => setIsMoodModalOpen(false)}><X size={20} /></button>
               </div>
@@ -521,7 +521,10 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           >
             <div className="card-header">
               <h3>My Classes Today</h3>
-              <button className="text-btn" onClick={() => onNavigate('schedule')}>Full Schedule</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button className="text-btn" onClick={() => onNavigate('lesson-plans')}>Lesson planning</button>
+                <button className="text-btn" onClick={() => onNavigate('schedule')}>Full Schedule</button>
+              </div>
             </div>
             <div className="classes-today-list">
               {teacherClasses.map(cls => (

@@ -8,6 +8,8 @@ import {
 import ClassDetail from '../components/ClassDetail';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { Avatar } from '../components/Avatar';
+import { SUBJECTS } from '../features/lessonPlans/catalog';
+import { translateCatalogValue } from '../features/lessonPlans/i18n';
 import './Schedule.css';
 
 const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
@@ -23,14 +25,17 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
     <div className="time-strip" style={{ backgroundColor: `hsl(var(${item.color}))` }}></div>
     <div className="schedule-content">
       <div className="schedule-header">
-        <div className="header-left">
+        <div className="header-left" style={{ flexWrap: 'wrap' }}>
           <span className="class-time">{item.time}</span>
           {item.isEvent && (
             <span className="event-tag">
               <Calendar size={11} /> Event
             </span>
           )}
-          {item.subjectCategory && !item.isEvent && (
+          {item.classLabel && !item.isEvent && (
+            <span className="category-tag glass">Class {item.classLabel} · P{item.period}</span>
+          )}
+          {item.subjectCategory && !item.isEvent && !item.classLabel && (
             <span className="category-tag glass">{item.subjectCategory}</span>
           )}
           {activeTab === 'all-schedule' && userRole !== 'admin' && item.enrolled && !item.isEvent && (
@@ -62,39 +67,54 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
 
 const INITIAL_SCHEDULE = {
   'Monday': [
-    { id: 1, time: '08:30 - 10:00', subject: 'Mathematics', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--primary', enrolled: true },
-    { id: 2, time: '10:15 - 11:45', subject: 'Physics Mechanics', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
-    { id: 3, time: '12:30 - 14:00', subject: 'English Literature', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
-    { id: 4, time: '14:15 - 15:45', subject: 'World History', subjectCategory: 'Humanities', room: 'Room 201', teacher: 'Mr. David Clark', color: '--chart-1', enrolled: true },
+    { id: 1, time: '08:30 - 10:00', subject: 'Mathematics', curriculumSubject: 'Matematikë', classLabel: 'VII/1', period: '1', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--primary', enrolled: true },
+    { id: 2, time: '10:15 - 11:45', subject: 'Physics Mechanics', curriculumSubject: 'Fizikë', classLabel: 'VIII/1', period: '2', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
+    { id: 3, time: '12:30 - 14:00', subject: 'English Literature', curriculumSubject: 'Gjuhë angleze', classLabel: 'VII/2', period: '3', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
+    { id: 4, time: '14:15 - 15:45', subject: 'World History', curriculumSubject: 'Histori', classLabel: 'IX/1', period: '4', subjectCategory: 'Humanities', room: 'Room 201', teacher: 'Mr. David Clark', color: '--chart-1', enrolled: true },
   ],
   'Tuesday': [
-    { id: 5, time: '08:30 - 10:00', subject: 'Chemistry Lab', subjectCategory: 'Science', room: 'Lab 2', teacher: 'Dr. Sarah Smith', color: '--chart-3', enrolled: false },
-    { id: 15, time: '10:15 - 11:45', subject: 'World History Seminar', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
-    { id: 6, time: '10:15 - 11:45', subject: 'Biology & Genetics', subjectCategory: 'Science', room: 'Lab 3', teacher: 'Prof. James Wilson', color: '--chart-5', enrolled: false },
-    { id: 7, time: '13:00 - 14:30', subject: 'Debate & Public Speaking', subjectCategory: 'Humanities', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--primary', enrolled: false },
-    { id: 16, time: '13:00 - 14:30', subject: 'Advanced Math Problem Session', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--primary', enrolled: true },
+    { id: 5, time: '08:30 - 10:00', subject: 'Chemistry Lab', curriculumSubject: 'Kimi', classLabel: 'VIII/1', period: '1', subjectCategory: 'Science', room: 'Lab 2', teacher: 'Noesis', color: '--chart-3', enrolled: false },
+    { id: 15, time: '10:15 - 11:45', subject: 'World History Seminar', curriculumSubject: 'Histori', classLabel: 'IX/1', period: '2', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
+    { id: 6, time: '10:15 - 11:45', subject: 'Biology & Genetics', curriculumSubject: 'Biologji', classLabel: 'VIII/2', period: '2', subjectCategory: 'Science', room: 'Lab 3', teacher: 'Prof. James Wilson', color: '--chart-5', enrolled: false },
+    { id: 7, time: '13:00 - 14:30', subject: 'Debate & Public Speaking', curriculumSubject: 'Gjuhë angleze', classLabel: 'VIII/3', period: '3', subjectCategory: 'Humanities', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--primary', enrolled: false },
+    { id: 16, time: '13:00 - 14:30', subject: 'Advanced Math Problem Session', curriculumSubject: 'Matematikë', classLabel: 'VII/1', period: '3', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--primary', enrolled: true },
   ],
   'Wednesday': [
-    { id: 8, time: '09:00 - 10:30', subject: 'Computer Science & AI', subjectCategory: 'Technology', room: 'Lab 4', teacher: 'Mr. Alex Vance', color: '--chart-4', enrolled: false },
-    { id: 17, time: '09:00 - 10:30', subject: 'Advanced Mathematics', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--primary', enrolled: true },
+    { id: 8, time: '09:00 - 10:30', subject: 'Computer Science & AI', curriculumSubject: 'Teknologji me TIK', classLabel: 'IX/2', period: '1', subjectCategory: 'Technology', room: 'Lab 4', teacher: 'Mr. Alex Vance', color: '--chart-4', enrolled: false },
+    { id: 17, time: '09:00 - 10:30', subject: 'Advanced Mathematics', curriculumSubject: 'Matematikë', classLabel: 'VII/1', period: '1', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--primary', enrolled: true },
     { id: 'e1', time: '11:00 - 15:00', subject: 'Science Fair Rehearsal', room: 'Auditorium', attendees: 45, color: '--primary', isEvent: true, enrolled: true },
-    { id: 9, time: '15:15 - 16:30', subject: 'Calculus Seminar', subjectCategory: 'Math', room: 'Room 302', teacher: 'Dr. Sarah Smith', color: '--accent', enrolled: false },
+    { id: 9, time: '15:15 - 16:30', subject: 'Calculus Seminar', curriculumSubject: 'Matematikë', classLabel: 'IX/1', period: '4', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--accent', enrolled: false },
   ],
   'Thursday': [
-    { id: 10, time: '10:00 - 11:30', subject: 'Digital Art & Animation', subjectCategory: 'Arts', room: 'Studio 3', teacher: 'Ms. Clara Oswald', color: '--chart-1', enrolled: false },
-    { id: 18, time: '10:00 - 11:30', subject: 'World History', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
-    { id: 11, time: '12:30 - 14:00', subject: 'Physics Mechanics', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
-    { id: 12, time: '14:30 - 16:00', subject: 'Civics & Government', subjectCategory: 'Humanities', room: 'Room 205', teacher: 'Mr. David Clark', color: '--chart-3', enrolled: false },
+    { id: 10, time: '10:00 - 11:30', subject: 'Digital Art & Animation', curriculumSubject: 'Edukatë figurative', classLabel: 'VIII/1', period: '1', subjectCategory: 'Arts', room: 'Studio 3', teacher: 'Ms. Clara Oswald', color: '--chart-1', enrolled: false },
+    { id: 18, time: '10:00 - 11:30', subject: 'World History', curriculumSubject: 'Histori', classLabel: 'IX/1', period: '1', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
+    { id: 11, time: '12:30 - 14:00', subject: 'Physics Mechanics', curriculumSubject: 'Fizikë', classLabel: 'VIII/1', period: '2', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
+    { id: 12, time: '14:30 - 16:00', subject: 'Civics & Government', curriculumSubject: 'Edukatë qytetare', classLabel: 'VIII/2', period: '3', subjectCategory: 'Humanities', room: 'Room 205', teacher: 'Mr. David Clark', color: '--chart-3', enrolled: false },
   ],
   'Friday': [
-    { id: 13, time: '08:30 - 10:00', subject: 'Physical Education & Athletics', subjectCategory: 'Athletics', room: 'Main Gymnasium', teacher: 'Coach Mike Tyson', color: '--mood-happy', enrolled: true },
-    { id: 19, time: '10:15 - 11:45', subject: 'English Literature Analysis', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
+    { id: 13, time: '08:30 - 10:00', subject: 'Physical Education & Athletics', curriculumSubject: 'Edukatë fizike, sportet dhe shëndeti', classLabel: 'VII/1', period: '1', subjectCategory: 'Athletics', room: 'Main Gymnasium', teacher: 'Coach Mike Tyson', color: '--mood-happy', enrolled: true },
+    { id: 19, time: '10:15 - 11:45', subject: 'English Literature Analysis', curriculumSubject: 'Gjuhë angleze', classLabel: 'VII/2', period: '2', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
     { id: 'e2', time: '13:00 - 16:00', subject: 'Annual Science Fair', room: 'Main Gym', attendees: 120, color: '--accent', isEvent: true, enrolled: true },
     { id: 14, time: '16:15 - 17:00', subject: 'Student Council Assembly', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--chart-2', isEvent: true, enrolled: true },
   ]
 };
 
-const Schedule = ({ userRole = 'student' }) => {
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+function mondayForWeek(weekOffset) {
+  const today = new Date();
+  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  monday.setDate(monday.getDate() + (today.getDay() === 0 ? -6 : 1 - today.getDay()) + weekOffset * 7);
+  return monday;
+}
+
+function dateForDay(monday, day) {
+  const date = new Date(monday);
+  date.setDate(date.getDate() + DAYS.indexOf(day));
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonPlan }) => {
   const { staffList } = useSchoolData();
   const [scheduleState, setScheduleState] = useState(INITIAL_SCHEDULE);
   const [selectedDay, setSelectedDay] = useState('Monday');
@@ -128,31 +148,29 @@ const Schedule = ({ userRole = 'student' }) => {
     day: 'Monday',
     time: '09:00 - 10:30',
     subject: '',
+    curriculumSubject: '',
+    classLabel: '',
+    period: '',
     subjectCategory: 'Academic',
     room: 'Room 101',
-    teacher: 'Dr. Sarah Smith',
+    teacher: 'Noesis',
     isEvent: false,
     color: '--primary',
     enrolled: true
   });
 
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const days = DAYS;
 
-  // Helper for computing dynamic week date string
+  const weekMonday = useMemo(() => mondayForWeek(weekOffset), [weekOffset]);
+
+  // A selected weekday is resolved against the displayed week, including week navigation.
   const weekDateString = useMemo(() => {
-    const now = new Date();
-    // Monday of current week
-    const currentMonday = new Date(now);
-    const dayOfWeek = now.getDay();
-    const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    currentMonday.setDate(now.getDate() + distanceToMonday + weekOffset * 7);
+    const friday = new Date(weekMonday);
+    friday.setDate(friday.getDate() + 4);
 
-    const friday = new Date(currentMonday);
-    friday.setDate(currentMonday.getDate() + 4);
-
-    const startMonth = currentMonday.toLocaleString('en-US', { month: 'short' });
+    const startMonth = weekMonday.toLocaleString('en-US', { month: 'short' });
     const endMonth = friday.toLocaleString('en-US', { month: 'short' });
-    const startDay = currentMonday.getDate();
+    const startDay = weekMonday.getDate();
     const endDay = friday.getDate();
     const year = friday.getFullYear();
 
@@ -160,12 +178,12 @@ const Schedule = ({ userRole = 'student' }) => {
       return `${startMonth} ${startDay} – ${endDay}, ${year}`;
     }
     return `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${year}`;
-  }, [weekOffset]);
+  }, [weekMonday]);
 
   // Determine if an item belongs in My Schedule
   const isItemInMySchedule = useCallback((item) => {
     if (userRole === 'teacher') {
-      return item.teacher?.includes('Sarah Smith') || item.isEvent;
+      return item.teacher === 'Noesis' || item.isEvent;
     }
     // For students and general users
     return Boolean(item.enrolled || item.isEvent);
@@ -232,13 +250,24 @@ const Schedule = ({ userRole = 'student' }) => {
 
   const handleClassClick = (item) => {
     if (item.isEvent) return;
-    setSelectedClass(item);
+    setSelectedClass({ ...item, scheduledDate: dateForDay(weekMonday, selectedDay) });
     setIsDetailOpen(true);
+  };
+
+  const handleCreateLessonPlan = () => {
+    if (!selectedClass?.classLabel || !selectedClass?.curriculumSubject || !onCreateLessonPlan) return;
+    onCreateLessonPlan({
+      date: selectedClass.scheduledDate,
+      classLabel: selectedClass.classLabel,
+      subject: selectedClass.curriculumSubject,
+      period: selectedClass.period,
+    });
+    setIsDetailOpen(false);
   };
 
   const handleAddSlotSubmit = (e) => {
     e.preventDefault();
-    if (!newSlotForm.subject) return;
+    if (!newSlotForm.subject || !newSlotForm.classLabel || !newSlotForm.curriculumSubject || !newSlotForm.period) return;
 
     const newItem = {
       ...newSlotForm,
@@ -255,9 +284,12 @@ const Schedule = ({ userRole = 'student' }) => {
       day: selectedDay,
       time: '09:00 - 10:30',
       subject: '',
+      curriculumSubject: '',
+      classLabel: '',
+      period: '',
       subjectCategory: 'Academic',
       room: 'Room 101',
-      teacher: 'Dr. Sarah Smith',
+      teacher: 'Noesis',
       isEvent: false,
       color: '--primary',
       enrolled: true
@@ -289,7 +321,7 @@ const Schedule = ({ userRole = 'student' }) => {
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
     const prefix = isMy ? 'My_Schedule' : 'Master_Campus_Schedule';
-    link.setAttribute("download", `LumiSchool_${prefix}_${weekDateString.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+    link.setAttribute("download", `NoesisHorizon_${prefix}_${weekDateString.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -628,6 +660,49 @@ const Schedule = ({ userRole = 'student' }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
+                    <label htmlFor="schedule-class-label">Class</label>
+                    <input
+                      id="schedule-class-label"
+                      type="text"
+                      required
+                      placeholder="e.g. VII/1"
+                      value={newSlotForm.classLabel}
+                      onChange={e => setNewSlotForm({ ...newSlotForm, classLabel: e.target.value })}
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="schedule-period">Period</label>
+                    <input
+                      id="schedule-period"
+                      type="number"
+                      min="1"
+                      max="12"
+                      required
+                      placeholder="e.g. 2"
+                      value={newSlotForm.period}
+                      onChange={e => setNewSlotForm({ ...newSlotForm, period: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="schedule-curriculum-subject">Curriculum subject for lesson planning</label>
+                  <select
+                    id="schedule-curriculum-subject"
+                    className="custom-form-select"
+                    required
+                    value={newSlotForm.curriculumSubject}
+                    onChange={e => setNewSlotForm({ ...newSlotForm, curriculumSubject: e.target.value })}
+                  >
+                    <option value="">Select subject</option>
+                    {SUBJECTS.map(subject => (
+                      <option key={subject.name} value={subject.name}>{translateCatalogValue(lessonLanguage, subject.name)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
                     <label>Instructor / Host</label>
                     <input 
                       type="text" 
@@ -718,6 +793,8 @@ const Schedule = ({ userRole = 'student' }) => {
         onClose={() => setIsDetailOpen(false)} 
         classInfo={selectedClass} 
         userRole={userRole}
+        onCreateLessonPlan={selectedClass && (userRole === 'admin' || (userRole === 'teacher' && selectedClass.teacher === 'Noesis')) ? handleCreateLessonPlan : undefined}
+        lessonLanguage={lessonLanguage}
       />
     </div>
   );

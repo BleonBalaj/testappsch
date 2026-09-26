@@ -21,7 +21,7 @@ const Toggle = ({ active, onToggle, label }) => (
   </div>
 );
 
-const Settings = ({ addNotification, userRole, setUserRole, onLogout }) => {
+const Settings = ({ addNotification, userRole, lessonLanguage = 'en', setUserRole, onNavigate, onLogout }) => {
   const [notifications, setNotifications] = useState(true);
   const [animations, setAnimations] = useState(true);
   const [cuteMode, setCuteMode] = useState(true);
@@ -74,7 +74,7 @@ const Settings = ({ addNotification, userRole, setUserRole, onLogout }) => {
             Settings
             <SettingsIcon size={32} style={{ color: 'hsl(var(--primary))' }} />
           </h1>
-          <p>Personalize your LumiSchool experience and switch role previews.</p>
+          <p>Personalize your Noesis Horizon experience and switch role previews.</p>
         </div>
       </header>
 
@@ -132,7 +132,7 @@ const Settings = ({ addNotification, userRole, setUserRole, onLogout }) => {
                 <input 
                   type="text" 
                   key={`name-${userRole}`}
-                  defaultValue={userRole === 'student' ? 'Aria Montgomery' : userRole === 'teacher' ? 'Prof. James Wilson' : 'Admin User'} 
+                  defaultValue={userRole === 'student' ? 'Aria Montgomery' : 'Noesis'}
                   className="glass" 
                 />
               </div>
@@ -150,7 +150,7 @@ const Settings = ({ addNotification, userRole, setUserRole, onLogout }) => {
                 <input 
                   type="text" 
                   key={`info-${userRole}`}
-                  defaultValue={userRole === 'student' ? 'Grade 10 Honors • Science & Arts' : 'LumiSchool Academy'} 
+                  defaultValue={userRole === 'student' ? 'Grade 10 Honors • Science & Arts' : 'Noesis Horizon'}
                   className="glass" 
                 />
               </div>
@@ -208,6 +208,17 @@ const Settings = ({ addNotification, userRole, setUserRole, onLogout }) => {
               </p>
             </div>
           </div>
+          {userRole !== 'student' && (
+            <button
+              type="button"
+              className="btn-secondary glass"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => onNavigate('lesson-plans-settings')}
+            >
+              <BookOpen size={18} />
+              {lessonLanguage === 'sq' ? 'Cilësimet e planifikimit' : 'Planning settings'}
+            </button>
+          )}
         </section>
 
         <section className="settings-section glass">
@@ -272,7 +283,7 @@ const Settings = ({ addNotification, userRole, setUserRole, onLogout }) => {
               }}
             >
               <LogOut size={20} />
-              <span>Logout from LumiSchool</span>
+              <span>Logout from Noesis Horizon</span>
             </button>
           </div>
         </section>

@@ -16,6 +16,7 @@ import Events from './pages/Events';
 import Resources from './pages/Resources';
 import MoodInsights from './pages/MoodInsights';
 import Transcript from './pages/Transcript';
+import LessonPlans from './pages/LessonPlans';
 import SearchOverlay from './components/SearchOverlay';
 import NotificationContainer from './components/Notification';
 import QuickAction from './components/QuickAction';
@@ -39,15 +40,38 @@ function App() {
   const [currentPath, setCurrentPath] = useState(getInitialPath);
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [pendingScheduledLesson, setPendingScheduledLesson] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [userRole, setUserRole] = useState(() => localStorage.getItem('lumi-role') || 'student'); // 'student', 'teacher', or 'admin'
+  const [lessonLanguage, setLessonLanguage] = useState(() => localStorage.getItem('lumi-lesson-language') === 'sq' ? 'sq' : 'en');
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('lumi-current-user') || 'null');
+      return saved && typeof saved === 'object'
+        ? { name: saved.name || '', email: saved.email || '' }
+        : { name: '', email: '' };
+    } catch {
+      return { name: '', email: '' };
+    }
+  });
   const mainContentRef = useRef(null);
 
+  const handleLogin = (user) => {
+    if (user?.role) handleSetUserRole(user.role);
+    const loginUser = { name: user?.name || '', email: user?.email || '' };
+    setCurrentUser(loginUser);
+    localStorage.setItem('lumi-current-user', JSON.stringify(loginUser));
+    handleNavigate('dashboard');
+  };
+
   const handleNavigate = (path) => {
+    if (path !== 'lesson-plans') setPendingScheduledLesson(null);
     setCurrentPath(path);
     if (typeof window !== 'undefined') {
       if (path === 'login') {
+        setCurrentUser({ name: '', email: '' });
+        localStorage.removeItem('lumi-current-user');
         window.history.pushState({}, '', '/login');
       } else if (window.location.pathname.replace(/^\/+|\/+$/g, '') === 'login') {
         window.history.pushState({}, '', '/');
@@ -75,7 +99,8 @@ function App() {
   const handleSetUserRole = (newRole) => {
     setUserRole(newRole);
     localStorage.setItem('lumi-role', newRole);
-    if (newRole === 'student' && ['staff', 'teachers', 'students', 'student-overview', 'resources'].includes(currentPath)) {
+    if (newRole === 'student' && ['staff', 'teachers', 'students', 'student-overview', 'resources', 'lesson-plans', 'lesson-plans-settings'].includes(currentPath)) {
+      setPendingScheduledLesson(null);
       setCurrentPath('dashboard');
     } else if (newRole !== 'student' && currentPath === 'transcript') {
       setCurrentPath('dashboard');
@@ -127,9 +152,9 @@ function App() {
   ];
 
   const renderPage = () => {
-    // Access control: Students are not permitted to access Staff Directory, Resource Hub, or Student Directory
+    // Role-based UI access. This local preview is not server-side authorization.
     if (userRole === 'student') {
-      if (['staff', 'teachers', 'students', 'student-overview', 'resources'].includes(currentPath)) {
+      if (['staff', 'teachers', 'students', 'student-overview', 'resources', 'lesson-plans', 'lesson-plans-settings'].includes(currentPath)) {
         return <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
       }
     }
@@ -179,6 +204,9 @@ function App() {
         />;
       case 'tasks':
         return <Tasks userRole={userRole} />;
+      case 'lesson-plans':
+      case 'lesson-plans-settings':
+        return <LessonPlans key={currentPath} initialView={currentPath === 'lesson-plans-settings' ? 'settings' : 'plans'} userRole={userRole} currentUser={{ ...currentUser, role: userRole }} language={lessonLanguage} onLanguageChange={(next) => { setLessonLanguage(next); localStorage.setItem('lumi-lesson-language', next); }} scheduledLesson={currentPath === 'lesson-plans' ? pendingScheduledLesson : null} onScheduledLessonConsumed={() => setPendingScheduledLesson(null)} />;
       case 'transcript':
         return userRole === 'student' ? <Transcript userRole={userRole} /> : <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
       case 'leaderboard':
@@ -197,7 +225,7 @@ function App() {
       case 'events':
         return <Events userRole={userRole} />;
       case 'schedule':
-        return <Schedule userRole={userRole} />;
+        return <Schedule userRole={userRole} lessonLanguage={lessonLanguage} onCreateLessonPlan={(scheduledLesson) => { setPendingScheduledLesson(scheduledLesson); setCurrentPath('lesson-plans'); }} />;
       case 'messages':
         return <Messages userRole={userRole} />;
       case 'settings':
@@ -205,7 +233,9 @@ function App() {
           <Settings 
             addNotification={addNotification} 
             userRole={userRole} 
+            lessonLanguage={lessonLanguage}
             setUserRole={handleSetUserRole} 
+            onNavigate={handleNavigate}
             onLogout={() => handleNavigate('login')}
           />
         );
@@ -216,10 +246,7 @@ function App() {
       case 'login':
         return (
           <Login 
-            onLogin={(user) => {
-              if (user?.role) handleSetUserRole(user.role);
-              handleNavigate('dashboard');
-            }}
+            onLogin={handleLogin}
             onNavigate={handleNavigate}
             addNotification={addNotification}
           />
@@ -234,10 +261,7 @@ function App() {
       <SchoolDataProvider>
         <MoodProvider>
           <Login 
-            onLogin={(user) => {
-              if (user?.role) handleSetUserRole(user.role);
-              handleNavigate('dashboard');
-            }}
+            onLogin={handleLogin}
             onNavigate={handleNavigate}
             addNotification={addNotification}
           />
@@ -255,7 +279,7 @@ function App() {
       <MoodProvider>
         <div className="app-container">
           <StarryBackground />
-          <Sidebar currentPath={currentPath} onNavigate={handleNavigate} userRole={userRole} />
+          <Sidebar currentPath={currentPath} onNavigate={handleNavigate} userRole={userRole} lessonLanguage={lessonLanguage} />
           <main className="main-content" ref={mainContentRef}>
             {currentPath !== 'messages' && (
               <header className="main-header">

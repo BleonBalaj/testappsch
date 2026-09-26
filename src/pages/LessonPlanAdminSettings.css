@@ -1,0 +1,137 @@
+.lp-admin-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.lp-admin-card.glass {
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: var(--glass-shadow);
+  min-width: 0;
+}
+
+.lp-admin-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: .8rem;
+  margin-bottom: 1.3rem;
+}
+
+.lp-admin-heading-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: hsl(var(--primary));
+  background: hsla(var(--primary), .14);
+}
+
+.lp-admin-heading h2 { font-size: 1.05rem; }
+.lp-admin-heading p { margin-top: .25rem; color: hsl(var(--muted-foreground)); font-size: .8rem; line-height: 1.45; }
+.lp-admin-form { display: flex; flex-direction: column; gap: .9rem; }
+.lp-admin-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.lp-admin-field { display: flex; flex-direction: column; gap: .38rem; min-width: 0; }
+.lp-admin-field-wide { grid-column: 1 / -1; }
+.lp-admin-field > span { color: hsl(var(--muted-foreground)); font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
+
+.lp-admin-field input,
+.lp-admin-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: .6rem .75rem;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--input));
+  outline: none;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: .86rem;
+}
+
+.lp-admin-field input::placeholder { color: hsl(var(--muted-foreground)); opacity: .78; }
+.lp-admin-field input:focus,
+.lp-admin-field select:focus { border-color: hsl(var(--primary)); box-shadow: 0 0 0 2px hsla(var(--primary), .22); }
+[data-theme='light'] .lp-admin-field input,
+[data-theme='light'] .lp-admin-field select { background: #fff; border-color: hsl(270 25% 75%); }
+
+.lp-admin-check { display: inline-flex; align-items: center; gap: .55rem; color: hsl(var(--foreground)); font-size: .8rem; font-weight: 600; }
+.lp-admin-check input { width: 16px; height: 16px; accent-color: hsl(var(--primary)); }
+.lp-admin-error { color: hsl(var(--destructive)); font-size: .78rem; line-height: 1.4; }
+.lp-admin-form-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
+.lp-admin-form-actions button { min-height: 38px; }
+.lp-admin-records { margin-top: 1.5rem; border-top: 1px solid hsla(var(--foreground), .1); padding-top: 1.15rem; }
+.lp-admin-records h3 { font-size: .9rem; display: flex; align-items: center; gap: .5rem; margin-bottom: .55rem; }
+.lp-admin-records h3 span { color: hsl(var(--primary)); font-size: .75rem; }
+.lp-admin-empty { color: hsl(var(--muted-foreground)); font-size: .8rem; line-height: 1.5; padding: .35rem 0; }
+.lp-admin-records ul { list-style: none; margin: 0; padding: 0; }
+.lp-admin-record { display: flex; justify-content: space-between; align-items: center; gap: .6rem; padding: .85rem 0; border-bottom: 1px solid hsla(var(--foreground), .08); }
+.lp-admin-record:last-child { border-bottom: 0; padding-bottom: 0; }
+.lp-admin-record-content { min-width: 0; }
+.lp-admin-record-title { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+.lp-admin-record-title strong { color: hsl(var(--foreground)); font-size: .82rem; font-weight: 700; overflow-wrap: anywhere; }
+.lp-admin-record-content p { margin-top: .22rem; color: hsl(var(--muted-foreground)); font-size: .74rem; line-height: 1.4; overflow-wrap: anywhere; }
+.lp-admin-approved,
+.lp-admin-unapproved { display: inline-flex; align-items: center; gap: .2rem; border-radius: 8px; padding: .2rem .4rem; font-size: .65rem; font-weight: 700; white-space: nowrap; }
+.lp-admin-approved { color: hsl(var(--mood-happy)); background: hsla(var(--mood-happy), .11); }
+.lp-admin-unapproved { color: hsl(var(--muted-foreground)); background: hsla(var(--muted-foreground), .12); }
+.lp-admin-record-actions { display: flex; align-items: center; gap: .15rem; flex: 0 0 auto; }
+.lp-admin-record-actions button { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: hsl(var(--muted-foreground)); }
+.lp-admin-record-actions button:hover { color: hsl(var(--primary)); background: hsla(var(--primary), .12); }
+.lp-admin-record-actions button:last-child:hover { color: hsl(var(--destructive)); background: hsla(var(--destructive), .12); }
+
+.lp-admin-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5300;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(9, 8, 21, .68);
+  backdrop-filter: blur(4px);
+}
+
+.lp-admin-confirm-card.glass {
+  width: min(100%, 440px);
+  padding: 1.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: var(--glass-shadow);
+}
+
+.lp-admin-confirm-card h2 { font-size: 1.2rem; }
+.lp-admin-confirm-card p { margin: .5rem 0 1.25rem; color: hsl(var(--muted-foreground)); font-size: .87rem; line-height: 1.5; }
+.lp-admin-confirm-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .6rem; }
+.lp-admin-confirm-actions button { min-height: 40px; }
+.lp-admin-confirm-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .65rem 1.2rem;
+  border: 1px solid hsl(var(--destructive));
+  border-radius: 14px;
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lp-admin-confirm-remove:hover { filter: brightness(1.08); }
+.lp-admin-confirm-remove:focus-visible { outline: 2px solid hsl(var(--foreground)); outline-offset: 2px; }
+
+@media (max-width: 700px) {
+  .lp-admin-card.glass { padding: 1.1rem; }
+  .lp-admin-form-grid { grid-template-columns: 1fr; }
+  .lp-admin-field-wide { grid-column: auto; }
+}

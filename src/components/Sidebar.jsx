@@ -10,6 +10,7 @@ import {
   School,
   MessageSquare,
   Book,
+  BookOpen,
   Trophy,
   CalendarDays,
   CheckSquare,
@@ -27,6 +28,17 @@ const SidebarItem = ({ icon: IconComponent, label, active, onClick, collapsed })
     <motion.div
       className={`sidebar-item ${active ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      aria-current={active ? 'page' : undefined}
+      title={label}
       whileHover={{ scale: 1.02, x: 5 }}
       whileTap={{ scale: 0.98 }}
     >
@@ -39,13 +51,14 @@ const SidebarItem = ({ icon: IconComponent, label, active, onClick, collapsed })
   );
 };
 
-const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
+const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage = 'en' }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'classes', label: 'Classes', icon: Book },
+    { id: 'lesson-plans', label: lessonLanguage === 'sq' ? 'Planifikimi mësimor' : 'Lesson planning', icon: BookOpen, teacherAndAdminOnly: true },
     { id: 'transcript', label: 'Transcript', icon: GraduationCap, studentOnly: true },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
@@ -62,6 +75,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
     if (id === 'staff') return currentPath === 'staff' || currentPath === 'teachers';
     if (id === 'students') return currentPath === 'students' || currentPath === 'student-overview';
     if (id === 'classes') return currentPath === 'classes' || currentPath === 'class-overview';
+    if (id === 'lesson-plans') return currentPath === 'lesson-plans' || currentPath === 'lesson-plans-settings';
     return currentPath === id;
   };
 
@@ -70,6 +84,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
 
   const visibleMenuItems = menuItems.filter(item => {
     if (item.studentOnly && !isStudent) return false;
+    if (item.teacherAndAdminOnly && isStudent) return false;
     if (isStudent) {
       return item.id !== 'students' && item.id !== 'staff' && item.id !== 'resources';
     }
@@ -93,7 +108,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              LumiSchool
+              Noesis Horizon
             </motion.span>
           )}
         </div>
@@ -120,12 +135,12 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin' }) => {
       <div className="sidebar-footer">
         <div className="user-profile">
           <div className="avatar">
-            <Avatar alt={isStudent ? 'Aria Montgomery' : isAdmin ? 'Admin User' : 'Prof. Wilson'} />
+            <Avatar alt={isStudent ? 'Aria Montgomery' : 'Noesis'} />
           </div>
           {!collapsed && (
             <div className="user-info">
               <p className="user-name">
-                {isStudent ? 'Aria Montgomery' : isAdmin ? 'Admin User' : 'Prof. Wilson'}
+                {isStudent ? 'Aria Montgomery' : 'Noesis'}
               </p>
               <p className="user-role">
                 {isStudent ? 'Grade 10 • Student' : isAdmin ? 'Super Admin' : 'Senior Teacher'}

@@ -274,7 +274,7 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `LumiSchool_Staff_Directory_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `NoesisHorizon_Staff_Directory_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -292,7 +292,7 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
             </h1>
             <span className="count-pill glass">{filteredStaff.length} Members</span>
           </div>
-          <p>Explore educators, administrators, and specialized faculty supporting LumiSchool.</p>
+          <p>Explore educators, administrators, and specialized faculty supporting Noesis Horizon.</p>
         </div>
 
         <div className="header-actions">
@@ -726,7 +726,7 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
               <div className="role-manager-layout">
                 {/* Left side: Role List */}
                 <div className="role-list-pane">
-                  <h4>Active Roles in LumiSchool</h4>
+                  <h4>Active Roles in Noesis Horizon</h4>
                   <div className="role-cards-container">
                     {rolesList.map(role => {
                       const count = staffList.filter(s => s.roleId === role.id).length;
@@ -895,7 +895,7 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
 
                 <div className="drawer-bio-box glass">
                   <h4>Biography & Specialization</h4>
-                  <p>{selectedProfile.bio || 'Dedicated educator and staff member committed to student success at LumiSchool.'}</p>
+                  <p>{selectedProfile.bio || 'Dedicated educator and staff member committed to student success at Noesis Horizon.'}</p>
                 </div>
 
                 <div className="drawer-contact-box glass">

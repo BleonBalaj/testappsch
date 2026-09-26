@@ -238,3 +238,67 @@
   padding: 0.75rem 1rem;
   margin: 0 0.5rem;
 }
+
+@media (max-width: 700px) {
+  .sidebar,
+  .sidebar.collapsed {
+    width: 64px !important;
+    min-width: 64px;
+    flex: 0 0 64px;
+    padding: 1rem 0.4rem;
+    border-radius: 0 18px 18px 0;
+  }
+
+  .sidebar-header,
+  .sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 0;
+    margin-bottom: 1rem;
+  }
+
+  .sidebar .logo-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .sidebar .logo-text,
+  .sidebar .collapse-btn,
+  .sidebar .label,
+  .sidebar .user-info {
+    display: none;
+  }
+
+  .sidebar-nav {
+    gap: 0.25rem;
+    padding-right: 0;
+    margin-right: 0;
+  }
+
+  .sidebar-item,
+  .sidebar-item.collapsed {
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.6rem;
+    margin: 0;
+  }
+
+  .sidebar-footer {
+    padding-top: 0.65rem;
+  }
+
+  .sidebar .user-profile {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0;
+  }
+
+  .sidebar .avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sidebar-logout-btn {
+    margin: 0;
+  }
+}
