@@ -200,7 +200,8 @@ const ResourceCard = ({ resource, view, onToggleBookmark, onDownload, onDelete }
   );
 };
 
-const Resources = () => {
+const Resources = ({ userRole = 'student' }) => {
+  const canEditResources = ['admin', 'teacher', 'dept_head'].includes(userRole);
   const { activeSchoolId, currentUser } = useAuth();
   const { t, isAlbanian } = useLanguage();
   const [resources, setResources] = useState(INITIAL_RESOURCES);
@@ -357,9 +358,9 @@ const Resources = () => {
           <p>{t('resources.subtitle', 'Access study materials, curriculum guides, video lectures, and syllabi.')}</p>
         </div>
         <div className="header-actions">
-          <button className="btn-primary" onClick={() => setIsAddOpen(true)}>
+          {canEditResources && <button className="btn-primary" onClick={() => setIsAddOpen(true)}>
             <Plus size={16} /> {t('resources.addMaterial', 'Add Material')}
-          </button>
+          </button>}
           <div className="view-toggle glass">
             <button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} title="Grid View">
               <LayoutGrid size={18} />
@@ -518,7 +519,7 @@ const Resources = () => {
               view={view} 
               onToggleBookmark={handleToggleBookmark}
               onDownload={handleDownload}
-              onDelete={handleDeleteResource}
+              onDelete={canEditResources ? handleDeleteResource : undefined}
             />
           ))}
         </AnimatePresence>

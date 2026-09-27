@@ -46,6 +46,26 @@ service cloud.firestore {
       );
     }
 
+    function canUseModule(schoolId, moduleId, teacherDefault, studentDefault) {
+      return isSchoolAdmin(schoolId) || (
+        isSchoolMember(schoolId) && (
+          (getMemberRole(schoolId) != 'student' &&
+            get(/databases/$(database)/documents/schools/$(schoolId)).data.get('rolePermissions', {}).get('teacher', {}).get(moduleId, teacherDefault) == true) ||
+          (getMemberRole(schoolId) == 'student' &&
+            get(/databases/$(database)/documents/schools/$(schoolId)).data.get('rolePermissions', {}).get('student', {}).get(moduleId, studentDefault) == true)
+        )
+      );
+    }
+
+    function validOwnSchoolLink(schoolId, uid) {
+      return isOwner(uid) &&
+        request.resource.data.schoolId == schoolId &&
+        exists(/databases/$(database)/documents/schools/$(schoolId)/members/$(uid)) &&
+        get(/databases/$(database)/documents/schools/$(schoolId)/members/$(uid)).data.status == 'active' &&
+        request.resource.data.role == get(/databases/$(database)/documents/schools/$(schoolId)/members/$(uid)).data.role &&
+        request.resource.data.status == 'active';
+    }
+
     // AI generation quota is written only by the server. Users may inspect
     // their own usage, but cannot grant themselves more generations.
     match /lessonAiUsage/{uid} {
@@ -61,8 +81,7 @@ service cloud.firestore {
     // USERS COLLECTION & PRIVATE PREFERENCES
     // ──────────────────────────────────────────────────────────
     match /users/{uid} {
-      allow read: if isSignedIn();
-      allow create, update: if isOwner(uid) || isSignedIn();
+      allow read, create, update: if isOwner(uid);
       allow delete: if false;
 
       // App-wide global preferences (Theme, animations, volume, etc.)
@@ -73,13 +92,14 @@ service cloud.firestore {
       // Per-user per-school preferences (Lesson-plan defaults, language, PDF options)
       match /schoolPreferences/{schoolId} {
         allow read: if isOwner(uid);
-        allow write: if isOwner(uid) || isSignedIn();
+        allow write: if isOwner(uid);
       }
 
       // School links projection for user's top dropdown
       match /schoolLinks/{schoolId} {
         allow read: if isOwner(uid);
-        allow write: if isOwner(uid) || isSignedIn();
+        allow create, update: if validOwnSchoolLink(schoolId, uid) || isSchoolAdmin(schoolId);
+        allow delete: if isSchoolAdmin(schoolId);
       }
 
       // User personal mood tracking
@@ -87,8 +107,12 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
 
-      // Any other user private documents
-      match /{allSubcollections=**} {
+      // Personal dashboard data. Keep these paths explicit so this rule cannot
+      // override the stricter schoolLinks membership checks above.
+      match /studentTasks/{taskId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /dashboardNotes/{noteId} {
         allow read, write: if isOwner(uid);
       }
     }
@@ -97,9 +121,9 @@ service cloud.firestore {
     // SCHOOL TENANTS & SUBCOLLECTIONS
     // ──────────────────────────────────────────────────────────
     match /schools/{schoolId} {
-      allow read: if (isSignedIn() && resource.data.creatorUid == request.auth.uid) || isSchoolMember(schoolId) || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)/schoolLinks/$(schoolId)));
-      allow create: if isSignedIn();
-      allow update: if isSchoolTeacherOrAdmin(schoolId);
+      allow read: if isSchoolMember(schoolId);
+      allow create: if isSignedIn() && request.resource.data.creatorUid == request.auth.uid;
+      allow update: if isSchoolAdmin(schoolId) && request.resource.data.creatorUid == resource.data.creatorUid;
       allow delete: if false;
 
       // Roles
@@ -111,124 +135,142 @@ service cloud.firestore {
       // School Memberships (Authoritative source for roles)
       match /members/{memberUid} {
         allow read: if isSchoolMember(schoolId) || isOwner(memberUid);
-        allow create: if isSchoolAdmin(schoolId) || (isSignedIn() && request.auth.uid == memberUid);
-        allow update: if isSchoolAdmin(schoolId) || isOwner(memberUid);
+        allow create: if isSchoolAdmin(schoolId);
+        allow update: if isSchoolAdmin(schoolId) || (isOwner(memberUid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'photoURL']));
         allow delete: if isSchoolAdmin(schoolId) && request.auth.uid != memberUid;
       }
 
       // Staff directory
       match /staff/{staffId} {
+        // Messaging and dashboard summaries also use the directory.
         allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolAdmin(schoolId);
+        // Initial school registration writes the creator's own staff record.
+        // All later staff provisioning uses the callable account flow.
+        allow create: if isSchoolCreator(schoolId) && isOwner(staffId) && request.resource.data.roleId == 'admin';
+        allow delete: if isSchoolAdmin(schoolId) && request.auth.uid != staffId;
+        allow update: if isSchoolAdmin(schoolId) || (isOwner(staffId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
       }
 
       // Students directory
       match /students/{studentId} {
+        // Messaging, leaderboard, and student dashboard share this roster.
         allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        // Provision and remove accounts through the callable so Auth,
+        // membership, school link, and directory stay in sync.
+        allow create: if false;
+        allow update: if isSchoolAdmin(schoolId) || (isOwner(studentId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])) ||
+          (isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'students', true, false) && canUseModule(schoolId, 'canEditDeleteStudents', true, false));
+        allow delete: if false;
       }
 
       // Classes / Courses
       match /classes/{classId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'classes', true, true);
+        allow create: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
+        allow update: if isSchoolAdmin(schoolId) || (isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true) &&
+          (canUseModule(schoolId, 'canEditDeleteClasses', true, false) ||
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weights', 'categoryLabels', 'gradingSettings', 'curriculumStage', 'updatedAt'])));
+        allow delete: if isSchoolAdmin(schoolId) || (isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true) && canUseModule(schoolId, 'canEditDeleteClasses', true, false));
 
         match /{allClassSubcollections=**} {
-          allow read, write: if isSchoolTeacherOrAdmin(schoolId) || isSchoolMember(schoolId);
+          allow read: if canUseModule(schoolId, 'classes', true, true);
+          allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
         }
       }
 
       // Class enrollments
       match /enrollments/{enrollmentId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'classes', true, true);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
       }
 
       // Schedule & Timetable
       match /scheduleEntries/{entryId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'schedule', true, true);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'schedule', true, true);
       }
 
       // Events
       match /events/{eventId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'events', true, true);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'events', true, true);
       }
 
       // Assignments
       match /assignments/{assignmentId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'classes', true, true);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
       }
 
       // Grades
       match /grades/{gradeId} {
-        allow read, write: if isSchoolTeacherOrAdmin(schoolId) || isSchoolMember(schoolId);
+        allow read: if canUseModule(schoolId, 'classes', true, true);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
       }
 
       // Attendance records
       match /attendanceRecords/{recordId} {
-        allow read, write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'classes', true, true);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
       }
 
       // Lesson Plans (Author, Teachers, and Admins)
       match /lessonPlans/{planId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
       }
 
       // Lesson Plan Templates
       match /templates/{templateId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
       }
 
       // Lesson Reusable Entries
       match /reusableEntries/{entryId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
       }
 
       // Topics
       match /topics/{topicId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
       }
 
       // School curriculum mappings
       match /subjectMappings/{mappingId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
       }
       match /stageMappings/{mappingId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
       }
 
       // Resources
       match /resources/{resourceId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read: if canUseModule(schoolId, 'resources', true, false);
+        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'resources', true, false);
       }
 
       // Conversations & Messages (Real-time Chat)
       match /conversations/{conversationId} {
-        allow read, write: if isSchoolMember(schoolId);
+        allow read, write: if canUseModule(schoolId, 'messages', true, true);
 
         match /messages/{messageId} {
-          allow read, write: if isSchoolMember(schoolId);
+          allow read, write: if canUseModule(schoolId, 'messages', true, true);
         }
       }
 
       // Tasks
       match /tasks/{taskId} {
-        allow read, write: if isSchoolMember(schoolId);
+        allow read, write: if canUseModule(schoolId, 'tasks', true, true);
       }
 
       // Mood entries
       match /moodEntries/{entryId} {
-        allow read, write: if isSchoolMember(schoolId);
+        allow read, write: if canUseModule(schoolId, 'mood-insights', true, true);
       }
 
       // Invitations

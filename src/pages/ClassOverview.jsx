@@ -490,9 +490,11 @@ const TABS = [
 ];
 
 const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student' }) => {
-  const { studentsList = [], updateStudent } = useSchoolData();
+  const { studentsList = [], updateStudent, rolePermissions } = useSchoolData();
   const { activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
+  const canEditClass = userRole === 'admin' || ((userRole === 'teacher' || userRole === 'dept_head') && (rolePermissions?.teacher?.classes ?? true));
+  const canManageEnrollment = canEditClass && (userRole === 'admin' || (rolePermissions?.teacher?.canEditDeleteStudents ?? true));
 
   const [activeTab, setActiveTab]         = useState('gradebook');
   const [assignments, setAssignments]     = useState([]);
@@ -637,7 +639,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     { id: 'attendance', label: t('classes.attendance', 'Attendance'), icon: ClipboardList },
   ];
 
-  const availableTabs = userRole === 'student' 
+  const availableTabs = !canManageEnrollment
     ? tabsList.filter(t => t.id !== 'roster')
     : tabsList;
 
@@ -777,7 +779,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
           <button className="back-btn bouncy" onClick={onBack}>
             <ArrowLeft size={16} /> {t('classes.allClasses', 'All Classes')}
           </button>
-          {userRole !== 'student' && (
+          {canManageEnrollment && (
             <button className="btn-primary btn-sm" onClick={() => setIsEnrollModalOpen(true)}>
               <Plus size={15} /> {t('classes.enrollStudent', 'Enroll Student')}
             </button>
@@ -889,9 +891,11 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     </div>
                   ))}
                 </div>
-                <button className="btn-secondary glass btn-sm" style={{marginTop:'1rem'}} onClick={() => setWeightsModal(true)}>
-                  <Settings size={14} /> {isAlbanian ? 'Cilësimet e Vlerësimit & Peshat' : 'Grading Settings & Weights'}
-                </button>
+                {canEditClass && (
+                  <button className="btn-secondary glass btn-sm" style={{marginTop:'1rem'}} onClick={() => setWeightsModal(true)}>
+                    <Settings size={14} /> {isAlbanian ? 'Cilësimet e Vlerësimit & Peshat' : 'Grading Settings & Weights'}
+                  </button>
+                )}
               </div>
               <div className="co-widget glass">
                 <h4>{t('classes.topStudents', 'Top Students')}</h4>
@@ -995,7 +999,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             <div className="co-toolbar">
               <div>
                 <h3 style={{ margin: 0 }}>
-                  {userRole === 'student' 
+                  {!canEditClass
                     ? (isAlbanian ? 'Detyrat & Notat e Kursit' : 'Course Assignments & Grades') 
                     : (isAlbanian ? 'Ditari i Notave & Vlerësimi' : 'Gradebook & Assessment')}
                 </h3>
@@ -1005,7 +1009,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     : 'Manage coursework, missing homework, engagement, and final grade distribution.'}
                 </p>
               </div>
-              {userRole !== 'student' && (
+              {canEditClass && (
                 <div className="co-toolbar-actions">
                   <button className="btn-secondary glass btn-sm" onClick={() => setWeightsModal(true)}>
                     <Settings size={15}/> {isAlbanian ? 'Cilësimet e Vlerësimit & Peshat' : 'Grading Settings & Weights'}
@@ -1054,7 +1058,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     <tbody>
                       {gradebookStudents.map(s => {
                         const data = calcStudentGradeData(s.id, assignments, grades, weights, studentTracking, gradingSettings);
-                        const canEdit = userRole !== 'student';
+                        const canEdit = canEditClass;
                         return (
                           <tr key={s.id}>
                             <td>
@@ -1204,7 +1208,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                       <th>{t('common.date', 'Date')}</th>
                       <th>{isAlbanian ? 'Pikët Totale' : 'Total Pts'}</th>
                       <th>{t('classes.classAvg', 'Class Avg')}</th>
-                      <th>{userRole === 'student' ? t('common.status', 'Status') : t('common.actions', 'Actions')}</th>
+                      <th>{!canEditClass ? t('common.status', 'Status') : t('common.actions', 'Actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1225,7 +1229,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                                 : <span className="muted">—</span>}
                             </td>
                             <td className="actions-cell">
-                              {userRole === 'student' ? (
+                              {!canEditClass ? (
                                 <span style={{ 
                                   display: 'inline-flex', 
                                   alignItems: 'center', 
@@ -1272,7 +1276,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                   <h4 style={{ margin: 0, color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 800 }}>
                     {isAlbanian ? 'Notat Përfundimtare të Nxënësve' : 'Student Final Grades & Distribution'}
                   </h4>
-                  {userRole !== 'student' && (
+                  {canEditClass && (
                     <span style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))' }}>
                       💡 {isAlbanian ? 'Mësuesit mund të rregullojnë notën manualisht me butonin "Ndrysho".' : 'Teachers can manually override final scores with "Adjust".'}
                     </span>
@@ -1291,7 +1295,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                         ))}
                         <th>{isAlbanian ? 'Përfundimtare %' : 'Final %'}</th>
                         <th>{isAlbanian ? 'Nota' : 'Grade'}</th>
-                        {userRole !== 'student' && <th>{isAlbanian ? 'Rregullim' : 'Override'}</th>}
+                        {canEditClass && <th>{isAlbanian ? 'Rregullim' : 'Override'}</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1350,7 +1354,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                               </span>
                             </td>
                             {/* Override Action */}
-                            {userRole !== 'student' && (
+                            {canEditClass && (
                               <td className="actions-cell">
                                 <button
                                   type="button"
@@ -1379,7 +1383,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
           <motion.div key="materials" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
             <div className="co-toolbar">
               <h3>{t('classes.materials', 'Course Materials')}</h3>
-              {userRole !== 'student' && (
+              {canEditClass && (
                 <button className="btn-primary btn-sm" onClick={() => setIsAddMaterialOpen(true)}>
                   <Plus size={15}/> {t('classes.addMaterial', 'Add Material')}
                 </button>
@@ -1399,7 +1403,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                           <ExternalLink size={14} /> {isAlbanian ? 'Hap' : 'Open'}
                         </a>
                       ) : <span />}
-                      {userRole !== 'student' && (
+                      {canEditClass && (
                         <button 
                           className="icon-btn-destructive" 
                           style={{ padding: '0.35rem' }} 
@@ -1430,7 +1434,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
           <motion.div key="attendance" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
             <div className="co-toolbar">
               <h3>{t('classes.attendance', 'Attendance Roll Call')}</h3>
-              {userRole !== 'student' && (
+              {canEditClass && (
                 <button className="btn-primary btn-sm" onClick={() => setIsMarkAttendanceOpen(true)}>
                   <Plus size={15}/> {isAlbanian ? 'Bëj Regjistrimin' : 'Take Roll Call'}
                 </button>

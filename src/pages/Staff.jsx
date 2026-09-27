@@ -258,8 +258,8 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
     e.preventDefault();
     if (!newStaffForm.name || !newStaffForm.email) return;
 
-    if (!newStaffForm.password || newStaffForm.password.length < 6) {
-      if (addNotification) addNotification('error', 'Initial password must be at least 6 characters long.');
+    if (newStaffForm.password && newStaffForm.password.length < 6) {
+      if (addNotification) addNotification('error', 'Initial password must be at least 6 characters long when provided.');
       return;
     }
 
@@ -268,7 +268,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
 
     setIsSubmittingStaff(true);
     try {
-      await addStaff({
+      const result = await addStaff({
         ...newStaffForm,
         staffId: customStaffId,
         roleName: matchedRole?.name || 'Staff Member',
@@ -276,7 +276,11 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
       });
 
       if (addNotification) {
-        addNotification('success', `Staff member ${newStaffForm.name} registered as a Firebase user! ✨`);
+        addNotification('success', result?.alreadyMember
+          ? `${newStaffForm.name} already belongs to this school.`
+          : result?.isExisting
+            ? `${newStaffForm.name}'s existing account was linked to this school.`
+            : `Staff member ${newStaffForm.name} registered as a Firebase user! ✨`);
       }
 
       setIsAddStaffOpen(false);
@@ -306,19 +310,23 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
   };
 
   // Handle Edit / Role Reassignment Submit
-  const handleEditStaffSubmit = (e) => {
+  const handleEditStaffSubmit = async (e) => {
     e.preventDefault();
     if (!editingStaff) return;
 
     const matchedRole = rolesList.find(r => r.id === editingStaff.roleId);
-    updateStaff(editingStaff.id, {
-      ...editingStaff,
-      staffId: editingStaff.staffId || `STF-${100 + editingStaff.id}`,
-      roleName: matchedRole?.name || editingStaff.roleName,
-      classes: Number(editingStaff.classes) || 0
-    });
-
-    setEditingStaff(null);
+    try {
+      await updateStaff(editingStaff.id, {
+        ...editingStaff,
+        staffId: editingStaff.staffId || `STF-${100 + editingStaff.id}`,
+        roleName: matchedRole?.name || editingStaff.roleName,
+        classes: Number(editingStaff.classes) || 0
+      });
+      setEditingStaff(null);
+      addNotification?.('success', isAlbanian ? 'Të dhënat dhe roli i stafit u ruajtën.' : 'Staff details and role saved.');
+    } catch (error) {
+      addNotification?.('error', error.message || 'Could not update staff.');
+    }
   };
 
   // Handle Add Custom Role Submit
@@ -561,12 +569,11 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
                   </div>
 
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Fjalëkalimi Fillestar i Hyrjes *' : 'Initial Login Password *'}</label>
+                    <label>{isAlbanian ? 'Fjalëkalimi Fillestar i Hyrjes' : 'Initial Login Password'}</label>
                     <input 
                       type="password" 
-                      required 
                       minLength={6}
-                      placeholder={isAlbanian ? 'Min. 6 karaktere për hyrjen e parë' : 'Min. 6 characters for first login'}
+                      placeholder={isAlbanian ? 'Kërkohet vetëm për llogari të reja (min. 6)' : 'Needed only for new accounts (min. 6)'}
                       value={newStaffForm.password || ''}
                       onChange={e => setNewStaffForm({ ...newStaffForm, password: e.target.value })}
                     />
@@ -764,11 +771,11 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Adresa e Email-it' : 'Email Address'}</label>
+                    <label>{isAlbanian ? 'Adresa e Email-it (identiteti i hyrjes)' : 'Email Address (login identity)'}</label>
                     <input 
                       type="email" 
                       value={editingStaff.email || ''}
-                      onChange={e => setEditingStaff({ ...editingStaff, email: e.target.value })}
+                      readOnly
                     />
                   </div>
                   <div className="input-group">

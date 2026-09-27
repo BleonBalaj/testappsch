@@ -285,9 +285,11 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   } = useSchoolData();
   const { language, t, isAlbanian } = useLanguage();
   const isAdmin = userRole === 'admin';
-  const isTeacher = userRole === 'teacher';
+  const isTeacher = userRole === 'teacher' || userRole === 'dept_head';
+  const teacherCanViewStudents = rolePermissions?.teacher?.students ?? DEFAULT_ROLE_PERMISSIONS.teacher.students;
   const teacherCanManage = (rolePermissions?.teacher?.canEditDeleteStudents ?? DEFAULT_ROLE_PERMISSIONS.teacher.canEditDeleteStudents) ?? true;
-  const canManage = isAdmin || (isTeacher && teacherCanManage);
+  const canCreate = isAdmin || (isTeacher && teacherCanViewStudents);
+  const canManage = isAdmin || (isTeacher && teacherCanViewStudents && teacherCanManage);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'archived', 'unassigned'
@@ -417,10 +419,11 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
   const handleAddStudentSubmit = async (e) => {
     e.preventDefault();
+    if (!canCreate) return;
     if (!studentForm.name || !studentForm.email) return;
 
-    if (!studentForm.password || studentForm.password.length < 6) {
-      if (addNotification) addNotification('error', 'Initial password must be at least 6 characters long.');
+    if (studentForm.password && studentForm.password.length < 6) {
+      if (addNotification) addNotification('error', 'Initial password must be at least 6 characters long when provided.');
       return;
     }
 
@@ -432,7 +435,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
     setIsSubmittingStudent(true);
     try {
-      await addStudent({
+      const result = await addStudent({
         ...studentForm,
         studentId: customId,
         status: 'active',
@@ -441,7 +444,11 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       });
 
       if (addNotification) {
-        addNotification('success', `Student ${studentForm.name} registered as a Firebase user! ✨`);
+        addNotification('success', result?.alreadyMember
+          ? `${studentForm.name} already belongs to this school.`
+          : result?.isExisting
+            ? `${studentForm.name}'s existing account was linked to this school.`
+            : `Student ${studentForm.name} registered as a Firebase user! ✨`);
       }
 
       setIsAddStudentOpen(false);
@@ -467,7 +474,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   };
 
   const handleConfirmDelete = async () => {
-    if (studentToDelete && isAdmin) {
+    if (studentToDelete && canManage) {
       const target = studentToDelete;
       setStudentToDelete(null);
       try {
@@ -519,10 +526,10 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
             <Download size={18} />
             {isAlbanian ? 'Eksporto Regjistrin' : 'Export Roster'}
           </button>
-          <button className="btn-primary" onClick={() => setIsAddStudentOpen(true)}>
+          {canCreate && <button className="btn-primary" onClick={() => setIsAddStudentOpen(true)}>
             <UserPlus size={20} />
             {t('students.addStudent')}
-          </button>
+          </button>}
         </div>
       </motion.header>
 
@@ -664,7 +671,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                   <span>
                     {isAlbanian 
                       ? 'Qasja e tyre në shkollë do të revokohet menjëherë. Nëse nuk kanë anëtarësim në shkolla të tjera, do të shohin ekranin "nuk jeni pjesë e asnjë shkolle".' 
-                      : 'Their school login access will be revoked immediately. If they have no other school memberships, they will see a "not part of any school" screen on next login. Academic history will also be removed.'}
+                      : 'Their access to this school and directory record will be removed. Other school memberships remain active; historical grades may remain in course records.'}
                   </span>
                 </div>
               </div>
@@ -763,12 +770,11 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                   </div>
 
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Fjalëkalimi Fillestar i Hyrjes *' : 'Initial Login Password *'}</label>
+                    <label>{isAlbanian ? 'Fjalëkalimi Fillestar i Hyrjes' : 'Initial Login Password'}</label>
                     <input 
                       type="password" 
-                      required 
                       minLength={6}
-                      placeholder={isAlbanian ? 'Min. 6 karaktere për hyrjen e parë' : 'Min. 6 characters for first login'}
+                      placeholder={isAlbanian ? 'Kërkohet vetëm për llogari të reja (min. 6)' : 'Needed only for new accounts (min. 6)'}
                       value={studentForm.password || ''}
                       onChange={e => setStudentForm({ ...studentForm, password: e.target.value })}
                     />

@@ -46,6 +46,7 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
   });
+  const [activeMembership, setActiveMembership] = useState(null);
   const [globalPreferences, setGlobalPreferences] = useState({ theme: 'dark', language: 'en' });
   const [schoolPreferences, setSchoolPreferences] = useState({});
   const [pendingInvitations, setPendingInvitations] = useState([]);
@@ -84,12 +85,13 @@ export const AuthProvider = ({ children }) => {
               setActiveSchoolId(targetId);
             }
           }
-        } catch {}
+        } catch { /* Local cache is optional. */ }
       } else {
         setIdToken(null);
         setSchoolLinks([]);
         setLoadedUid(null);
         setActiveSchoolDoc(null);
+        setActiveMembership(null);
         setActiveSchoolId(null);
         setPendingInvitations([]);
         localStorage.removeItem('lumi-cached-school-links');
@@ -151,7 +153,7 @@ export const AuthProvider = ({ children }) => {
       try {
         localStorage.setItem(`lumi-cached-school-links-${uid}`, JSON.stringify(links));
         localStorage.setItem('lumi-cached-school-links', JSON.stringify(links));
-      } catch {}
+      } catch { /* Local cache is optional. */ }
 
       // Auto-select school if none selected or if previously selected is invalid
       if (links.length > 0) {
@@ -186,7 +188,7 @@ export const AuthProvider = ({ children }) => {
         setActiveSchoolDoc(data);
         try {
           localStorage.setItem('lumi-cached-active-school-doc', JSON.stringify(data));
-        } catch {}
+        } catch { /* Local cache is optional. */ }
       } else {
         setActiveSchoolDoc(null);
         localStorage.removeItem('lumi-cached-active-school-doc');
@@ -197,6 +199,21 @@ export const AuthProvider = ({ children }) => {
 
     return () => unsubscribe();
   }, [activeSchoolId]);
+
+  // A school link powers the switcher; the membership document determines authority.
+  useEffect(() => {
+    if (!activeSchoolId || !currentUser?.uid) {
+      setActiveMembership(null);
+      return undefined;
+    }
+    const memberRef = doc(db, 'schools', activeSchoolId, 'members', currentUser.uid);
+    return onSnapshot(memberRef, snapshot => {
+      setActiveMembership(snapshot.exists() ? { schoolId: activeSchoolId, ...snapshot.data() } : null);
+    }, error => {
+      console.warn('Could not load active school membership:', error);
+      setActiveMembership(null);
+    });
+  }, [activeSchoolId, currentUser?.uid]);
 
   // 3b. Listen to user profile document in Firestore: users/{uid}
   useEffect(() => {
@@ -296,12 +313,13 @@ export const AuthProvider = ({ children }) => {
     }
   }, [currentUser?.email, refreshPendingInvitations]);
 
-  // Derive current role strictly from the active school membership!
+  // Never derive authority from a cached or user-editable school link.
   const currentRole = useMemo(() => {
-    if (!activeSchoolId || !schoolLinks.length) return 'student';
-    const link = schoolLinks.find(l => l.schoolId === activeSchoolId);
-    return link ? link.role : 'student';
-  }, [activeSchoolId, schoolLinks]);
+    if (!activeSchoolId || !currentUser?.uid) return 'student';
+    if (activeSchoolDoc?.id === activeSchoolId && activeSchoolDoc.creatorUid === currentUser.uid) return 'admin';
+    return activeMembership?.schoolId === activeSchoolId && activeMembership.status === 'active'
+      ? activeMembership.role : 'student';
+  }, [activeSchoolId, activeSchoolDoc, activeMembership, currentUser?.uid]);
 
   // Email existence pre-check (Strict email-first signup flow)
   const checkEmailExists = async (email) => {
@@ -531,7 +549,7 @@ const DEFAULT_SCHOOL_ROLES = [
     }
   };
 
-  // Update school logo (Admin or Teacher)
+  // Update school logo (administrator only; enforced by school document rules)
   const updateSchoolLogo = async (logoDataUrl) => {
     if (!activeSchoolId) return;
     const schoolRef = doc(db, 'schools', activeSchoolId);
@@ -648,8 +666,9 @@ const DEFAULT_SCHOOL_ROLES = [
         name: cleanName
       }, { merge: true });
 
-      const staffRef = doc(db, 'schools', activeSchoolId, 'staff', currentUser.uid);
-      await setDoc(staffRef, {
+      const directory = currentRole === 'student' ? 'students' : 'staff';
+      const directoryRef = doc(db, 'schools', activeSchoolId, directory, currentUser.uid);
+      await setDoc(directoryRef, {
         name: cleanName
       }, { merge: true });
 

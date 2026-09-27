@@ -87,7 +87,7 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot,
             </div>
             <span className="teacher-name">{item.isEvent ? (isAlbanian ? `${item.attendees || 50} Të Regjistruar` : `${item.attendees || 50} Registered`) : item.teacher}</span>
           </div>
-          {userRole !== 'student' && !item.isEvent && onDeleteSlot && (
+          {['admin', 'teacher', 'dept_head'].includes(userRole) && !item.isEvent && onDeleteSlot && (
             <button 
               type="button" 
               className="icon-action-btn delete glass"
@@ -283,7 +283,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     if (!item) return false;
     if (item.isEvent) return true;
 
-    if (userRole === 'teacher') {
+    if (userRole === 'teacher' || userRole === 'dept_head') {
       // 1. Direct creator / teacher ID match
       if (item.createdByUid && item.createdByUid === currentUser?.uid) return true;
       if (item.teacherId && (item.teacherId === currentUser?.uid || (currentStaff && (item.teacherId === currentStaff.id || item.teacherId === currentStaff.staffId)))) return true;
@@ -600,7 +600,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             <span className="export-btn-text">{isAlbanian ? 'Eksporto Orarin' : (userRole === 'admin' || effectiveTab === 'all-schedule' ? 'Export Master' : 'Export Timetable')}</span>
           </button>
           
-          {userRole !== 'student' && (
+          {['admin', 'teacher', 'dept_head'].includes(userRole) && (
             <button className="btn-primary" onClick={() => setIsAddSlotOpen(true)}>
               <Plus size={16} />
               <span>{t('schedule.addEntry')}</span>
@@ -980,7 +980,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         onClose={() => setIsDetailOpen(false)} 
         classInfo={selectedClass} 
         userRole={userRole}
-        onCreateLessonPlan={selectedClass && (userRole === 'admin' || (userRole === 'teacher' && isItemInMySchedule(selectedClass))) ? handleCreateLessonPlan : undefined}
+        onCreateLessonPlan={selectedClass && (userRole === 'admin' || (['teacher', 'dept_head'].includes(userRole) && isItemInMySchedule(selectedClass))) ? handleCreateLessonPlan : undefined}
         lessonLanguage={lessonLanguage}
       />
     </motion.div>

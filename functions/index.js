@@ -1,22 +1,32 @@
-import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
-import { createHash, randomUUID } from 'node:crypto';
-import { buildLessonGenerationContext, generateLessonPlanCore } from './lessonAiCore.js';
-import {
-  LessonAiQuotaError, getLessonAiQuota, reserveLessonAiQuota,
-  completeLessonAiQuota, releaseLessonAiQuota,
-} from './lessonAiQuota.js';
-
-initializeApp();
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const permittedRoles = new Set(['admin', 'teacher', 'dept_head']);
 
 export const getLessonAiUsage = onCall({ region: 'us-central1', invoker: 'public' }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in to view your AI usage.');
+  const [{ getFirestore }, { getLessonAiQuota }] = await Promise.all([
+    import('firebase-admin/firestore'), import('./lessonAiQuota.js'),
+  ]);
+  const { getApps, initializeApp } = await import('firebase-admin/app');
+  if (!getApps().length) initializeApp();
   return getLessonAiQuota(getFirestore(), request.auth.uid);
+});
+
+export const provisionSchoolUser = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 60 }, async (request) => {
+  const { provisionUser } = await import('./provisionSchoolUser.js');
+  return provisionUser(request);
+});
+
+export const removeSchoolStudent = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 60 }, async (request) => {
+  const { removeStudent } = await import('./provisionSchoolUser.js');
+  return removeStudent(request);
+});
+
+export const updateSchoolStaff = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 60 }, async (request) => {
+  const { updateStaffMember } = await import('./provisionSchoolUser.js');
+  return updateStaffMember(request);
 });
 
 export const generateLessonPlan = onCall({
@@ -35,6 +45,14 @@ export const generateLessonPlan = onCall({
     throw new HttpsError('invalid-argument', 'Select a valid school before generating.');
   }
 
+  const [adminApp, { getFirestore }, quota, lessonCore, crypto] = await Promise.all([
+    import('firebase-admin/app'), import('firebase-admin/firestore'),
+    import('./lessonAiQuota.js'), import('./lessonAiCore.js'), import('node:crypto'),
+  ]);
+  if (!adminApp.getApps().length) adminApp.initializeApp();
+  const { LessonAiQuotaError, reserveLessonAiQuota, completeLessonAiQuota, releaseLessonAiQuota } = quota;
+  const { buildLessonGenerationContext, generateLessonPlanCore } = lessonCore;
+  const { createHash, randomUUID } = crypto;
   const db = getFirestore();
   const [school, membership] = await Promise.all([
     db.doc(`schools/${schoolId}`).get(),
@@ -45,7 +63,8 @@ export const generateLessonPlan = onCall({
   const member = membership.data();
   const isCreator = school.data()?.creatorUid === uid;
   const isAllowedMember = member?.status === 'active' && permittedRoles.has(member.role);
-  if (!isCreator && !isAllowedMember) {
+  const canUseLessonPlans = school.data()?.rolePermissions?.teacher?.['lesson-plans'] !== false;
+  if (!isCreator && !(isAllowedMember && (member.role === 'admin' || canUseLessonPlans))) {
     throw new HttpsError('permission-denied', 'Only active teachers and school administrators can generate lesson plans for this school.');
   }
 

@@ -200,7 +200,7 @@ const Events = ({ userRole = 'student' }) => {
             <Download size={18} />
             {t('events.export', 'Export Events')}
           </button>
-          {userRole !== 'student' && (
+          {['admin', 'teacher', 'dept_head'].includes(userRole) && (
             <button className="btn-primary" onClick={() => setIsNewEventOpen(true)}>
               <Plus size={18} />
               {t('events.addEvent', 'Schedule Event')}

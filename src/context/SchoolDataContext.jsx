@@ -11,6 +11,8 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { functions } from '../services/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from './AuthContext';
 import { provisionNewUser } from '../services/userProvisioningService';
 
@@ -85,6 +87,12 @@ export const SchoolDataProvider = ({ children }) => {
       return;
     }
 
+    setStaffList([]);
+    setStudentsList([]);
+    setClassesList([]);
+    setEventsList([]);
+    setRolesList(INITIAL_ROLES);
+    setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
     setLoading(true);
 
     const handleSnapshotError = (colName) => (err) => {
@@ -192,8 +200,8 @@ export const SchoolDataProvider = ({ children }) => {
                 if (betterName && betterName.toLowerCase() !== 'administrator' && betterName.toLowerCase() !== 'admin') {
                   s.name = betterName;
                   try {
-                    updateDoc(doc(db, 'schools', activeSchoolId, 'staff', s.id), { name: betterName });
-                  } catch (e) {}
+                    await updateDoc(doc(db, 'schools', activeSchoolId, 'staff', s.id), { name: betterName });
+                  } catch (error) { console.warn('Could not update the school creator name:', error); }
                 }
               }
             }
@@ -261,39 +269,22 @@ export const SchoolDataProvider = ({ children }) => {
 
   // Staff Handlers
   const addStaff = useCallback(async (newStaff) => {
-    if (!activeSchoolId) return;
-
-    // If an email and password are provided, create as full Firebase user
-    if (newStaff.email && newStaff.password) {
-      return await provisionNewUser({
-        email: newStaff.email,
-        password: newStaff.password,
-        name: newStaff.name,
-        role: newStaff.roleId || 'teacher',
-        schoolId: activeSchoolId,
-        schoolName: activeSchool?.name || '',
-        extraData: newStaff
-      });
-    }
-
-    // Fallback: direct doc creation if no password provided
-    const staffId = newStaff.id || `stf_${Date.now()}`;
-    const staffDocRef = doc(db, 'schools', activeSchoolId, 'staff', String(staffId));
-    const payload = {
-      ...newStaff,
-      id: staffId,
-      staffId: newStaff.staffId || `STF-${Math.floor(100 + Math.random() * 900)}`,
-      status: newStaff.status || 'active',
-      joinDate: newStaff.joinDate || new Date().toISOString().split('T')[0],
-      createdAt: serverTimestamp()
-    };
-    await setDoc(staffDocRef, payload);
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    if (!newStaff.email) throw new Error('A staff email is required to create an account.');
+    return provisionNewUser({
+      email: newStaff.email,
+      password: newStaff.password,
+      name: newStaff.name,
+      role: newStaff.roleId || 'teacher',
+      schoolId: activeSchoolId,
+      schoolName: activeSchool?.name || '',
+      extraData: newStaff
+    });
   }, [activeSchoolId, activeSchool?.name]);
 
   const updateStaff = useCallback(async (id, updates) => {
-    if (!activeSchoolId) return;
-    const staffDocRef = doc(db, 'schools', activeSchoolId, 'staff', String(id));
-    await updateDoc(staffDocRef, { ...updates, updatedAt: serverTimestamp() });
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    await httpsCallable(functions, 'updateSchoolStaff')({ schoolId: activeSchoolId, staffUid: String(id), updates });
   }, [activeSchoolId]);
 
   const deleteStaff = useCallback(async (id) => {
@@ -336,33 +327,17 @@ export const SchoolDataProvider = ({ children }) => {
 
   // Student Handlers
   const addStudent = useCallback(async (newStudent) => {
-    if (!activeSchoolId) return;
-
-    // If an email and password are provided, create as full Firebase user
-    if (newStudent.email && newStudent.password) {
-      return await provisionNewUser({
-        email: newStudent.email,
-        password: newStudent.password,
-        name: newStudent.name,
-        role: 'student',
-        schoolId: activeSchoolId,
-        schoolName: activeSchool?.name || '',
-        extraData: newStudent
-      });
-    }
-
-    // Fallback: direct doc creation if no password provided
-    const studentId = newStudent.id || `stu_${Date.now()}`;
-    const studentDocRef = doc(db, 'schools', activeSchoolId, 'students', String(studentId));
-    const payload = {
-      ...newStudent,
-      id: studentId,
-      studentId: newStudent.studentId || `STU-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: newStudent.status || 'active',
-      assignedClasses: newStudent.assignedClasses || [],
-      createdAt: serverTimestamp()
-    };
-    await setDoc(studentDocRef, payload);
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    if (!newStudent.email) throw new Error('A student email is required to create an account.');
+    return provisionNewUser({
+      email: newStudent.email,
+      password: newStudent.password,
+      name: newStudent.name,
+      role: 'student',
+      schoolId: activeSchoolId,
+      schoolName: activeSchool?.name || '',
+      extraData: newStudent
+    });
   }, [activeSchoolId, activeSchool?.name]);
 
   const updateStudent = useCallback(async (id, updates) => {
@@ -372,20 +347,8 @@ export const SchoolDataProvider = ({ children }) => {
   }, [activeSchoolId]);
 
   const deleteStudent = useCallback(async (id) => {
-    if (!activeSchoolId) return;
-    const uid = String(id);
-    const batch = writeBatch(db);
-    // Remove student record
-    batch.delete(doc(db, 'schools', activeSchoolId, 'students', uid));
-    // Remove school membership (so the user can no longer authenticate as a member)
-    batch.delete(doc(db, 'schools', activeSchoolId, 'members', uid));
-    await batch.commit();
-    // Remove the user's school link (best-effort, non-critical)
-    try {
-      await deleteDoc(doc(db, 'users', uid, 'schoolLinks', activeSchoolId));
-    } catch (e) {
-      console.warn('Could not remove schoolLink for', uid, e.message);
-    }
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    await httpsCallable(functions, 'removeSchoolStudent')({ schoolId: activeSchoolId, studentUid: String(id) });
   }, [activeSchoolId]);
 
   const toggleArchiveStudent = useCallback(async (id) => {
@@ -455,18 +418,14 @@ export const SchoolDataProvider = ({ children }) => {
 
   // Role Permissions Handler (Admin only)
   const updateRolePermissions = useCallback(async (role, permissions) => {
-    if (!activeSchoolId) return;
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    if (!['teacher', 'student'].includes(role) || Object.keys(permissions).some(key => !Object.hasOwn(DEFAULT_ROLE_PERMISSIONS[role], key))) {
+      throw new Error('Invalid role permission.');
+    }
     const schoolDocRef = doc(db, 'schools', activeSchoolId);
-    const updated = {
-      ...rolePermissions,
-      [role]: { ...(rolePermissions[role] || {}), ...permissions }
-    };
-    setRolePermissions(updated);
-    await updateDoc(schoolDocRef, {
-      rolePermissions: updated,
-      updatedAt: serverTimestamp()
-    });
-  }, [activeSchoolId, rolePermissions]);
+    const fields = Object.fromEntries(Object.entries(permissions).map(([key, value]) => [`rolePermissions.${role}.${key}`, Boolean(value)]));
+    await updateDoc(schoolDocRef, { ...fields, updatedAt: serverTimestamp() });
+  }, [activeSchoolId]);
 
   return (
     <SchoolDataContext.Provider value={{

@@ -91,6 +91,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
   const visibleMenuItems = menuItems.filter(item => {
     // Settings is always accessible to manage profile
     if (item.id === 'settings') return true;
+    if (item.teacherAndAdminOnly && !['admin', 'teacher', 'dept_head'].includes(userRole)) return false;
     
     // Admins always see all management and school areas
     if (isAdmin) {

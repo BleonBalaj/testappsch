@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import StarryBackground from './components/StarryBackground';
 import Dashboard from './pages/Dashboard';
@@ -25,7 +25,7 @@ import SchoolSwitcher from './components/SchoolSwitcher';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MoodProvider } from './context/MoodContext';
-import { SchoolDataProvider, useSchoolData } from './context/SchoolDataContext';
+import { SchoolDataProvider, useSchoolData, DEFAULT_ROLE_PERMISSIONS } from './context/SchoolDataContext';
 import { TasksProvider } from './context/TasksContext';
 import { Calendar, Sparkles, School, Plus, LogOut } from 'lucide-react';
 import './App.css';
@@ -33,7 +33,7 @@ import './App.css';
 function AppContent() {
   const { currentUser, currentRole, activeSchoolId, activeSchool, authLoading, schoolLinks, schoolLinksLoaded, createNewSchool, logoutUser } = useAuth();
   const { language, t } = useLanguage();
-  const { classesList = [], eventsList = [] } = useSchoolData();
+  const { classesList = [], eventsList = [], rolePermissions } = useSchoolData();
 
   const getInitialPath = () => {
     if (typeof window !== 'undefined') {
@@ -64,13 +64,25 @@ function AppContent() {
   // The active role strictly tracks currentRole attached to active school membership
   const userRole = currentRole || 'student';
 
+  const canAccessPath = useCallback((path) => {
+    if (path === 'login' || path === 'settings') return true;
+    if (path === 'lesson-plans-settings') return userRole === 'admin';
+    if (path === 'transcript') return userRole === 'student' && Boolean(rolePermissions?.student?.transcript ?? DEFAULT_ROLE_PERMISSIONS.student.transcript);
+    const moduleByPath = { 'class-overview': 'classes', 'student-overview': 'students', teachers: 'staff' };
+    const moduleId = moduleByPath[path] || path;
+    if (moduleId === 'lesson-plans' && !['admin', 'teacher', 'dept_head'].includes(userRole)) return false;
+    if (userRole === 'admin') return true;
+    const permissionRole = userRole === 'student' ? 'student' : 'teacher';
+    return Boolean(rolePermissions?.[permissionRole]?.[moduleId] ?? DEFAULT_ROLE_PERMISSIONS[permissionRole]?.[moduleId]);
+  }, [userRole, rolePermissions]);
+
   // Route protection based on role
   useEffect(() => {
-    if (userRole === 'student' && ['staff', 'teachers', 'students', 'student-overview', 'resources', 'lesson-plans', 'lesson-plans-settings'].includes(currentPath)) {
+    if (!canAccessPath(currentPath)) {
       setPendingScheduledLesson(null);
-      setCurrentPath('dashboard');
+      setCurrentPath(canAccessPath('dashboard') ? 'dashboard' : 'settings');
     }
-  }, [userRole, currentPath]);
+  }, [currentPath, canAccessPath]);
 
   const handleNavigate = (path) => {
     if (path !== 'lesson-plans') setPendingScheduledLesson(null);
@@ -246,11 +258,7 @@ function AppContent() {
   }
 
   const renderPage = () => {
-    if (userRole === 'student') {
-      if (['staff', 'teachers', 'students', 'student-overview', 'resources', 'lesson-plans', 'lesson-plans-settings'].includes(currentPath)) {
-        return <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
-      }
-    }
+    if (!canAccessPath(currentPath)) return <Settings addNotification={addNotification} lessonLanguage={lessonLanguage} onNavigate={handleNavigate} onLogout={logoutUser} />;
 
     switch (currentPath) {
       case 'dashboard':
@@ -345,7 +353,7 @@ function AppContent() {
           />
         );
       case 'resources':
-        return <Resources />;
+        return <Resources userRole={userRole} />;
       case 'mood-insights':
         return <MoodInsights />;
       case 'login':

@@ -199,9 +199,10 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
   const effectiveTab = userRole === 'admin' ? 'all-classes' : activeTab;
 
   const isAdmin = userRole === 'admin';
-  const isTeacher = userRole === 'teacher';
+  const isTeacher = userRole === 'teacher' || userRole === 'dept_head';
+  const canCreateClass = isAdmin || (isTeacher && (rolePermissions?.teacher?.classes ?? true));
   const teacherCanEditDelete = (rolePermissions?.teacher?.canEditDeleteClasses ?? true);
-  const canManageClass = isAdmin || (isTeacher && teacherCanEditDelete);
+  const canManageClass = isAdmin || (isTeacher && canCreateClass && teacherCanEditDelete);
 
   // New Class Form State
   const [newClassName, setNewClassName] = useState('');
@@ -530,7 +531,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
             <Download size={16} />
             {userRole === 'student' ? (isAlbanian ? 'Eksporto Orarin' : 'Export Schedule') : (isAlbanian ? 'Eksporto CSV' : 'Export CSV')}
           </button>
-          {userRole !== 'student' && (
+          {canCreateClass && (
             <button type="button" className="btn-primary" onClick={() => setIsAddModalOpen(true)}>
               <Plus size={18} />
               {t('classes.addClass')}
