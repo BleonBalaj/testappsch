@@ -45,7 +45,7 @@ const Toggle = ({ active, onToggle, label }) => (
   </div>
 );
 
-const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate, onLogout }) => {
+const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout }) => {
   const { 
     currentUser, 
     activeSchool, 
@@ -509,7 +509,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
               {/* User display name - Fully Editable */}
               <div className="input-group">
                 <label>{t('settings.displayName')}</label>
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                <div className="settings-inline-field">
                   <input 
                     type="text" 
                     value={displayNameInput}
@@ -555,7 +555,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                <div className="settings-inline-field">
                   <input 
                     type="text" 
                     value={schoolNameInput}

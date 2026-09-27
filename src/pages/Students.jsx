@@ -190,9 +190,6 @@ const StudentCard = ({ student, index, onSelect, onEdit, onRequestDelete, onTogg
       <div className="student-card-header">
         <div className="student-avatar-large">
           <Avatar alt={student.name} />
-          <div className="student-points-badge bouncy">
-            👑 {student.points || 500}
-          </div>
         </div>
         <div className="header-actions-right" onClick={e => e.stopPropagation()}>
           {/* Status Badges */}
@@ -245,7 +242,7 @@ const StudentCard = ({ student, index, onSelect, onEdit, onRequestDelete, onTogg
           <h3>{student.name}</h3>
           <span className="student-id-badge">{student.studentId || `STU-${1000 + student.id}`}</span>
         </div>
-        <p className="student-grade">Grade {student.grade} • GPA {student.gpa || '3.8'}</p>
+        <p className="student-grade">Grade {student.grade}{student.gpa != null && student.gpa !== '' ? ` • GPA ${student.gpa}` : ''}</p>
         
         {/* Enrolled Classes Badges */}
         <div className="student-classes-list">
@@ -308,9 +305,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
     password: '',
     phone: '',
     guardian: '',
-    gpa: '3.85',
-    points: 1000,
-    attendance: 98,
+    gpa: '',
     assignedClasses: []
   });
 
@@ -323,9 +318,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
     email: '',
     phone: '',
     guardian: '',
-    gpa: '3.85',
-    points: 1000,
-    attendance: 98,
+    gpa: '',
     assignedClasses: [],
     status: 'active'
   });
@@ -340,9 +333,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       email: s.email || '',
       phone: s.phone || '',
       guardian: s.guardian || '',
-      gpa: s.gpa || 3.8,
-      points: s.points || 500,
-      attendance: s.attendance || 100,
+      gpa: s.gpa ?? '',
       assignedClasses: Array.isArray(s.assignedClasses) ? [...s.assignedClasses] : (s.assignedClasses ? [s.assignedClasses] : []),
       status: s.status || 'active'
     });
@@ -363,9 +354,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
           email: editStudentForm.email.trim(),
           phone: editStudentForm.phone.trim(),
           guardian: editStudentForm.guardian.trim(),
-          gpa: Number(editStudentForm.gpa) || 3.8,
-          points: Number(editStudentForm.points) || 500,
-          attendance: Number(editStudentForm.attendance) || 100,
+          ...(editStudentForm.gpa !== '' ? { gpa: Number(editStudentForm.gpa) } : {}),
           assignedClasses: editStudentForm.assignedClasses || [],
           status: editStudentForm.status || 'active'
         });
@@ -448,9 +437,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
         studentId: customId,
         status: 'active',
         assignedClasses: classesArray,
-        points: Number(studentForm.points) || 500,
-        gpa: Number(studentForm.gpa) || 3.8,
-        attendance: Number(studentForm.attendance) || 100
+        ...(studentForm.gpa !== '' ? { gpa: Number(studentForm.gpa) } : {})
       });
 
       if (addNotification) {
@@ -466,9 +453,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
         password: '',
         phone: '',
         guardian: '',
-        gpa: '3.85',
-        points: 1000,
-        attendance: 98,
+        gpa: '',
         assignedClasses: []
       });
     } catch (err) {
@@ -504,8 +489,8 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
   const handleExportStudents = () => {
     const csvContent = "data:text/csv;charset=utf-8," + 
-      ["Name,Grade,Status,ClassesEnrolled,Email,Phone,GPA,Points,Guardian,Tags"].join(",") + "\n" +
-      filteredStudents.map(s => `"${s.name}","${s.grade}","${s.status || 'active'}","${s.assignedClasses?.length || 0}","${s.email}","${s.phone}","${s.gpa || ''}","${s.points || ''}","${s.guardian || ''}","${(s.tags || []).join('; ')}"`).join("\n");
+      ["Name,Grade,Status,ClassesEnrolled,Email,Phone,GPA,Guardian,Tags"].join(",") + "\n" +
+      filteredStudents.map(s => `"${s.name}","${s.grade}","${s.status || 'active'}","${s.assignedClasses?.length || 0}","${s.email}","${s.phone}","${s.gpa || ''}","${s.guardian || ''}","${(s.tags || []).join('; ')}"`).join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -954,27 +939,9 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                     />
                   </div>
 
-                  <div className="input-group">
-                    <label>{isAlbanian ? 'Pikët e Arritjeve' : 'Reward Points'}</label>
-                    <input 
-                      type="number" 
-                      value={editStudentForm.points}
-                      onChange={e => setEditStudentForm({ ...editStudentForm, points: e.target.value })}
-                    />
-                  </div>
                 </div>
 
                 <div className="form-grid-2">
-                  <div className="input-group">
-                    <label>{isAlbanian ? 'Pjesëmarrja (%)' : 'Attendance (%)'}</label>
-                    <input 
-                      type="number" 
-                      min="0"
-                      max="100"
-                      value={editStudentForm.attendance}
-                      onChange={e => setEditStudentForm({ ...editStudentForm, attendance: e.target.value })}
-                    />
-                  </div>
 
                   <div className="input-group">
                     <label>{isAlbanian ? 'Statusi' : 'Status'}</label>

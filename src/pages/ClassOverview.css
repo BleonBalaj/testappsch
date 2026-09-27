@@ -928,3 +928,13 @@ select.grade-input-field { cursor: pointer; }
   color: hsl(var(--mood-neutral));
   border: 1px solid hsla(var(--mood-neutral), 0.4);
 }
+
+.category-editor-list { display: grid; gap: 0.75rem; }
+.category-editor-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 120px) auto; align-items: end; gap: 0.75rem; }
+.category-editor-row .input-group { min-width: 0; }
+.category-editor-row input { width: 100%; min-width: 0; }
+.category-editor-row .icon-btn-destructive { margin-bottom: 0.25rem; }
+.category-editor-error { color: hsl(var(--destructive)); font-size: 0.83rem; margin: 0.5rem 0; }
+.gradebook-student-search { width: min(100%, 440px); margin: 0 0 1.25rem; }
+.gradebook-student-search input { min-width: 0; width: 100%; }
+@media (max-width: 520px) { .category-editor-row { grid-template-columns: minmax(0, 1fr) 86px auto; gap: 0.4rem; } }

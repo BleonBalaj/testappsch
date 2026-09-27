@@ -181,9 +181,6 @@ export async function provisionNewUser({
       phone: extraData.phone || '',
       guardian: extraData.guardian || '',
       assignedClasses: extraData.assignedClasses || (extraData.assignedClassInput ? [extraData.assignedClassInput] : []),
-      points: Number(extraData.points) || 500,
-      gpa: Number(extraData.gpa) || 3.8,
-      attendance: Number(extraData.attendance) || 100,
       createdAt: now,
       updatedAt: now
     }, { merge: true });

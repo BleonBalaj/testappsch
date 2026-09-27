@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Mail, Phone, MapPin, Star, Trophy, BookOpen,
@@ -7,18 +7,24 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { calcStudentGradeData, INITIAL_WEIGHTS } from '../features/gradebook/grading';
 import { Avatar } from '../components/Avatar';
 import './StudentOverview.css';
 
 /* ─── Grade helpers ────────────────────────────────────── */
 const gradeColor = (pct) => {
+  if (pct === null || pct === undefined) return 'hsl(var(--muted-foreground))';
   if (pct >= 80) return 'hsl(var(--mood-happy))';
   if (pct >= 60) return 'hsl(var(--mood-neutral))';
   return 'hsl(var(--mood-sad))';
 };
 
 const gradeLabel = (pct) => {
+  if (pct === null || pct === undefined) return '—';
   if (pct >= 93) return 'A'; if (pct >= 90) return 'A-';
   if (pct >= 87) return 'B+'; if (pct >= 83) return 'B'; if (pct >= 80) return 'B-';
   if (pct >= 77) return 'C+'; if (pct >= 73) return 'C'; if (pct >= 70) return 'C-';
@@ -27,55 +33,97 @@ const gradeLabel = (pct) => {
 
 /* ─── Dynamic Student Data ──────────────────────── */
 const buildStudentData = (student) => ({
-  gpa: student?.gpa || 0,
-  attendance: student?.attendance || 100,
-  rank: student?.rank || '—',
-  streak: student?.streak || 0,
-  classes: (student?.assignedClasses || []).map(cls => ({
-    name: typeof cls === 'string' ? cls : cls.name,
-    teacher: cls.teacher || 'Course Instructor',
-    grade: cls.grade != null ? cls.grade : 100,
-    code: cls.code || 'CLS-101'
-  })),
-  assignments: student?.assignments || [],
   recentActivity: student?.recentActivity || [],
   badges: student?.badges || [],
-  weeklyAttendance: student?.weeklyAttendance || [1, 1, 1, 1, 1],
-  weeklyHistory: student?.weeklyHistory || []
 });
 
 const TABS = [
   { id: 'overview',     label: 'Overview',     icon: BarChart2  },
   { id: 'grades',       label: 'Grades',       icon: BookOpen   },
   { id: 'assignments',  label: 'Assignments',  icon: CheckSquare},
-  { id: 'attendance',   label: 'Attendance',   icon: Calendar   },
 ];
-
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 /* ─── Component ─────────────────────────────────────────── */
 const StudentOverview = ({ student, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const { studentsList, toggleArchiveStudent } = useSchoolData();
+  const { studentsList, classesList, toggleArchiveStudent } = useSchoolData();
+  const { activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
+  const liveStudent = studentsList.find(s => s.id === student?.id) || student;
+  const studentId = liveStudent?.id;
+  const enrolledClasses = useMemo(() => classesList.filter(course => (liveStudent?.assignedClasses || []).some(entry => {
+    const value = typeof entry === 'string' ? entry : entry?.id || entry?.name;
+    return value === course.id || value === course.name || value === course.code;
+  })), [classesList, liveStudent]);
+  const [courseRecords, setCourseRecords] = useState({});
+
+  useEffect(() => {
+    if (!activeSchoolId || !studentId) return undefined;
+    const unsubscribers = enrolledClasses.flatMap(course => ['assignments', 'grades', 'studentTracking'].map(kind =>
+      onSnapshot(collection(db, 'schools', activeSchoolId, 'classes', String(course.id), kind), snapshot => {
+        const records = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+        const key = `${activeSchoolId}/${studentId}/${course.id}`;
+        setCourseRecords(prev => ({ ...prev, [key]: { ...prev[key], [kind]: records } }));
+      }, error => {
+        console.warn(`Could not load ${kind} for student profile:`, error);
+        const key = `${activeSchoolId}/${studentId}/${course.id}`;
+        setCourseRecords(prev => ({ ...prev, [key]: { ...prev[key], [kind]: null, error: true } }));
+      })
+    ));
+    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
+  }, [activeSchoolId, studentId, enrolledClasses]);
+
+  const courseSummary = useMemo(() => {
+    const classes = [];
+    const assignments = [];
+    let earned = 0;
+    let possible = 0;
+    let loading = false;
+    let error = false;
+    for (const course of enrolledClasses) {
+      const record = courseRecords[`${activeSchoolId}/${studentId}/${course.id}`];
+      if (!record || record.assignments === undefined || record.grades === undefined || record.studentTracking === undefined) {
+        loading = true;
+        classes.push({ name: course.name, teacher: course.teacher || '—', grade: null });
+        continue;
+      }
+      if (record.error) {
+        error = true;
+        classes.push({ name: course.name, teacher: course.teacher || '—', grade: null });
+        continue;
+      }
+      const studentGrades = {};
+      for (const grade of record.grades) {
+        if (grade.scores?.[studentId] !== undefined) studentGrades[grade.id] = grade.scores[studentId];
+      }
+      const tracking = record.studentTracking.find(item => item.id === String(studentId));
+      const grade = calcStudentGradeData(studentId, record.assignments, { [studentId]: studentGrades }, course.weights || INITIAL_WEIGHTS, { [studentId]: tracking }, course.gradingSettings).finalPct;
+      classes.push({ name: course.name, teacher: course.teacher || '—', grade });
+      for (const assignment of record.assignments) {
+        const rawScore = studentGrades[assignment.id];
+        const max = Number(assignment.totalPoints);
+        const graded = rawScore !== undefined && rawScore !== null && rawScore !== '' && Number.isFinite(Number(rawScore)) && Number.isFinite(max) && max > 0;
+        const score = graded ? Math.min(max, Math.max(0, Number(rawScore))) : null;
+        if (graded) { earned += score; possible += max; }
+        assignments.push({ title: assignment.title, due: assignment.date || '—', status: graded ? 'Submitted' : 'Not Started', score: graded ? `${score} / ${max}` : '—' });
+      }
+    }
+    return { classes, assignments, earned, possible, loading, error };
+  }, [activeSchoolId, enrolledClasses, courseRecords, studentId]);
 
   const tabs = [
     { id: 'overview',     label: t('student.overview', 'Overview'),         icon: BarChart2  },
     { id: 'grades',       label: t('student.grades', 'Grades'),             icon: BookOpen   },
     { id: 'assignments',  label: t('student.assignments', 'Assignments'),   icon: CheckSquare},
-    { id: 'attendance',   label: t('student.attendance', 'Attendance'),     icon: Calendar   },
   ];
-
-  const days = isAlbanian ? ['Hën', 'Mar', 'Mër', 'Enj', 'Pre'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   if (!student) return null;
 
   // Retrieve freshest student record if present in Context
-  const liveStudent = studentsList.find(s => s.id === student.id) || student;
   const isArchived = liveStudent.status === 'archived';
   const isUnassigned = !isArchived && (!liveStudent.assignedClasses || liveStudent.assignedClasses.length === 0);
 
-  const data = buildStudentData(liveStudent);
+  const data = { ...buildStudentData(liveStudent), ...courseSummary };
 
   return (
     <motion.div className="sov-page" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
@@ -87,7 +135,7 @@ const StudentOverview = ({ student, onBack }) => {
             <Archive size={22} className="banner-icon-archived" />
             <div>
               <h4>{t('student.archivedRecord', 'Archived Student Record')}</h4>
-              <p>{t('student.archivedBanner', 'This student is currently archived and marked as inactive in active rosters and attendance call sheets.')}</p>
+              <p>{isAlbanian ? 'Ky nxënës është arkivuar dhe është joaktiv në listat aktuale të klasave.' : 'This student is archived and inactive in current class rosters.'}</p>
             </div>
           </div>
           <button 
@@ -172,23 +220,8 @@ const StudentOverview = ({ student, onBack }) => {
         <div className="sov-stat-strip">
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--primary)/0.35)', background: 'hsl(var(--primary)/0.12)' }}>
             <Star size={16} color="hsl(var(--primary))" />
-            <span>{t('student.points', 'Points')}</span>
-            <strong style={{ color: 'hsl(var(--primary))' }}>{liveStudent.points ?? 0}</strong>
-          </div>
-          <div className="sov-stat" style={{ borderColor: 'hsl(var(--chart-2)/0.35)', background: 'hsl(var(--chart-2)/0.12)' }}>
-            <TrendingUp size={16} color="hsl(var(--chart-2))" />
-            <span>{t('student.gpa', 'GPA')}</span>
-            <strong style={{ color: 'hsl(var(--chart-2))' }}>{data.gpa}</strong>
-          </div>
-          <div className="sov-stat" style={{ borderColor: 'hsl(var(--mood-happy)/0.35)', background: 'hsl(var(--mood-happy)/0.12)' }}>
-            <CheckSquare size={16} color="hsl(var(--mood-happy))" />
-            <span>{t('student.attendance', 'Attendance')}</span>
-            <strong style={{ color: 'hsl(var(--mood-happy))' }}>{data.attendance}%</strong>
-          </div>
-          <div className="sov-stat" style={{ borderColor: 'hsl(var(--chart-4)/0.35)', background: 'hsl(var(--chart-4)/0.12)' }}>
-            <Trophy size={16} color="hsl(var(--chart-4))" />
-            <span>{t('student.rank', 'Class Rank')}</span>
-            <strong style={{ color: 'hsl(var(--chart-4))' }}>#{data.rank}</strong>
+            <span>{isAlbanian ? 'Pikë të vlerësuara' : 'Graded points'}</span>
+            <strong style={{ color: 'hsl(var(--primary))' }}>{data.error ? '—' : data.loading ? '…' : `${data.earned} / ${data.possible}`}</strong>
           </div>
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--accent)/0.35)', background: 'hsl(var(--accent)/0.12)' }}>
             <BookOpen size={16} color="hsl(var(--accent))" />
@@ -273,22 +306,6 @@ const StudentOverview = ({ student, onBack }) => {
                 </div>
               </div>
 
-              {/* Weekly Attendance mini-chart */}
-              <div className="sov-widget glass">
-                <h4 className="widget-title">{t('student.thisWeekAttendance', "This Week's Attendance")}</h4>
-                <div className="week-attendance">
-                  {days.map((d, i) => (
-                    <div key={d} className="day-col">
-                      <div className={`day-dot ${data.weeklyAttendance[i] ? 'present' : 'absent'}`} />
-                      <span className="day-label">{d}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="attendance-note" style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.82rem', marginTop: '0.5rem' }}>
-                  {data.weeklyAttendance.filter(Boolean).length}/5 {t('student.daysPresentThisWeek', 'days present this week')}
-                </p>
-              </div>
-
               {/* Grade Snapshot */}
               <div className="sov-widget glass">
                 <h4 className="widget-title">{t('student.gradeSnapshot', 'Grade Snapshot')}</h4>
@@ -302,9 +319,9 @@ const StudentOverview = ({ student, onBack }) => {
                       <div key={i} className="grade-snap-row">
                         <span className="grade-snap-name">{c.name}</span>
                         <div className="grade-snap-bar-bg">
-                          <div className="grade-snap-bar" style={{ width: `${c.grade}%`, background: gradeColor(c.grade) }} />
+                          <div className="grade-snap-bar" style={{ width: `${c.grade ?? 0}%`, background: gradeColor(c.grade) }} />
                         </div>
-                        <strong style={{ color: gradeColor(c.grade), minWidth: '36px', textAlign: 'right' }}>{c.grade}%</strong>
+                        <strong style={{ color: gradeColor(c.grade), minWidth: '36px', textAlign: 'right' }}>{c.grade === null ? '—' : `${c.grade}%`}</strong>
                       </div>
                     ))
                   )}
@@ -344,13 +361,13 @@ const StudentOverview = ({ student, onBack }) => {
                         <td>
                           <div className="grade-bar-wrap">
                             <div className="mini-bar-bg">
-                              <div className="mini-bar" style={{ width: `${c.grade}%`, background: gradeColor(c.grade) }} />
+                              <div className="mini-bar" style={{ width: `${c.grade ?? 0}%`, background: gradeColor(c.grade) }} />
                             </div>
-                            <strong style={{ color: gradeColor(c.grade) }}>{c.grade}%</strong>
+                            <strong style={{ color: gradeColor(c.grade) }}>{c.grade === null ? '—' : `${c.grade}%`}</strong>
                           </div>
                         </td>
                         <td><span className="grade-badge" style={{ color: gradeColor(c.grade) }}>{gradeLabel(c.grade)}</span></td>
-                        <td><span className="status-chip" style={{ background: `${gradeColor(c.grade)}22`, color: gradeColor(c.grade) }}>{c.grade >= 70 ? t('student.passing', 'Passing') : t('student.atRisk', 'At Risk')}</span></td>
+                        <td><span className="status-chip" style={{ color: gradeColor(c.grade) }}>{c.grade === null ? (isAlbanian ? 'Pa nota' : 'Not graded') : c.grade >= 70 ? t('student.passing', 'Passing') : t('student.atRisk', 'At Risk')}</span></td>
                       </tr>
                     ))
                   )}
@@ -397,81 +414,6 @@ const StudentOverview = ({ student, onBack }) => {
                             </span>
                           </td>
                           <td><strong style={{ color: a.score ? gradeColor(parseInt(a.score)) : 'hsl(var(--muted-foreground))' }}>{a.score || '—'}</strong></td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ATTENDANCE */}
-        {activeTab === 'attendance' && (
-          <motion.div key="attendance" className="sov-tab" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-            <div className="sov-attendance-cards">
-              <div className="att-stat-card glass">
-                <div className="att-icon" style={{ background: 'hsl(var(--mood-happy)/0.15)' }}>
-                  <CheckSquare size={28} color="hsl(var(--mood-happy))" />
-                </div>
-                <span>{t('student.totalPresent', 'Total Present')}</span>
-                <strong style={{ color: 'hsl(var(--mood-happy))' }}>{liveStudent.presentDays || 0} {t('student.days', 'days')}</strong>
-              </div>
-              <div className="att-stat-card glass">
-                <div className="att-icon" style={{ background: 'hsl(var(--mood-sad)/0.15)' }}>
-                  <AlertCircle size={28} color="hsl(var(--mood-sad))" />
-                </div>
-                <span>{t('student.totalAbsent', 'Total Absent')}</span>
-                <strong style={{ color: 'hsl(var(--mood-sad))' }}>{liveStudent.absentDays || 0} {t('student.days', 'days')}</strong>
-              </div>
-              <div className="att-stat-card glass">
-                <div className="att-icon" style={{ background: 'hsl(var(--mood-neutral)/0.15)' }}>
-                  <Clock size={28} color="hsl(var(--mood-neutral))" />
-                </div>
-                <span>{t('student.lateArrivals', 'Late Arrivals')}</span>
-                <strong style={{ color: 'hsl(var(--mood-neutral))' }}>{liveStudent.lateDays || 0} {t('student.times', 'times')}</strong>
-              </div>
-              <div className="att-stat-card glass">
-                <div className="att-icon" style={{ background: 'hsl(var(--chart-2)/0.15)' }}>
-                  <TrendingUp size={28} color="hsl(var(--chart-2))" />
-                </div>
-                <span>{t('student.overallRate', 'Overall Rate')}</span>
-                <strong style={{ color: 'hsl(var(--chart-2))' }}>{data.attendance}%</strong>
-              </div>
-            </div>
-            <div className="co-table glass" style={{ marginTop: '1.25rem' }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>{t('student.week', 'Week')}</th>
-                    <th>{days[0]}</th>
-                    <th>{days[1]}</th>
-                    <th>{days[2]}</th>
-                    <th>{days[3]}</th>
-                    <th>{days[4]}</th>
-                    <th>{t('student.rate', 'Rate')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.weeklyHistory.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
-                        {t('student.noWeeklyHistory', 'No weekly attendance history logged yet.')}
-                      </td>
-                    </tr>
-                  ) : (
-                    data.weeklyHistory.map(([week,...daysHistory]) => {
-                      const present = daysHistory.slice(0,5).filter(Boolean).length;
-                      return (
-                        <tr key={week}>
-                          <td className="muted">{week}</td>
-                          {daysHistory.slice(0,5).map((d, i2) => (
-                            <td key={i2} className="centered">
-                              <span style={{ fontSize: '1.25rem' }}>{d ? '✅' : '❌'}</span>
-                            </td>
-                          ))}
-                          <td className="centered"><strong style={{ color: gradeColor(present/5*100) }}>{present}/5</strong></td>
                         </tr>
                       );
                     })

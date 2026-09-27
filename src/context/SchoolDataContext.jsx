@@ -360,9 +360,6 @@ export const SchoolDataProvider = ({ children }) => {
       studentId: newStudent.studentId || `STU-${Math.floor(1000 + Math.random() * 9000)}`,
       status: newStudent.status || 'active',
       assignedClasses: newStudent.assignedClasses || [],
-      points: newStudent.points || 500,
-      attendance: newStudent.attendance || 100,
-      gpa: newStudent.gpa || 3.8,
       createdAt: serverTimestamp()
     };
     await setDoc(studentDocRef, payload);

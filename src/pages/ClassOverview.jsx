@@ -13,119 +13,15 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import { CURRICULUM_STAGES } from './Classes';
+import { INITIAL_WEIGHTS, getCategoryDisplayName, validateCategoryWeights, calcStudentGradeData } from '../features/gradebook/grading';
 import './ClassOverview.css';
 
 /* ─── Production Data State ──────────────────────────────── */
-
-const INITIAL_STUDENTS = [];
-const INITIAL_ASSIGNMENTS = [];
-const INITIAL_WEIGHTS = { Homework: 20, Engagement: 15, Quiz: 20, Exam: 30, Project: 15 };
-const DEFAULT_GRADING_SETTINGS = {
-  homeworkMinusValue: 1,      // each minus deducts 1% from homework category
-  engagementPlusValue: 1,     // each plus adds 1% to engagement category
-  engagementMinusValue: 1     // each minus deducts 1% from engagement category
-};
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
 const toPercent = (score, total) =>
   total > 0 ? Math.round((score / total) * 100) : 0;
-
-export const getCategoryDisplayName = (cat, isAlbanian = false) => {
-  switch (cat) {
-    case 'Homework': return isAlbanian ? 'Detyrat e Shtëpisë' : 'Homework';
-    case 'Engagement': return isAlbanian ? 'Angazhimi në Klasë' : 'Class Engagement';
-    case 'Quiz': return isAlbanian ? 'Kuize' : 'Quiz';
-    case 'Exam': return isAlbanian ? 'Provime' : 'Exam';
-    case 'Project': return isAlbanian ? 'Projekte' : 'Project';
-    default: return cat;
-  }
-};
-
-export const calcStudentGradeData = (studentId, assignments = [], grades = {}, weights = INITIAL_WEIGHTS, studentTracking = {}, gradingSettings = DEFAULT_GRADING_SETTINGS) => {
-  const studentTrack = studentTracking?.[studentId] || {};
-  const hwWeight = Number(weights?.Homework ?? 20);
-  const engWeight = Number(weights?.Engagement ?? 15);
-  const hwMinusVal = Number(gradingSettings?.homeworkMinusValue ?? 1);
-  const engPlusVal = Number(gradingSettings?.engagementPlusValue ?? 1);
-  const engMinusVal = Number(gradingSettings?.engagementMinusValue ?? 1);
-
-  // 1. Missing Homework calculation
-  // Base weight - (minuses * hwMinusVal), clamped at 0 (never negative)
-  const missingHw = Math.max(0, Number(studentTrack.missingHomework || 0));
-  const hwDeductionPts = missingHw * hwMinusVal;
-  const hwEarnedWeightPts = Math.max(0, hwWeight - hwDeductionPts);
-  const hwPct = hwWeight > 0 ? Math.round((hwEarnedWeightPts / hwWeight) * 100) : 0;
-
-  // 2. Class Engagement calculation
-  // (pluses * engPlusVal) - (minuses * engMinusVal), clamped between 0 and engWeight
-  const engPluses = Math.max(0, Number(studentTrack.engagementPluses || 0));
-  const engMinuses = Math.max(0, Number(studentTrack.engagementMinuses || 0));
-  const netEngWeightPts = Math.min(engWeight, Math.max(0, (engPluses * engPlusVal) - (engMinuses * engMinusVal)));
-  const engPct = engWeight > 0 ? Math.round((netEngWeightPts / engWeight) * 100) : 0;
-  const engEarnedWeightPts = netEngWeightPts;
-
-  // 3. Conventional assignments categories
-  const catScores = {
-    Homework: { earnedWeightPts: hwEarnedWeightPts, maxWeight: hwWeight, pct: hwPct, hasData: true },
-    Engagement: { earnedWeightPts: engEarnedWeightPts, maxWeight: engWeight, pct: engPct, hasData: true }
-  };
-
-  const assignCats = {};
-  assignments.forEach(a => {
-    const g = grades?.[studentId]?.[a.id];
-    if (g === undefined || g === '' || g === null) return;
-    if (!assignCats[a.category]) assignCats[a.category] = { earned: 0, total: 0 };
-    assignCats[a.category].earned += Number(g);
-    assignCats[a.category].total += Number(a.totalPoints || 100);
-  });
-
-  Object.keys(weights || {}).forEach(cat => {
-    if (cat === 'Homework' || cat === 'Engagement') return;
-    const w = Number(weights[cat] ?? 0);
-    if (assignCats[cat] && assignCats[cat].total > 0) {
-      const pct = Math.round((assignCats[cat].earned / assignCats[cat].total) * 100);
-      const earnedWeightPts = (pct / 100) * w;
-      catScores[cat] = { earnedWeightPts, maxWeight: w, pct, hasData: true };
-    } else {
-      catScores[cat] = { earnedWeightPts: 0, maxWeight: w, pct: null, hasData: false };
-    }
-  });
-
-  // Calculate overall grade across active categories
-  let totalEarned = 0;
-  let totalActiveWeight = 0;
-  Object.entries(catScores).forEach(([cat, data]) => {
-    if (data.hasData && data.maxWeight > 0) {
-      totalEarned += data.earnedWeightPts;
-      totalActiveWeight += data.maxWeight;
-    }
-  });
-
-  const calculatedPct = totalActiveWeight > 0
-    ? Math.round((totalEarned / totalActiveWeight) * 100)
-    : null;
-
-  const isOverridden = studentTrack.manualOverridePct !== undefined &&
-                       studentTrack.manualOverridePct !== null &&
-                       studentTrack.manualOverridePct !== '';
-  const finalPct = isOverridden
-    ? Math.min(100, Math.max(0, Number(studentTrack.manualOverridePct)))
-    : calculatedPct;
-
-  return {
-    catScores,
-    calculatedPct,
-    finalPct,
-    isOverridden,
-    manualOverridePct: studentTrack.manualOverridePct,
-    missingHw,
-    engPluses,
-    engMinuses,
-    hwEarnedWeightPts,
-    engEarnedWeightPts
-  };
-};
 
 const calcClassAvg = (assignmentId, grades, students) => {
   const graded = students.filter(s => grades[s.id]?.[assignmentId] !== undefined);
@@ -164,11 +60,20 @@ const gradeColor = (pct) => {
 /* ─── Sub-components ─────────────────────────────────────── */
 
 /* Grade Modal */
-const GradeModal = ({ assignment, students, grades, onSave, onClose }) => {
+const GradeModal = ({ assignment, students, grades, categoryLabels, onSave, onClose }) => {
   const { isAlbanian } = useLanguage();
+  const [studentSearch, setStudentSearch] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [local, setLocal] = useState(
     Object.fromEntries(students.map(s => [s.id, grades[s.id]?.[assignment.id] ?? '']))
   );
+  const handleSubmit = async event => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try { await onSave(assignment.id, local); } catch (saveError) { setError(saveError.message || 'Could not save grades.'); } finally { setSaving(false); }
+  };
   return (
     <div className="modal-overlay" onClick={onClose}>
       <motion.div
@@ -181,14 +86,15 @@ const GradeModal = ({ assignment, students, grades, onSave, onClose }) => {
       >
         <div className="modal-header">
           <h3>{isAlbanian ? 'Vlerëso — ' : 'Grade — '}{assignment.title}</h3>
-          <p className="modal-subtitle">{isAlbanian ? `Pikët maksimale të detyrës: ${assignment.totalPoints} Pikë` : `Total assignment capacity: ${assignment.totalPoints} Points`}</p>
+          <p className="modal-subtitle">{getCategoryDisplayName(assignment.category, isAlbanian, categoryLabels)} · {isAlbanian ? `Pikët maksimale: ${assignment.totalPoints}` : `Maximum points: ${assignment.totalPoints}`}</p>
           <button type="button" className="icon-btn-close" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>
-        <form className="modal-form" onSubmit={(e) => { e.preventDefault(); onSave(assignment.id, local); }}>
+        <form className="modal-form" onSubmit={handleSubmit}>
+          <div className="search-box glass gradebook-student-search"><span>🔍</span><input aria-label={isAlbanian ? 'Kërko nxënësit' : 'Search students'} placeholder={isAlbanian ? 'Kërko nxënësit…' : 'Search students…'} value={studentSearch} onChange={e => setStudentSearch(e.target.value)} /></div>
           <div className="modal-grades-list">
-            {students.map(s => (
+            {students.filter(s => [s.name, s.studentId, s.email].some(value => String(value || '').toLocaleLowerCase().includes(studentSearch.trim().toLocaleLowerCase()))).map(s => (
               <div key={s.id} className="grade-input-row">
                 <div className="grade-student-info">
                   <Avatar name={s.name} size={30} />
@@ -208,9 +114,10 @@ const GradeModal = ({ assignment, students, grades, onSave, onClose }) => {
               </div>
             ))}
           </div>
+          {error && <p role="alert" className="category-editor-error">{error}</p>}
           <div className="modal-footer-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>{isAlbanian ? 'Anulo' : 'Cancel'}</button>
-            <button type="submit" className="btn-primary">{isAlbanian ? 'Ruaj Notat' : 'Save Grades'}</button>
+            <button type="submit" className="btn-primary" disabled={saving}>{saving ? (isAlbanian ? 'Duke ruajtur…' : 'Saving…') : (isAlbanian ? 'Ruaj Notat' : 'Save Grades')}</button>
           </div>
         </form>
       </motion.div>
@@ -219,16 +126,12 @@ const GradeModal = ({ assignment, students, grades, onSave, onClose }) => {
 };
 
 /* Grading & Weights Settings Modal */
-const GradingSettingsModal = ({ weights, gradingSettings, curriculumStage, onSave, onClose }) => {
+const GradingSettingsModal = ({ weights, categoryLabels, assignments, gradingSettings, curriculumStage, onSave, onClose }) => {
   const { isAlbanian } = useLanguage();
-  const [localWeights, setLocalWeights] = useState({
-    Homework: weights.Homework ?? 20,
-    Engagement: weights.Engagement ?? 15,
-    Quiz: weights.Quiz ?? 20,
-    Exam: weights.Exam ?? 30,
-    Project: weights.Project ?? 15,
-    ...weights
-  });
+  const [localWeights, setLocalWeights] = useState({ ...weights });
+  const [localLabels, setLocalLabels] = useState({ ...categoryLabels });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [localSettings, setLocalSettings] = useState({
     homeworkMinusValue: gradingSettings?.homeworkMinusValue ?? 1,
     engagementPlusValue: gradingSettings?.engagementPlusValue ?? 1,
@@ -238,14 +141,34 @@ const GradingSettingsModal = ({ weights, gradingSettings, curriculumStage, onSav
 
   const totalWeight = Object.values(localWeights).reduce((a, b) => a + Number(b || 0), 0);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (totalWeight !== 100) return;
-    onSave({
-      newWeights: localWeights,
+    const validationError = validateCategoryWeights(localWeights, localLabels, assignments);
+    if (validationError) { setError(validationError); return; }
+    setSaving(true);
+    setError('');
+    try { await onSave({
+      newWeights: Object.fromEntries(Object.entries(localWeights).map(([key, value]) => [key, Number(value)])),
+      newCategoryLabels: localLabels,
       newGradingSettings: localSettings,
       newCurriculumStage: localStage
-    });
+    }); } catch (saveError) { setError(saveError.message || 'Could not save settings.'); } finally { setSaving(false); }
+  };
+
+  const addCategory = () => {
+    const id = `custom_${crypto.randomUUID()}`;
+    setLocalWeights(prev => ({ ...prev, [id]: 0 }));
+    setLocalLabels(prev => ({ ...prev, [id]: '' }));
+  };
+
+  const removeCategory = (category) => {
+    if (assignments.some(assignment => assignment.category === category)) {
+      setError(isAlbanian ? 'Kjo kategori ka detyra. Hiqni ose zhvendosni detyrat para se ta fshini.' : 'This category has assignments. Remove or move them before deleting it.');
+      return;
+    }
+    setLocalWeights(prev => { const next = { ...prev }; delete next[category]; return next; });
+    setLocalLabels(prev => { const next = { ...prev }; delete next[category]; return next; });
+    setError('');
   };
 
   return (
@@ -292,28 +215,37 @@ const GradingSettingsModal = ({ weights, gradingSettings, curriculumStage, onSav
             <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, textTransform: 'uppercase', color: 'hsl(var(--primary))', letterSpacing: '0.5px' }}>
               {isAlbanian ? 'Peshat e Kategorive (Totali duhet të jetë 100%)' : 'Category Weights (Total must equal 100%)'}
             </h4>
+            <p className="ct-subtitle">{isAlbanian ? 'Ndryshoni emrat dhe peshat. Kategoritë e ndjekjes Detyrat dhe Angazhimi nuk mund të fshihen.' : 'Edit names and weights. Homework and Engagement stay because continuous tracking uses them.'}</p>
           </div>
 
-          <div className="form-grid-2">
+          <div className="category-editor-list">
             {Object.keys(localWeights).map(cat => (
-              <div key={cat} className="input-group">
-                <label>{getCategoryDisplayName(cat, isAlbanian)} (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={localWeights[cat]}
-                  onChange={e => setLocalWeights({ ...localWeights, [cat]: Number(e.target.value) })}
-                />
+              <div key={cat} className="category-editor-row">
+                <div className="input-group">
+                  <label htmlFor={`category-name-${cat}`}>{isAlbanian ? 'Emri i kategorisë' : 'Category name'}</label>
+                  <input id={`category-name-${cat}`} aria-label={`${getCategoryDisplayName(cat, isAlbanian, localLabels)} name`} value={localLabels[cat] ?? ''}
+                    placeholder={cat.startsWith('custom_') ? (isAlbanian ? 'Emri i ri' : 'New category name') : getCategoryDisplayName(cat, isAlbanian)}
+                    onChange={e => setLocalLabels(prev => ({ ...prev, [cat]: e.target.value }))} />
+                </div>
+                <div className="input-group">
+                  <label htmlFor={`category-weight-${cat}`}>{isAlbanian ? 'Pesha (%)' : 'Weight (%)'}</label>
+                  <input id={`category-weight-${cat}`} type="number" min="0" max="100" step="1" value={localWeights[cat]}
+                    onChange={e => setLocalWeights(prev => ({ ...prev, [cat]: e.target.value }))} />
+                </div>
+                <button type="button" className="icon-btn-destructive" disabled={cat === 'Homework' || cat === 'Engagement' || assignments.some(a => a.category === cat)}
+                  title={cat === 'Homework' || cat === 'Engagement' ? (isAlbanian ? 'Kategoria e ndjekjes është e detyrueshme' : 'Required tracking category') : (isAlbanian ? 'Fshi kategorinë' : 'Remove category')}
+                  aria-label={`${isAlbanian ? 'Fshi' : 'Remove'} ${getCategoryDisplayName(cat, isAlbanian, localLabels)}`} onClick={() => removeCategory(cat)}><Trash2 size={16} /></button>
               </div>
             ))}
           </div>
+          <button type="button" className="btn-secondary" onClick={addCategory}><Plus size={15} /> {isAlbanian ? 'Shto Kategori' : 'Add Category'}</button>
 
           <div className="weights-total-row" style={{ color: totalWeight === 100 ? 'hsl(var(--mood-happy))' : 'hsl(var(--destructive))', fontWeight: 700 }}>
             {isAlbanian
               ? `Totali i Peshave: ${totalWeight}% ${totalWeight !== 100 ? '(Duhet të jetë saktësisht 100%)' : '✓'}`
               : `Total Weight: ${totalWeight}% ${totalWeight !== 100 ? '(Must equal exactly 100%)' : '✓'}`}
           </div>
+          {error && <p role="alert" className="category-editor-error">{error}</p>}
 
           {/* Section: Continuous Assessment Rules */}
           <div style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}>
@@ -376,8 +308,8 @@ const GradingSettingsModal = ({ weights, gradingSettings, curriculumStage, onSav
             <button type="button" className="btn-secondary" onClick={onClose}>
               {isAlbanian ? 'Anulo' : 'Cancel'}
             </button>
-            <button type="submit" className="btn-primary" disabled={totalWeight !== 100}>
-              {isAlbanian ? 'Ruaj Cilësimet' : 'Save Settings'}
+            <button type="submit" className="btn-primary" disabled={saving || totalWeight !== 100}>
+              {saving ? (isAlbanian ? 'Duke ruajtur…' : 'Saving…') : (isAlbanian ? 'Ruaj Cilësimet' : 'Save Settings')}
             </button>
           </div>
         </form>
@@ -487,9 +419,17 @@ const ManualOverrideModal = ({ studentData, onSave, onReset, onClose }) => {
 };
 
 /* Add Assignment Modal */
-const AddAssignmentModal = ({ onSave, onClose }) => {
+const AddAssignmentModal = ({ weights, categoryLabels, onSave, onClose }) => {
   const { isAlbanian } = useLanguage();
-  const [form, setForm] = useState({ title: '', category: 'Homework', totalPoints: 100, date: '' });
+  const [form, setForm] = useState({ title: '', category: Object.keys(weights)[0] || 'Homework', totalPoints: 100, date: '' });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try { await onSave(form); } catch (saveError) { setError(saveError.message || 'Could not create assignment.'); } finally { setSaving(false); }
+  };
   return (
     <div className="modal-overlay" onClick={onClose}>
       <motion.div
@@ -507,7 +447,7 @@ const AddAssignmentModal = ({ onSave, onClose }) => {
             <X size={16} />
           </button>
         </div>
-        <form className="modal-form" onSubmit={(e) => { e.preventDefault(); if (form.title) onSave(form); }}>
+        <form className="modal-form" onSubmit={handleSubmit}>
           <div className="input-group">
             <label>{isAlbanian ? 'Titulli' : 'Title'}</label>
             <input required placeholder={isAlbanian ? 'p.sh. Ushtrime Kapitulli 5' : 'e.g. Chapter 5 Practice'} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
@@ -516,7 +456,7 @@ const AddAssignmentModal = ({ onSave, onClose }) => {
             <div className="input-group">
               <label>{isAlbanian ? 'Kategoria' : 'Category'}</label>
               <select className="custom-form-select" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                {['Homework', 'Quiz', 'Exam', 'Project'].map(c => <option key={c}>{c}</option>)}
+                {Object.keys(weights).map(c => <option key={c} value={c}>{getCategoryDisplayName(c, isAlbanian, categoryLabels)}</option>)}
               </select>
             </div>
             <div className="input-group">
@@ -528,9 +468,10 @@ const AddAssignmentModal = ({ onSave, onClose }) => {
             <label>{isAlbanian ? 'Data' : 'Date'}</label>
             <input type="text" placeholder={isAlbanian ? 'p.sh. 25 Mars, 2026' : 'e.g. Mar 25, 2026'} value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           </div>
+          {error && <p role="alert" className="category-editor-error">{error}</p>}
           <div className="modal-footer-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>{isAlbanian ? 'Anulo' : 'Cancel'}</button>
-            <button type="submit" className="btn-primary">{isAlbanian ? 'Shto Detyrë' : 'Add Assignment'}</button>
+            <button type="submit" className="btn-primary" disabled={saving}>{saving ? (isAlbanian ? 'Duke ruajtur…' : 'Saving…') : (isAlbanian ? 'Shto Detyrë' : 'Add Assignment')}</button>
           </div>
         </form>
       </motion.div>
@@ -557,6 +498,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const [assignments, setAssignments]     = useState([]);
   const [grades, setGrades]               = useState({});   // { studentId: { assignmentId: score } }
   const [weights, setWeights]             = useState(classData?.weights || INITIAL_WEIGHTS);
+  const [categoryLabels, setCategoryLabels] = useState(classData?.categoryLabels || {});
   const [gradingSettings, setGradingSettings] = useState(() => ({
     homeworkMinusValue: classData?.gradingSettings?.homeworkMinusValue ?? 1,
     engagementPlusValue: classData?.gradingSettings?.engagementPlusValue ?? 1,
@@ -576,8 +518,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const [studentToRemove, setStudentToRemove] = useState(null);
   const [catFilter, setCatFilter]         = useState('All');
   const [searchQ, setSearchQ]             = useState('');
-
-  if (!classData) return null;
+  const [studentSearchQ, setStudentSearchQ] = useState('');
 
   // Sync props updates
   useEffect(() => {
@@ -594,16 +535,24 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     if (classData?.weights) {
       setWeights(classData.weights);
     }
+    setCategoryLabels(classData?.categoryLabels || {});
   }, [classData]);
 
   // Filter students enrolled in this class
   const students = useMemo(() => {
+    if (!classData) return [];
     return studentsList.filter(s =>
       s.assignedClasses && s.assignedClasses.some(c =>
         c === classData.name || c === classData.code || (classData.code && c.includes(classData.code))
       )
     );
   }, [studentsList, classData]);
+
+  const gradebookStudents = useMemo(() => {
+    const query = studentSearchQ.trim().toLocaleLowerCase();
+    if (!query) return students;
+    return students.filter(student => [student.name, student.studentId, student.email].some(value => String(value || '').toLocaleLowerCase().includes(query)));
+  }, [students, studentSearchQ]);
 
   // Students available to be enrolled
   const availableStudentsToEnroll = useMemo(() => {
@@ -694,36 +643,36 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
   /* Cloud operations */
   const saveGrades = async (assignmentId, localScores) => {
-    if (!activeSchoolId || !classData?.id) return;
-    try {
-      const gradeDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'grades', String(assignmentId));
-      await setDoc(gradeDocRef, {
+    if (!activeSchoolId || !classData?.id) throw new Error('No active school or class.');
+    const assignment = assignments.find(item => item.id === assignmentId);
+    if (!assignment) throw new Error('Assignment no longer exists.');
+    const max = Number(assignment.totalPoints);
+    if (Object.values(localScores).some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > max))) throw new Error(`Scores must be between 0 and ${max}.`);
+    const gradeDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'grades', String(assignmentId));
+    await setDoc(gradeDocRef, {
         assignmentId,
         scores: localScores,
         updatedAt: serverTimestamp()
-      }, { merge: true });
-    } catch (e) {
-      console.warn('Could not save grades to Firestore:', e.message);
-    }
+    }, { merge: true });
     setGradeModal(null);
   };
 
-  const saveGradingSettings = async ({ newWeights, newGradingSettings, newCurriculumStage }) => {
+  const saveGradingSettings = async ({ newWeights, newCategoryLabels, newGradingSettings, newCurriculumStage }) => {
+    const validationError = validateCategoryWeights(newWeights, newCategoryLabels, assignments);
+    if (validationError) throw new Error(validationError);
+    if (!activeSchoolId || !classData?.id) throw new Error('No active school or class.');
+    const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id));
+    await updateDoc(classDocRef, {
+        weights: newWeights,
+        categoryLabels: newCategoryLabels,
+        gradingSettings: newGradingSettings,
+        curriculumStage: newCurriculumStage
+    });
     setWeights(newWeights);
+    setCategoryLabels(newCategoryLabels);
     setGradingSettings(newGradingSettings);
     setCurriculumStage(newCurriculumStage);
     setWeightsModal(false);
-    if (!activeSchoolId || !classData?.id) return;
-    try {
-      const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id));
-      await updateDoc(classDocRef, {
-        weights: newWeights,
-        gradingSettings: newGradingSettings,
-        curriculumStage: newCurriculumStage
-      });
-    } catch (e) {
-      console.warn('Could not save grading settings to Firestore:', e.message);
-    }
   };
 
   const updateStudentTracking = async (studentId, changes) => {
@@ -759,8 +708,9 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   };
 
   const addAssignment = async (form) => {
-    setAddModal(false);
-    if (!activeSchoolId || !classData?.id) return;
+    if (!activeSchoolId || !classData?.id) throw new Error('No active school or class.');
+    if (!Object.hasOwn(weights, form.category)) throw new Error('Choose an available category.');
+    if (!form.title?.trim() || !Number.isFinite(Number(form.totalPoints)) || Number(form.totalPoints) <= 0) throw new Error('Enter a title and positive total points.');
     const assignId = `asg_${Date.now()}`;
     const next = {
       ...form,
@@ -768,12 +718,9 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
       date: form.date || new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }),
       createdAt: serverTimestamp()
     };
-    try {
-      const assignRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'assignments', assignId);
-      await setDoc(assignRef, next);
-    } catch (e) {
-      console.warn('Could not add assignment to Firestore:', e.message);
-    }
+    const assignRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'assignments', assignId);
+    await setDoc(assignRef, next);
+    setAddModal(false);
   };
 
   const deleteAssignment = async (id) => {
@@ -817,6 +764,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     if (!avgs.length) return null;
     return Math.round(avgs.reduce((a,b) => a+b,0) / avgs.length);
   };
+
+  if (!classData) return null;
 
   return (
     <motion.div className="co-page" initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}>
@@ -932,7 +881,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                 <div className="weights-list">
                   {Object.entries(weights).map(([cat, w]) => (
                     <div key={cat} className="weight-row">
-                      <span className="type-badge">{getCategoryDisplayName(cat, isAlbanian)}</span>
+                      <span className="type-badge">{getCategoryDisplayName(cat, isAlbanian, categoryLabels)}</span>
                       <div className="breakdown-bar-bg">
                         <div className="breakdown-bar" style={{ width: `${w}%`, background: `hsl(var(--accent))` }} />
                       </div>
@@ -1068,6 +1017,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
               )}
             </div>
 
+            <div className="search-box glass gradebook-student-search"><span>🔍</span><input aria-label={isAlbanian ? 'Kërko nxënësin në ditarin e notave' : 'Search gradebook students'} placeholder={isAlbanian ? 'Kërko nxënësin sipas emrit, ID-së ose email-it…' : 'Find a student by name, ID, or email…'} value={studentSearchQ} onChange={e => setStudentSearchQ(e.target.value)} /></div>
+
             {/* ── 1. Continuous Assessment: Missing Homework & Engagement ── */}
             {students.length > 0 && (
               <div className="continuous-tracking-card glass">
@@ -1078,12 +1029,12 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     </div>
                     <div>
                       <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800 }}>
-                        {isAlbanian ? 'Vlerësimi i Vazhdueshëm: Detyrat e Shtëpisë & Angazhimi në Klasë' : 'Continuous Assessment: Homework & Class Engagement'}
+                        {isAlbanian ? 'Vlerësimi i Vazhdueshëm' : 'Continuous Assessment'}: {getCategoryDisplayName('Homework', isAlbanian, categoryLabels)} & {getCategoryDisplayName('Engagement', isAlbanian, categoryLabels)}
                       </h4>
                       <p className="ct-subtitle">
                         {isAlbanian
-                          ? `Detyrat: ${weights.Homework ?? 20}% e notës (-${gradingSettings.homeworkMinusValue}% për çdo minus) · Angazhimi: ${weights.Engagement ?? 15}% e notës (+${gradingSettings.engagementPlusValue}% për plus, -${gradingSettings.engagementMinusValue}% për minus)`
-                          : `Homework: ${weights.Homework ?? 20}% weight (-${gradingSettings.homeworkMinusValue}% per minus) · Engagement: ${weights.Engagement ?? 15}% weight (+${gradingSettings.engagementPlusValue}% per plus, -${gradingSettings.engagementMinusValue}% per minus)`}
+                          ? `${getCategoryDisplayName('Homework', true, categoryLabels)}: ${weights.Homework ?? 0}% e notës (-${gradingSettings.homeworkMinusValue}% për çdo minus) · ${getCategoryDisplayName('Engagement', true, categoryLabels)}: ${weights.Engagement ?? 0}% e notës (+${gradingSettings.engagementPlusValue}% për plus, -${gradingSettings.engagementMinusValue}% për minus)`
+                          : `${getCategoryDisplayName('Homework', false, categoryLabels)}: ${weights.Homework ?? 0}% weight (-${gradingSettings.homeworkMinusValue}% per minus) · ${getCategoryDisplayName('Engagement', false, categoryLabels)}: ${weights.Engagement ?? 0}% weight (+${gradingSettings.engagementPlusValue}% per plus, -${gradingSettings.engagementMinusValue}% per minus)`}
                       </p>
                     </div>
                   </div>
@@ -1101,7 +1052,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                       </tr>
                     </thead>
                     <tbody>
-                      {students.map(s => {
+                      {gradebookStudents.map(s => {
                         const data = calcStudentGradeData(s.id, assignments, grades, weights, studentTracking, gradingSettings);
                         const canEdit = userRole !== 'student';
                         return (
@@ -1144,8 +1095,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                             {/* Homework Score */}
                             <td className="centered">
                               <span style={{ fontWeight: 700, color: data.catScores.Homework.pct < 70 ? 'hsl(var(--mood-sad))' : 'hsl(var(--mood-happy))' }}>
-                                {data.catScores.Homework.earnedWeightPts.toFixed(1)} / {weights.Homework ?? 20}%
-                                <span className="pts-pct-sub"> ({data.catScores.Homework.pct}%)</span>
+                                {data.catScores.Homework.earnedWeightPts.toFixed(1)} / {weights.Homework ?? 0}%
+                                <span className="pts-pct-sub"> ({data.catScores.Homework.pct === null ? '—' : `${data.catScores.Homework.pct}%`})</span>
                               </span>
                             </td>
                             {/* Engagement Column */}
@@ -1207,8 +1158,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                             {/* Engagement Score */}
                             <td className="centered">
                               <span style={{ fontWeight: 700, color: data.catScores.Engagement.pct < 60 ? 'hsl(var(--mood-sad))' : 'hsl(var(--mood-happy))' }}>
-                                {data.catScores.Engagement.earnedWeightPts.toFixed(1)} / {weights.Engagement ?? 15}%
-                                <span className="pts-pct-sub"> ({data.catScores.Engagement.pct}%)</span>
+                                {data.catScores.Engagement.earnedWeightPts.toFixed(1)} / {weights.Engagement ?? 0}%
+                                <span className="pts-pct-sub"> ({data.catScores.Engagement.pct === null ? '—' : `${data.catScores.Engagement.pct}%`})</span>
                               </span>
                             </td>
                           </tr>
@@ -1237,7 +1188,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                 <div className="cat-pills">
                   {cats.map(c => (
                     <button key={c} className={`cat-pill ${catFilter === c ? 'active' : ''}`} onClick={() => setCatFilter(c)}>
-                      {c === 'All' ? (isAlbanian ? 'Të Gjitha' : 'All') : getCategoryDisplayName(c, isAlbanian)}
+                      {c === 'All' ? (isAlbanian ? 'Të Gjitha' : 'All') : getCategoryDisplayName(c, isAlbanian, categoryLabels)}
                     </button>
                   ))}
                 </div>
@@ -1263,7 +1214,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                         return (
                           <motion.tr key={a.id} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} layout>
                             <td><strong>{a.title}</strong></td>
-                            <td><span className="type-badge">{getCategoryDisplayName(a.category, isAlbanian)}</span></td>
+                            <td><span className="type-badge">{getCategoryDisplayName(a.category, isAlbanian, categoryLabels)}</span></td>
                             <td className="muted">{a.date}</td>
                             <td className="centered">{a.totalPoints}</td>
                             <td className="centered">
@@ -1333,10 +1284,10 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     <thead>
                       <tr>
                         <th>{t('leaderboard.student', 'Student')}</th>
-                        <th>{isAlbanian ? `Detyrat (${weights.Homework ?? 20}%)` : `Homework (${weights.Homework ?? 20}%)`}</th>
-                        <th>{isAlbanian ? `Angazhimi (${weights.Engagement ?? 15}%)` : `Engagement (${weights.Engagement ?? 15}%)`}</th>
+                        <th>{getCategoryDisplayName('Homework', isAlbanian, categoryLabels)} ({weights.Homework ?? 0}%)</th>
+                        <th>{getCategoryDisplayName('Engagement', isAlbanian, categoryLabels)} ({weights.Engagement ?? 0}%)</th>
                         {Object.keys(weights).filter(c => c !== 'Homework' && c !== 'Engagement').map(cat => (
-                          <th key={cat}>{getCategoryDisplayName(cat, isAlbanian)} ({weights[cat]}%)</th>
+                          <th key={cat}>{getCategoryDisplayName(cat, isAlbanian, categoryLabels)} ({weights[cat]}%)</th>
                         ))}
                         <th>{isAlbanian ? 'Përfundimtare %' : 'Final %'}</th>
                         <th>{isAlbanian ? 'Nota' : 'Grade'}</th>
@@ -1344,7 +1295,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                       </tr>
                     </thead>
                     <tbody>
-                      {students.map(s => {
+                      {gradebookStudents.map(s => {
                         const data = calcStudentGradeData(s.id, assignments, grades, weights, studentTracking, gradingSettings);
                         const pct = data.finalPct;
                         return (
@@ -1358,7 +1309,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                             {/* Homework */}
                             <td className="centered">
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                                <span style={{ fontWeight: 700 }}>{data.catScores.Homework.pct}%</span>
+                                <span style={{ fontWeight: 700 }}>{data.catScores.Homework.pct === null ? '—' : `${data.catScores.Homework.pct}%`}</span>
                                 <small className="muted" style={{ fontSize: '0.72rem' }}>
                                   {data.missingHw > 0 ? `-${data.missingHw} min` : (isAlbanian ? 'E plotë' : 'Full')}
                                 </small>
@@ -1367,7 +1318,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                             {/* Engagement */}
                             <td className="centered">
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                                <span style={{ fontWeight: 700 }}>{data.catScores.Engagement.pct}%</span>
+                                <span style={{ fontWeight: 700 }}>{data.catScores.Engagement.pct === null ? '—' : `${data.catScores.Engagement.pct}%`}</span>
                                 <small className="muted" style={{ fontSize: '0.72rem' }}>
                                   +{data.engPluses} / -{data.engMinuses}
                                 </small>
@@ -1533,10 +1484,12 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
       {/* ── Modals ── */}
       <AnimatePresence>
-        {gradeModal   && <GradeModal assignment={gradeModal} students={students} grades={grades} onSave={saveGrades} onClose={() => setGradeModal(null)} />}
+        {gradeModal   && <GradeModal assignment={gradeModal} students={students} grades={grades} categoryLabels={categoryLabels} onSave={saveGrades} onClose={() => setGradeModal(null)} />}
         {weightsModal && (
           <GradingSettingsModal 
             weights={weights} 
+            categoryLabels={categoryLabels}
+            assignments={assignments}
             gradingSettings={gradingSettings} 
             curriculumStage={curriculumStage} 
             onSave={saveGradingSettings} 
@@ -1557,7 +1510,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             onClose={() => setManualOverrideModal(null)}
           />
         )}
-        {addModal     && <AddAssignmentModal onSave={addAssignment} onClose={() => setAddModal(false)} />}
+        {addModal     && <AddAssignmentModal weights={weights} categoryLabels={categoryLabels} onSave={addAssignment} onClose={() => setAddModal(false)} />}
 
         {/* Enroll Student Modal */}
         {isEnrollModalOpen && (
