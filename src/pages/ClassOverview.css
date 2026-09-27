@@ -738,3 +738,193 @@ select.grade-input-field { cursor: pointer; }
   font-size: 0.9rem;
   font-weight: 600;
 }
+
+/* ── Continuous Assessment Tracker & Header Badge ──────── */
+.co-curriculum-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: hsla(var(--primary), 0.15);
+  color: hsl(var(--primary));
+  border: 1px solid hsla(var(--primary), 0.35);
+}
+
+.continuous-tracking-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.5rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+[data-theme='light'] .continuous-tracking-card {
+  background: #ffffff;
+  border: 1px solid hsla(270, 20%, 88%, 1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
+}
+
+.continuous-tracking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ct-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.ct-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: hsla(var(--primary), 0.16);
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ct-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.4;
+}
+
+/* Counter group buttons */
+.tracker-counter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.tracker-counter-group.mini {
+  gap: 0.3rem;
+}
+
+.tracker-label-tiny {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+}
+
+.counter-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.counter-btn.sm {
+  width: 24px;
+  height: 24px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+}
+
+.counter-btn:hover:not(:disabled) {
+  border-color: hsl(var(--primary));
+  transform: scale(1.08);
+}
+
+.counter-btn.minus:hover:not(:disabled) {
+  background: hsla(var(--destructive), 0.15);
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive));
+}
+
+.counter-btn.plus:hover:not(:disabled) {
+  background: hsla(var(--mood-happy), 0.15);
+  color: hsl(var(--mood-happy));
+  border-color: hsl(var(--mood-happy));
+}
+
+.counter-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+[data-theme='light'] .counter-btn {
+  background: #ffffff;
+  border-color: hsla(270, 20%, 82%, 1);
+}
+
+/* Badges */
+.tracker-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tracker-badge.badge-clean {
+  background: hsla(var(--mood-happy), 0.12);
+  color: hsl(var(--mood-happy));
+  border: 1px solid hsla(var(--mood-happy), 0.25);
+}
+
+.tracker-badge.badge-minus {
+  background: hsla(var(--destructive), 0.14);
+  color: hsl(var(--destructive));
+  border: 1px solid hsla(var(--destructive), 0.3);
+}
+
+.tracker-badge.badge-plus {
+  background: hsla(var(--mood-happy), 0.14);
+  color: hsl(var(--mood-happy));
+  border: 1px solid hsla(var(--mood-happy), 0.3);
+}
+
+.tracker-engagement-dual {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.pts-pct-sub {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+.override-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: hsla(var(--mood-neutral), 0.2);
+  color: hsl(var(--mood-neutral));
+  border: 1px solid hsla(var(--mood-neutral), 0.4);
+}

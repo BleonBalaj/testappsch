@@ -17,6 +17,7 @@ import { db } from '../services/firebase';
 import { compressImageFile } from '../services/imageUtils';
 import LessonPlanDocument from './LessonPlanDocument';
 import LessonPlanAdminSettings from './LessonPlanAdminSettings';
+import LessonAiAssistanceCard from '../components/LessonAiAssistanceCard';
 import './LessonPlans.css';
 
 const DATE_OPTIONS = ['all', 'today', 'yesterday', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'last7Days', 'custom'];
@@ -709,6 +710,13 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       <div className="lesson-mobile-pane-switch"><button className={mobilePane === 'editor' ? 'active' : ''} onClick={() => setMobilePane('editor')}>{t('editor.editorTab')}</button><button className={mobilePane === 'preview' ? 'active' : ''} onClick={() => setMobilePane('preview')}>{t('editor.documentTab')}</button></div>
       <div className="lesson-editor-layout">
         <div className={`lesson-editor-fields ${mobilePane === 'preview' ? 'lesson-mobile-hidden' : ''}`}>
+          <LessonAiAssistanceCard
+            activePlan={activePlan}
+            updatePlan={updatePlan}
+            saveNow={saveNow}
+            language={language}
+            notify={notify}
+          />
           <Section id="lesson-basics" title={t('editor.basicsTitle')} subtitle={t('editor.basicsSubtitle')} open={expanded.basics} onToggle={() => toggleSection('basics')}>
             <div className="lesson-form-grid"><Field label={t('editor.date')}><input type="date" value={activePlan.date || ''} onChange={(event) => updatePlan({ date: event.target.value })} /></Field>
               <Field label={t('editor.class')}><input list="lesson-class-list" value={activePlan.classLabel || ''} onChange={(event) => changeClass(event.target.value)} placeholder={t('settings.exampleClass')} /><datalist id="lesson-class-list">{unique([...(preferences.assignedClasses || []), preferences.defaultClass]).map((value) => <option key={value} value={value} />)}</datalist></Field>

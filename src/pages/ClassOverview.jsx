@@ -4,7 +4,7 @@ import {
   ArrowLeft, BookOpen, Users, Settings, Plus, Trash2,
   Edit, AlertCircle, UserMinus, BarChart2, BookMarked,
   ClipboardList, Calendar, X, Check, CheckCircle2, ShieldAlert,
-  Download, ExternalLink, FileText, Video, Link as LinkIcon
+  Download, ExternalLink, FileText, Video, Link as LinkIcon, RotateCcw
 } from 'lucide-react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -12,18 +12,120 @@ import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
+import { CURRICULUM_STAGES } from './Classes';
 import './ClassOverview.css';
 
 /* ─── Production Data State ──────────────────────────────── */
 
 const INITIAL_STUDENTS = [];
 const INITIAL_ASSIGNMENTS = [];
-const INITIAL_WEIGHTS = { Homework: 25, Quiz: 25, Exam: 30, Project: 20 };
+const INITIAL_WEIGHTS = { Homework: 20, Engagement: 15, Quiz: 20, Exam: 30, Project: 15 };
+const DEFAULT_GRADING_SETTINGS = {
+  homeworkMinusValue: 1,      // each minus deducts 1% from homework category
+  engagementPlusValue: 1,     // each plus adds 1% to engagement category
+  engagementMinusValue: 1     // each minus deducts 1% from engagement category
+};
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
 const toPercent = (score, total) =>
   total > 0 ? Math.round((score / total) * 100) : 0;
+
+export const getCategoryDisplayName = (cat, isAlbanian = false) => {
+  switch (cat) {
+    case 'Homework': return isAlbanian ? 'Detyrat e Shtëpisë' : 'Homework';
+    case 'Engagement': return isAlbanian ? 'Angazhimi në Klasë' : 'Class Engagement';
+    case 'Quiz': return isAlbanian ? 'Kuize' : 'Quiz';
+    case 'Exam': return isAlbanian ? 'Provime' : 'Exam';
+    case 'Project': return isAlbanian ? 'Projekte' : 'Project';
+    default: return cat;
+  }
+};
+
+export const calcStudentGradeData = (studentId, assignments = [], grades = {}, weights = INITIAL_WEIGHTS, studentTracking = {}, gradingSettings = DEFAULT_GRADING_SETTINGS) => {
+  const studentTrack = studentTracking?.[studentId] || {};
+  const hwWeight = Number(weights?.Homework ?? 20);
+  const engWeight = Number(weights?.Engagement ?? 15);
+  const hwMinusVal = Number(gradingSettings?.homeworkMinusValue ?? 1);
+  const engPlusVal = Number(gradingSettings?.engagementPlusValue ?? 1);
+  const engMinusVal = Number(gradingSettings?.engagementMinusValue ?? 1);
+
+  // 1. Missing Homework calculation
+  // Base weight - (minuses * hwMinusVal), clamped at 0 (never negative)
+  const missingHw = Math.max(0, Number(studentTrack.missingHomework || 0));
+  const hwDeductionPts = missingHw * hwMinusVal;
+  const hwEarnedWeightPts = Math.max(0, hwWeight - hwDeductionPts);
+  const hwPct = hwWeight > 0 ? Math.round((hwEarnedWeightPts / hwWeight) * 100) : 0;
+
+  // 2. Class Engagement calculation
+  // (pluses * engPlusVal) - (minuses * engMinusVal), clamped between 0 and engWeight
+  const engPluses = Math.max(0, Number(studentTrack.engagementPluses || 0));
+  const engMinuses = Math.max(0, Number(studentTrack.engagementMinuses || 0));
+  const netEngWeightPts = Math.min(engWeight, Math.max(0, (engPluses * engPlusVal) - (engMinuses * engMinusVal)));
+  const engPct = engWeight > 0 ? Math.round((netEngWeightPts / engWeight) * 100) : 0;
+  const engEarnedWeightPts = netEngWeightPts;
+
+  // 3. Conventional assignments categories
+  const catScores = {
+    Homework: { earnedWeightPts: hwEarnedWeightPts, maxWeight: hwWeight, pct: hwPct, hasData: true },
+    Engagement: { earnedWeightPts: engEarnedWeightPts, maxWeight: engWeight, pct: engPct, hasData: true }
+  };
+
+  const assignCats = {};
+  assignments.forEach(a => {
+    const g = grades?.[studentId]?.[a.id];
+    if (g === undefined || g === '' || g === null) return;
+    if (!assignCats[a.category]) assignCats[a.category] = { earned: 0, total: 0 };
+    assignCats[a.category].earned += Number(g);
+    assignCats[a.category].total += Number(a.totalPoints || 100);
+  });
+
+  Object.keys(weights || {}).forEach(cat => {
+    if (cat === 'Homework' || cat === 'Engagement') return;
+    const w = Number(weights[cat] ?? 0);
+    if (assignCats[cat] && assignCats[cat].total > 0) {
+      const pct = Math.round((assignCats[cat].earned / assignCats[cat].total) * 100);
+      const earnedWeightPts = (pct / 100) * w;
+      catScores[cat] = { earnedWeightPts, maxWeight: w, pct, hasData: true };
+    } else {
+      catScores[cat] = { earnedWeightPts: 0, maxWeight: w, pct: null, hasData: false };
+    }
+  });
+
+  // Calculate overall grade across active categories
+  let totalEarned = 0;
+  let totalActiveWeight = 0;
+  Object.entries(catScores).forEach(([cat, data]) => {
+    if (data.hasData && data.maxWeight > 0) {
+      totalEarned += data.earnedWeightPts;
+      totalActiveWeight += data.maxWeight;
+    }
+  });
+
+  const calculatedPct = totalActiveWeight > 0
+    ? Math.round((totalEarned / totalActiveWeight) * 100)
+    : null;
+
+  const isOverridden = studentTrack.manualOverridePct !== undefined &&
+                       studentTrack.manualOverridePct !== null &&
+                       studentTrack.manualOverridePct !== '';
+  const finalPct = isOverridden
+    ? Math.min(100, Math.max(0, Number(studentTrack.manualOverridePct)))
+    : calculatedPct;
+
+  return {
+    catScores,
+    calculatedPct,
+    finalPct,
+    isOverridden,
+    manualOverridePct: studentTrack.manualOverridePct,
+    missingHw,
+    engPluses,
+    engMinuses,
+    hwEarnedWeightPts,
+    engEarnedWeightPts
+  };
+};
 
 const calcClassAvg = (assignmentId, grades, students) => {
   const graded = students.filter(s => grades[s.id]?.[assignmentId] !== undefined);
@@ -32,26 +134,20 @@ const calcClassAvg = (assignmentId, grades, students) => {
   return sum / graded.length;
 };
 
-const calcFinalGrade = (studentId, assignments, grades, weights) => {
-  const cats = {};
-  assignments.forEach(a => {
-    const g = grades[studentId]?.[a.id];
-    if (g === undefined) return;
-    if (!cats[a.category]) cats[a.category] = { earned: 0, total: 0 };
-    cats[a.category].earned += Number(g);
-    cats[a.category].total  += a.totalPoints;
-  });
-  let weightedSum = 0, weightTotal = 0;
-  Object.entries(cats).forEach(([cat, { earned, total }]) => {
-    const w = weights[cat] ?? 0;
-    weightedSum += (earned / total) * w;
-    weightTotal += w;
-  });
-  return weightTotal > 0 ? Math.round((weightedSum / weightTotal) * 100) : null;
+const calcFinalGrade = (studentId, assignments, grades, weights, studentTracking, gradingSettings) => {
+  const data = calcStudentGradeData(studentId, assignments, grades, weights, studentTracking, gradingSettings);
+  return data.finalPct;
 };
 
-const gradeLabel = (pct) => {
-  if (pct === null) return '—';
+const gradeLabel = (pct, isAlbanian = false) => {
+  if (pct === null || pct === undefined) return '—';
+  if (isAlbanian) {
+    if (pct >= 90) return '5 (A)';
+    if (pct >= 75) return '4 (B)';
+    if (pct >= 60) return '3 (C)';
+    if (pct >= 50) return '2 (D)';
+    return '1 (F)';
+  }
   if (pct >= 93) return 'A'; if (pct >= 90) return 'A-';
   if (pct >= 87) return 'B+'; if (pct >= 83) return 'B'; if (pct >= 80) return 'B-';
   if (pct >= 77) return 'C+'; if (pct >= 73) return 'C'; if (pct >= 70) return 'C-';
@@ -59,7 +155,7 @@ const gradeLabel = (pct) => {
 };
 
 const gradeColor = (pct) => {
-  if (pct === null) return 'hsl(var(--muted-foreground))';
+  if (pct === null || pct === undefined) return 'hsl(var(--muted-foreground))';
   if (pct >= 80) return 'hsl(var(--mood-happy))';
   if (pct >= 60) return 'hsl(var(--mood-neutral))';
   return 'hsl(var(--mood-sad))';
@@ -122,11 +218,36 @@ const GradeModal = ({ assignment, students, grades, onSave, onClose }) => {
   );
 };
 
-/* Weights Modal */
-const WeightsModal = ({ weights, onSave, onClose }) => {
+/* Grading & Weights Settings Modal */
+const GradingSettingsModal = ({ weights, gradingSettings, curriculumStage, onSave, onClose }) => {
   const { isAlbanian } = useLanguage();
-  const [local, setLocal] = useState({ ...weights });
-  const total = Object.values(local).reduce((a, b) => a + Number(b || 0), 0);
+  const [localWeights, setLocalWeights] = useState({
+    Homework: weights.Homework ?? 20,
+    Engagement: weights.Engagement ?? 15,
+    Quiz: weights.Quiz ?? 20,
+    Exam: weights.Exam ?? 30,
+    Project: weights.Project ?? 15,
+    ...weights
+  });
+  const [localSettings, setLocalSettings] = useState({
+    homeworkMinusValue: gradingSettings?.homeworkMinusValue ?? 1,
+    engagementPlusValue: gradingSettings?.engagementPlusValue ?? 1,
+    engagementMinusValue: gradingSettings?.engagementMinusValue ?? 1
+  });
+  const [localStage, setLocalStage] = useState(curriculumStage || 'Shkalla III');
+
+  const totalWeight = Object.values(localWeights).reduce((a, b) => a + Number(b || 0), 0);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (totalWeight !== 100) return;
+    onSave({
+      newWeights: localWeights,
+      newGradingSettings: localSettings,
+      newCurriculumStage: localStage
+    });
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <motion.div
@@ -138,33 +259,226 @@ const WeightsModal = ({ weights, onSave, onClose }) => {
         onClick={e => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h3>{isAlbanian ? 'Peshat e Kategorive' : 'Category Weights'}</h3>
-          <p className="modal-subtitle">{isAlbanian ? 'Konfiguroni përqindjen e peshave për çdo kategori detyrash (Totali duhet të jetë 100%).' : 'Configure percentage weights for each assignment type (Total must equal 100%).'}</p>
+          <h3>{isAlbanian ? 'Cilësimet e Notimit & Peshat' : 'Grading Settings & Category Weights'}</h3>
+          <p className="modal-subtitle">
+            {isAlbanian
+              ? 'Konfiguroni peshat e vlerësimit, zbritjet për detyrat, angazhimin dhe shkallën e kurrikulës.'
+              : 'Configure category weights, continuous evaluation deductions, and curriculum stage.'}
+          </p>
           <button type="button" className="icon-btn-close" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>
-        <form className="modal-form" onSubmit={(e) => { e.preventDefault(); if (total === 100) onSave(local); }}>
+
+        <form className="modal-form" onSubmit={handleSubmit}>
+          {/* Shkalla e Kurrikulës */}
+          <div className="input-group">
+            <label>{isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}</label>
+            <select
+              className="custom-form-select"
+              value={localStage}
+              onChange={(e) => setLocalStage(e.target.value)}
+            >
+              {CURRICULUM_STAGES.map(stage => (
+                <option key={stage.id} value={stage.id}>
+                  {isAlbanian ? stage.labelSq : stage.labelEn}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Section: Category Weights */}
+          <div style={{ marginTop: '0.5rem', marginBottom: '0.25rem' }}>
+            <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, textTransform: 'uppercase', color: 'hsl(var(--primary))', letterSpacing: '0.5px' }}>
+              {isAlbanian ? 'Peshat e Kategorive (Totali duhet të jetë 100%)' : 'Category Weights (Total must equal 100%)'}
+            </h4>
+          </div>
+
           <div className="form-grid-2">
-            {Object.keys(weights).map(cat => (
+            {Object.keys(localWeights).map(cat => (
               <div key={cat} className="input-group">
-                <label>{cat} (%)</label>
+                <label>{getCategoryDisplayName(cat, isAlbanian)} (%)</label>
                 <input
                   type="number"
                   min="0"
                   max="100"
-                  value={local[cat]}
-                  onChange={e => setLocal({ ...local, [cat]: Number(e.target.value) })}
+                  value={localWeights[cat]}
+                  onChange={e => setLocalWeights({ ...localWeights, [cat]: Number(e.target.value) })}
                 />
               </div>
             ))}
           </div>
-          <div className="weights-total-row" style={{ color: total === 100 ? 'hsl(var(--mood-happy))' : 'hsl(var(--destructive))' }}>
-            {isAlbanian ? `Totali: ${total}% ${total !== 100 ? '(Duhet të jetë 100%)' : ''}` : `Total: ${total}% ${total !== 100 ? '(Must equal 100%)' : ''}`}
+
+          <div className="weights-total-row" style={{ color: totalWeight === 100 ? 'hsl(var(--mood-happy))' : 'hsl(var(--destructive))', fontWeight: 700 }}>
+            {isAlbanian
+              ? `Totali i Peshave: ${totalWeight}% ${totalWeight !== 100 ? '(Duhet të jetë saktësisht 100%)' : '✓'}`
+              : `Total Weight: ${totalWeight}% ${totalWeight !== 100 ? '(Must equal exactly 100%)' : '✓'}`}
           </div>
+
+          {/* Section: Continuous Assessment Rules */}
+          <div style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}>
+            <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, textTransform: 'uppercase', color: 'hsl(var(--primary))', letterSpacing: '0.5px' }}>
+              {isAlbanian ? 'Rregullat e Vlerësimit të Vazhdueshëm' : 'Continuous Assessment Rules'}
+            </h4>
+          </div>
+
+          <div className="form-grid-2">
+            <div className="input-group">
+              <label>{isAlbanian ? 'Detyra e Munguar: Zbritje për çdo Minus (%)' : 'Missing Homework: Deduction per Minus (%)'}</label>
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                max="50"
+                required
+                value={localSettings.homeworkMinusValue}
+                onChange={e => setLocalSettings({ ...localSettings, homeworkMinusValue: Number(e.target.value) })}
+              />
+              <small style={{ fontSize: '0.73rem', color: 'hsl(var(--muted-foreground))' }}>
+                {isAlbanian ? 'p.sh. 1% minus për çdo detyrë të papërfunduar (zbret nga pesha e detyrave)' : 'e.g. 1% minus per missing homework (deducted from homework weight)'}
+              </small>
+            </div>
+
+            <div className="input-group">
+              <label>{isAlbanian ? 'Angazhim në Klasë: Fiton për çdo Plus (%)' : 'Class Engagement: Earned per Plus (%)'}</label>
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                max="50"
+                required
+                value={localSettings.engagementPlusValue}
+                onChange={e => setLocalSettings({ ...localSettings, engagementPlusValue: Number(e.target.value) })}
+              />
+              <small style={{ fontSize: '0.73rem', color: 'hsl(var(--muted-foreground))' }}>
+                {isAlbanian ? 'p.sh. 1% për çdo përgjigje ose aktivitet pozitiv në orë' : 'e.g. 1% per positive classroom response or activity'}
+              </small>
+            </div>
+          </div>
+
+          <div className="input-group">
+            <label>{isAlbanian ? 'Angazhim në Klasë: Zbret për çdo Minus (%)' : 'Class Engagement: Deducted per Minus (%)'}</label>
+            <input
+              type="number"
+              min="0.1"
+              step="0.1"
+              max="50"
+              required
+              value={localSettings.engagementMinusValue}
+              onChange={e => setLocalSettings({ ...localSettings, engagementMinusValue: Number(e.target.value) })}
+            />
+            <small style={{ fontSize: '0.73rem', color: 'hsl(var(--muted-foreground))' }}>
+              {isAlbanian ? 'p.sh. 1% zbret për vonesë, mosangazhim ose prishje disipline' : 'e.g. 1% deducted for inattention or lack of preparation'}
+            </small>
+          </div>
+
           <div className="modal-footer-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>{isAlbanian ? 'Anulo' : 'Cancel'}</button>
-            <button type="submit" className="btn-primary" disabled={total !== 100}>{isAlbanian ? 'Ruaj Peshat' : 'Save Weights'}</button>
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              {isAlbanian ? 'Anulo' : 'Cancel'}
+            </button>
+            <button type="submit" className="btn-primary" disabled={totalWeight !== 100}>
+              {isAlbanian ? 'Ruaj Cilësimet' : 'Save Settings'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
+/* Manual Override Modal */
+const ManualOverrideModal = ({ studentData, onSave, onReset, onClose }) => {
+  const { isAlbanian } = useLanguage();
+  const [val, setVal] = useState(
+    studentData.manualOverridePct !== undefined && studentData.manualOverridePct !== null
+      ? studentData.manualOverridePct
+      : (studentData.calculatedPct ?? 100)
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <motion.div
+        className="modal-content"
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h3>{isAlbanian ? `Rregullo Notën — ${studentData.student?.name}` : `Adjust Grade — ${studentData.student?.name}`}</h3>
+          <p className="modal-subtitle">
+            {isAlbanian
+              ? 'Vendosni një përqindje të personalizuar përfundimtare për këtë nxënës ose rivendosni llogaritjen automatike.'
+              : 'Set a custom final grade percentage for this student or reset to automated weight-based calculation.'}
+          </p>
+          <button type="button" className="icon-btn-close" onClick={onClose} aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form className="modal-form" onSubmit={(e) => { e.preventDefault(); onSave(Number(val)); }}>
+          <div style={{
+            padding: '0.85rem 1rem',
+            borderRadius: '12px',
+            background: 'hsl(var(--background))',
+            border: '1px solid hsl(var(--border))',
+            marginBottom: '1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <div>
+              <span style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', fontWeight: 700 }}>
+                {isAlbanian ? 'Llogaritja Automatike e Sistemit' : 'System Calculated Grade'}
+              </span>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--foreground))' }}>
+                {studentData.calculatedPct !== null ? `${studentData.calculatedPct}%` : '—'}
+              </div>
+            </div>
+            {studentData.isOverridden && (
+              <span style={{
+                padding: '0.25rem 0.65rem',
+                borderRadius: '8px',
+                background: 'hsla(var(--mood-neutral), 0.2)',
+                color: 'hsl(var(--mood-neutral))',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                textTransform: 'uppercase'
+              }}>
+                {isAlbanian ? 'E Rregulluar Manualisht' : 'Manually Overridden'}
+              </span>
+            )}
+          </div>
+
+          <div className="input-group">
+            <label>{isAlbanian ? 'Përqindja Përfundimtare e Notës (%)' : 'Final Grade Percentage (%)'}</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              required
+              value={val}
+              onChange={e => setVal(e.target.value)}
+              placeholder="0 - 100"
+            />
+          </div>
+
+          <div className="modal-footer-actions" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            {studentData.isOverridden ? (
+              <button type="button" className="btn-secondary" style={{ color: 'hsl(var(--destructive))' }} onClick={onReset}>
+                <RotateCcw size={14} style={{ marginRight: '0.35rem' }} />
+                {isAlbanian ? 'Rivendos Automatike' : 'Reset to Auto'}
+              </button>
+            ) : <span />}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                {isAlbanian ? 'Anulo' : 'Cancel'}
+              </button>
+              <button type="submit" className="btn-primary">
+                {isAlbanian ? 'Ruaj Notën' : 'Save Grade'}
+              </button>
+            </div>
           </div>
         </form>
       </motion.div>
@@ -243,6 +557,14 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const [assignments, setAssignments]     = useState([]);
   const [grades, setGrades]               = useState({});   // { studentId: { assignmentId: score } }
   const [weights, setWeights]             = useState(classData?.weights || INITIAL_WEIGHTS);
+  const [gradingSettings, setGradingSettings] = useState(() => ({
+    homeworkMinusValue: classData?.gradingSettings?.homeworkMinusValue ?? 1,
+    engagementPlusValue: classData?.gradingSettings?.engagementPlusValue ?? 1,
+    engagementMinusValue: classData?.gradingSettings?.engagementMinusValue ?? 1
+  }));
+  const [curriculumStage, setCurriculumStage] = useState(classData?.curriculumStage || 'Shkalla III');
+  const [studentTracking, setStudentTracking] = useState({});
+  const [manualOverrideModal, setManualOverrideModal] = useState(null);
   const [materials, setMaterials]         = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [gradeModal, setGradeModal]       = useState(null); // assignment obj
@@ -256,6 +578,23 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const [searchQ, setSearchQ]             = useState('');
 
   if (!classData) return null;
+
+  // Sync props updates
+  useEffect(() => {
+    if (classData?.gradingSettings) {
+      setGradingSettings({
+        homeworkMinusValue: classData.gradingSettings.homeworkMinusValue ?? 1,
+        engagementPlusValue: classData.gradingSettings.engagementPlusValue ?? 1,
+        engagementMinusValue: classData.gradingSettings.engagementMinusValue ?? 1
+      });
+    }
+    if (classData?.curriculumStage) {
+      setCurriculumStage(classData.curriculumStage);
+    }
+    if (classData?.weights) {
+      setWeights(classData.weights);
+    }
+  }, [classData]);
 
   // Filter students enrolled in this class
   const students = useMemo(() => {
@@ -303,7 +642,21 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     return () => unsub();
   }, [activeSchoolId, classData?.id]);
 
-  // 3. Real-time listener for materials
+  // 3. Real-time listener for student continuous tracking (homework minuses, engagement +/-, manual override)
+  useEffect(() => {
+    if (!activeSchoolId || !classData?.id) return;
+    const colRef = collection(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'studentTracking');
+    const unsub = onSnapshot(colRef, (snapshot) => {
+      const items = {};
+      snapshot.forEach(docSnap => {
+        items[docSnap.id] = docSnap.data();
+      });
+      setStudentTracking(items);
+    }, (err) => console.warn('StudentTracking sync notice:', err.message));
+    return () => unsub();
+  }, [activeSchoolId, classData?.id]);
+
+  // 4. Real-time listener for materials
   useEffect(() => {
     if (!activeSchoolId || !classData?.id) return;
     const colRef = collection(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'materials');
@@ -315,7 +668,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     return () => unsub();
   }, [activeSchoolId, classData?.id]);
 
-  // 4. Real-time listener for attendance
+  // 5. Real-time listener for attendance
   useEffect(() => {
     if (!activeSchoolId || !classData?.id) return;
     const colRef = collection(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'attendance');
@@ -355,16 +708,54 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     setGradeModal(null);
   };
 
-  const saveWeights = async (w) => {
-    setWeights(w);
+  const saveGradingSettings = async ({ newWeights, newGradingSettings, newCurriculumStage }) => {
+    setWeights(newWeights);
+    setGradingSettings(newGradingSettings);
+    setCurriculumStage(newCurriculumStage);
     setWeightsModal(false);
     if (!activeSchoolId || !classData?.id) return;
     try {
       const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id));
-      await updateDoc(classDocRef, { weights: w });
+      await updateDoc(classDocRef, {
+        weights: newWeights,
+        gradingSettings: newGradingSettings,
+        curriculumStage: newCurriculumStage
+      });
     } catch (e) {
-      console.warn('Could not save weights to Firestore:', e.message);
+      console.warn('Could not save grading settings to Firestore:', e.message);
     }
+  };
+
+  const updateStudentTracking = async (studentId, changes) => {
+    if (!activeSchoolId || !classData?.id || !studentId) return;
+    setStudentTracking(prev => ({
+      ...prev,
+      [studentId]: { ...(prev[studentId] || {}), ...changes }
+    }));
+    try {
+      const docRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'studentTracking', String(studentId));
+      await setDoc(docRef, { ...changes, updatedAt: serverTimestamp() }, { merge: true });
+    } catch (err) {
+      console.warn('Could not save student tracking:', err.message);
+    }
+  };
+
+  const adjustHomeworkMinus = (studentId, delta) => {
+    const current = Math.max(0, Number(studentTracking[studentId]?.missingHomework || 0));
+    const next = Math.max(0, current + delta);
+    updateStudentTracking(studentId, { missingHomework: next });
+  };
+
+  const adjustEngagementPlus = (studentId, delta) => {
+    const current = Math.max(0, Number(studentTracking[studentId]?.engagementPluses || 0));
+    const next = Math.max(0, current + delta);
+    updateStudentTracking(studentId, { engagementPluses: next });
+  };
+
+  const adjustEngagementMinus = (studentId, delta) => {
+    const current = Math.max(0, Number(studentTracking[studentId]?.engagementMinuses || 0));
+    const next = Math.max(0, current + delta);
+    updateStudentTracking(studentId, { engagementMinuses: next });
   };
 
   const addAssignment = async (form) => {
@@ -422,7 +813,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
   /* avg across all graded */
   const classOverallAvg = () => {
-    const avgs = students.map(s => calcFinalGrade(s.id, assignments, grades, weights)).filter(v => v !== null);
+    const avgs = students.map(s => calcFinalGrade(s.id, assignments, grades, weights, studentTracking, gradingSettings)).filter(v => v !== null);
     if (!avgs.length) return null;
     return Math.round(avgs.reduce((a,b) => a+b,0) / avgs.length);
   };
@@ -450,8 +841,15 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             <BookOpen size={28} color={`hsl(var(${classData.color}))`} />
           </div>
           <div>
-            <h2 className="co-class-name">{classData.name}</h2>
-            <p className="co-meta">{classData.code} &nbsp;·&nbsp; {classData.teacher}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+              <h2 className="co-class-name">{classData.name}</h2>
+              {curriculumStage && (
+                <span className="co-curriculum-badge" title={isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}>
+                  🏷️ {curriculumStage}
+                </span>
+              )}
+            </div>
+            <p className="co-meta">{classData.code} &nbsp;·&nbsp; {classData.teacher} {classData.room ? `· ${classData.room}` : ''}</p>
           </div>
         </div>
 
@@ -514,8 +912,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                 <div className="breakdown-list">
                   {['A','B','C','D','F'].map((letter, idx) => {
                     const count = students.filter(s => {
-                      const pct = calcFinalGrade(s.id, assignments, grades, weights);
-                      return gradeLabel(pct) === letter || gradeLabel(pct).startsWith(letter);
+                      const pct = calcFinalGrade(s.id, assignments, grades, weights, studentTracking, gradingSettings);
+                      return gradeLabel(pct, false) === letter || gradeLabel(pct, false).startsWith(letter);
                     }).length;
                     return (
                       <div key={letter} className="breakdown-row">
@@ -534,7 +932,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                 <div className="weights-list">
                   {Object.entries(weights).map(([cat, w]) => (
                     <div key={cat} className="weight-row">
-                      <span className="type-badge">{cat}</span>
+                      <span className="type-badge">{getCategoryDisplayName(cat, isAlbanian)}</span>
                       <div className="breakdown-bar-bg">
                         <div className="breakdown-bar" style={{ width: `${w}%`, background: `hsl(var(--accent))` }} />
                       </div>
@@ -543,23 +941,23 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                   ))}
                 </div>
                 <button className="btn-secondary glass btn-sm" style={{marginTop:'1rem'}} onClick={() => setWeightsModal(true)}>
-                  <Settings size={14} /> {isAlbanian ? 'Ndrysho Peshat' : 'Edit Weights'}
+                  <Settings size={14} /> {isAlbanian ? 'Cilësimet e Vlerësimit & Peshat' : 'Grading Settings & Weights'}
                 </button>
               </div>
               <div className="co-widget glass">
                 <h4>{t('classes.topStudents', 'Top Students')}</h4>
                 {students.slice().sort((a,b) => {
-                  const pa = calcFinalGrade(a.id, assignments, grades, weights) ?? -1;
-                  const pb = calcFinalGrade(b.id, assignments, grades, weights) ?? -1;
+                  const pa = calcFinalGrade(a.id, assignments, grades, weights, studentTracking, gradingSettings) ?? -1;
+                  const pb = calcFinalGrade(b.id, assignments, grades, weights, studentTracking, gradingSettings) ?? -1;
                   return pb - pa;
                 }).map((s,i) => {
-                  const pct = calcFinalGrade(s.id, assignments, grades, weights);
+                  const pct = calcFinalGrade(s.id, assignments, grades, weights, studentTracking, gradingSettings);
                   return (
                     <div key={s.id} className="top-student-row">
                       <span className="rank-badge">#{i+1}</span>
                       <Avatar name={s.name} size={32} />
                       <span className="flex-1">{s.name}</span>
-                      <strong style={{ color: gradeColor(pct) }}>{pct !== null ? `${pct}%` : '—'} {gradeLabel(pct)}</strong>
+                      <strong style={{ color: gradeColor(pct) }}>{pct !== null ? `${pct}%` : '—'} ({gradeLabel(pct, isAlbanian)})</strong>
                     </div>
                   );
                 })}
@@ -646,11 +1044,22 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
           <motion.div key="gradebook" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
             {/* Toolbar */}
             <div className="co-toolbar">
-              <h3>{userRole === 'student' ? (isAlbanian ? 'Detyrat & Notat e Kursit' : 'Course Assignments & Grades') : t('classes.gradebook', 'Gradebook')}</h3>
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  {userRole === 'student' 
+                    ? (isAlbanian ? 'Detyrat & Notat e Kursit' : 'Course Assignments & Grades') 
+                    : (isAlbanian ? 'Ditari i Notave & Vlerësimi' : 'Gradebook & Assessment')}
+                </h3>
+                <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))' }}>
+                  {isAlbanian 
+                    ? 'Menaxhoni detyrat, mungesat e detyrave, angazhimin dhe shpërndarjen e notave.' 
+                    : 'Manage coursework, missing homework, engagement, and final grade distribution.'}
+                </p>
+              </div>
               {userRole !== 'student' && (
                 <div className="co-toolbar-actions">
                   <button className="btn-secondary glass btn-sm" onClick={() => setWeightsModal(true)}>
-                    <Settings size={15}/> {isAlbanian ? 'Përcakto Peshat' : 'Set Weights'}
+                    <Settings size={15}/> {isAlbanian ? 'Cilësimet e Vlerësimit & Peshat' : 'Grading Settings & Weights'}
                   </button>
                   <button className="btn-primary btn-sm" onClick={() => setAddModal(true)}>
                     <Plus size={15}/> {isAlbanian ? 'Shto Detyrë' : 'Add Assignment'}
@@ -658,125 +1067,351 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                 </div>
               )}
             </div>
-            {/* Filters */}
-            <div className="co-filters">
-              <div className="search-box glass">
-                <span>🔍</span>
-                <input placeholder={isAlbanian ? 'Kërko detyrat…' : 'Search assignments…'} value={searchQ} onChange={e => setSearchQ(e.target.value)} />
-              </div>
-              <div className="cat-pills">
-                {cats.map(c => (
-                  <button key={c} className={`cat-pill ${catFilter === c ? 'active' : ''}`} onClick={() => setCatFilter(c)}>{c === 'All' ? t('common.all', 'All') : c}</button>
-                ))}
-              </div>
-            </div>
-            {/* Table */}
-            <div className="co-table glass">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{isAlbanian ? 'Emri' : 'Name'}</th>
-                    <th>{isAlbanian ? 'Kategoria' : 'Category'}</th>
-                    <th>{t('common.date', 'Date')}</th>
-                    <th>{isAlbanian ? 'Pikët Totale' : 'Total Pts'}</th>
-                    <th>{t('classes.classAvg', 'Class Avg')}</th>
-                    <th>{userRole === 'student' ? t('common.status', 'Status') : t('common.actions', 'Actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <AnimatePresence>
-                    {filteredAssignments.map(a => {
-                      const avg = calcClassAvg(a.id, grades, students);
-                      return (
-                        <motion.tr key={a.id} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} layout>
-                          <td><strong>{a.title}</strong></td>
-                          <td><span className="type-badge">{a.category}</span></td>
-                          <td className="muted">{a.date}</td>
-                          <td className="centered">{a.totalPoints}</td>
-                          <td className="centered">
-                            {avg !== null
-                              ? <span style={{ color: gradeColor(toPercent(avg, a.totalPoints)), fontWeight: 700 }}>
-                                  {Math.round(avg)} / {a.totalPoints} ({toPercent(avg, a.totalPoints)}%)
-                                </span>
-                              : <span className="muted">—</span>}
-                          </td>
-                          <td className="actions-cell">
-                            {userRole === 'student' ? (
-                              <span style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '0.35rem', 
-                                padding: '0.3rem 0.7rem', 
-                                borderRadius: '8px', 
-                                fontSize: '0.78rem', 
-                                fontWeight: 700, 
-                                background: 'hsla(var(--mood-happy), 0.15)', 
-                                color: 'hsl(var(--mood-happy))' 
-                              }}>
-                                <CheckCircle2 size={13} /> {isAlbanian ? 'E Vlerësuar' : 'Graded'}
-                              </span>
-                            ) : (
-                              <>
-                                <button className="btn-grade glass bouncy" onClick={() => setGradeModal(a)}>
-                                  <Edit size={14} /> {isAlbanian ? 'Vlerëso' : 'Grade'}
-                                </button>
-                                <button className="icon-btn-destructive" onClick={() => deleteAssignment(a.id)}>
-                                  <Trash2 size={14} />
-                                </button>
-                              </>
-                            )}
-                          </td>
-                        </motion.tr>
-                      );
-                    })}
-                  </AnimatePresence>
-                </tbody>
-              </table>
-              {filteredAssignments.length === 0 && <div className="empty-state"><AlertCircle size={28}/><p>{isAlbanian ? 'Nuk u gjet asnjë detyrë.' : 'No assignments found.'}</p></div>}
-            </div>
 
-            {/* Per-student grade summary */}
-            {students.length > 0 && assignments.length > 0 && (
-              <div className="grade-summary-section">
-                <h4 style={{ margin: '0 0 1rem', color: 'hsl(var(--muted-foreground))', fontSize:'0.9rem', textTransform:'uppercase', letterSpacing:'1px' }}>{isAlbanian ? 'Notat Përfundimtare të Nxënësve' : 'Student Final Grades'}</h4>
+            {/* ── 1. Continuous Assessment: Missing Homework & Engagement ── */}
+            {students.length > 0 && (
+              <div className="continuous-tracking-card glass">
+                <div className="continuous-tracking-header">
+                  <div className="ct-title-group">
+                    <div className="ct-icon-badge">
+                      <ClipboardList size={20} />
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800 }}>
+                        {isAlbanian ? 'Vlerësimi i Vazhdueshëm: Detyrat e Shtëpisë & Angazhimi në Klasë' : 'Continuous Assessment: Homework & Class Engagement'}
+                      </h4>
+                      <p className="ct-subtitle">
+                        {isAlbanian
+                          ? `Detyrat: ${weights.Homework ?? 20}% e notës (-${gradingSettings.homeworkMinusValue}% për çdo minus) · Angazhimi: ${weights.Engagement ?? 15}% e notës (+${gradingSettings.engagementPlusValue}% për plus, -${gradingSettings.engagementMinusValue}% për minus)`
+                          : `Homework: ${weights.Homework ?? 20}% weight (-${gradingSettings.homeworkMinusValue}% per minus) · Engagement: ${weights.Engagement ?? 15}% weight (+${gradingSettings.engagementPlusValue}% per plus, -${gradingSettings.engagementMinusValue}% per minus)`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="co-table glass">
                   <table>
                     <thead>
                       <tr>
                         <th>{t('leaderboard.student', 'Student')}</th>
-                        {Object.keys(weights).map(cat => <th key={cat}>{cat}</th>)}
-                        <th>{isAlbanian ? 'Përfundimtare %' : 'Final %'}</th>
-                        <th>{isAlbanian ? 'Nota' : 'Grade'}</th>
+                        <th>{isAlbanian ? `Detyrat e Munguara (-${gradingSettings.homeworkMinusValue}%)` : `Missing Homework (-${gradingSettings.homeworkMinusValue}%)`}</th>
+                        <th>{isAlbanian ? 'Pikët e Detyrave' : 'Homework Score'}</th>
+                        <th>{isAlbanian ? 'Angazhimi në Klasë (+ / -)' : 'Class Engagement (+ / -)'}</th>
+                        <th>{isAlbanian ? 'Pikët e Angazhimit' : 'Engagement Score'}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {students.map(s => {
-                        const pct = calcFinalGrade(s.id, assignments, grades, weights);
-                        const catScores = {};
-                        assignments.forEach(a => {
-                          const g = grades[s.id]?.[a.id];
-                          if (g === undefined) return;
-                          if (!catScores[a.category]) catScores[a.category] = { earned:0, total:0 };
-                          catScores[a.category].earned += Number(g);
-                          catScores[a.category].total  += a.totalPoints;
-                        });
+                        const data = calcStudentGradeData(s.id, assignments, grades, weights, studentTracking, gradingSettings);
+                        const canEdit = userRole !== 'student';
                         return (
                           <tr key={s.id}>
                             <td>
                               <div className="student-cell">
                                 <Avatar name={s.name} size={28} />
-                                <span>{s.name}</span>
+                                <span style={{ fontWeight: 600 }}>{s.name}</span>
                               </div>
                             </td>
-                            {Object.keys(weights).map(cat => (
+                            {/* Missing Homework Column */}
+                            <td>
+                              <div className="tracker-counter-group">
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    className="counter-btn minus"
+                                    disabled={data.missingHw <= 0}
+                                    onClick={() => adjustHomeworkMinus(s.id, -1)}
+                                    title={isAlbanian ? 'Hiq një minus' : 'Remove a minus'}
+                                  >
+                                    –
+                                  </button>
+                                )}
+                                <span className={`tracker-badge ${data.missingHw > 0 ? 'badge-minus' : 'badge-clean'}`}>
+                                  {data.missingHw} {data.missingHw === 1 ? (isAlbanian ? 'minus' : 'minus') : (isAlbanian ? 'minuse' : 'minuses')}
+                                </span>
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    className="counter-btn plus"
+                                    onClick={() => adjustHomeworkMinus(s.id, 1)}
+                                    title={isAlbanian ? 'Shto minus për detyrë mangut' : 'Add minus for missing homework'}
+                                  >
+                                    +
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            {/* Homework Score */}
+                            <td className="centered">
+                              <span style={{ fontWeight: 700, color: data.catScores.Homework.pct < 70 ? 'hsl(var(--mood-sad))' : 'hsl(var(--mood-happy))' }}>
+                                {data.catScores.Homework.earnedWeightPts.toFixed(1)} / {weights.Homework ?? 20}%
+                                <span className="pts-pct-sub"> ({data.catScores.Homework.pct}%)</span>
+                              </span>
+                            </td>
+                            {/* Engagement Column */}
+                            <td>
+                              <div className="tracker-engagement-dual">
+                                {/* Pluses */}
+                                <div className="tracker-counter-group mini">
+                                  <span className="tracker-label-tiny">{isAlbanian ? 'Plus:' : 'Plus:'}</span>
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      className="counter-btn minus sm"
+                                      disabled={data.engPluses <= 0}
+                                      onClick={() => adjustEngagementPlus(s.id, -1)}
+                                    >
+                                      –
+                                    </button>
+                                  )}
+                                  <span className="tracker-badge badge-plus">+{data.engPluses}</span>
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      className="counter-btn plus sm"
+                                      onClick={() => adjustEngagementPlus(s.id, 1)}
+                                      title={isAlbanian ? 'Shto plus për aktivitet' : 'Add plus for engagement'}
+                                    >
+                                      +
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Minuses */}
+                                <div className="tracker-counter-group mini">
+                                  <span className="tracker-label-tiny">{isAlbanian ? 'Minus:' : 'Minus:'}</span>
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      className="counter-btn minus sm"
+                                      disabled={data.engMinuses <= 0}
+                                      onClick={() => adjustEngagementMinus(s.id, -1)}
+                                    >
+                                      –
+                                    </button>
+                                  )}
+                                  <span className="tracker-badge badge-minus">-{data.engMinuses}</span>
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      className="counter-btn plus sm"
+                                      onClick={() => adjustEngagementMinus(s.id, 1)}
+                                      title={isAlbanian ? 'Shto minus për mosangazhim' : 'Add minus for inattention'}
+                                    >
+                                      +
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            {/* Engagement Score */}
+                            <td className="centered">
+                              <span style={{ fontWeight: 700, color: data.catScores.Engagement.pct < 60 ? 'hsl(var(--mood-sad))' : 'hsl(var(--mood-happy))' }}>
+                                {data.catScores.Engagement.earnedWeightPts.toFixed(1)} / {weights.Engagement ?? 15}%
+                                <span className="pts-pct-sub"> ({data.catScores.Engagement.pct}%)</span>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ── 2. Coursework & Exams List ── */}
+            <div className="assignments-section" style={{ marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h4 style={{ margin: 0, color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 800 }}>
+                  {isAlbanian ? 'Detyrat & Testimet e Kursit' : 'Assignments & Examinations'}
+                </h4>
+              </div>
+
+              {/* Filters */}
+              <div className="co-filters">
+                <div className="search-box glass">
+                  <span>🔍</span>
+                  <input placeholder={isAlbanian ? 'Kërko detyrat…' : 'Search assignments…'} value={searchQ} onChange={e => setSearchQ(e.target.value)} />
+                </div>
+                <div className="cat-pills">
+                  {cats.map(c => (
+                    <button key={c} className={`cat-pill ${catFilter === c ? 'active' : ''}`} onClick={() => setCatFilter(c)}>
+                      {c === 'All' ? (isAlbanian ? 'Të Gjitha' : 'All') : getCategoryDisplayName(c, isAlbanian)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="co-table glass">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{isAlbanian ? 'Emri' : 'Name'}</th>
+                      <th>{isAlbanian ? 'Kategoria' : 'Category'}</th>
+                      <th>{t('common.date', 'Date')}</th>
+                      <th>{isAlbanian ? 'Pikët Totale' : 'Total Pts'}</th>
+                      <th>{t('classes.classAvg', 'Class Avg')}</th>
+                      <th>{userRole === 'student' ? t('common.status', 'Status') : t('common.actions', 'Actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <AnimatePresence>
+                      {filteredAssignments.map(a => {
+                        const avg = calcClassAvg(a.id, grades, students);
+                        return (
+                          <motion.tr key={a.id} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} layout>
+                            <td><strong>{a.title}</strong></td>
+                            <td><span className="type-badge">{getCategoryDisplayName(a.category, isAlbanian)}</span></td>
+                            <td className="muted">{a.date}</td>
+                            <td className="centered">{a.totalPoints}</td>
+                            <td className="centered">
+                              {avg !== null
+                                ? <span style={{ color: gradeColor(toPercent(avg, a.totalPoints)), fontWeight: 700 }}>
+                                    {Math.round(avg)} / {a.totalPoints} ({toPercent(avg, a.totalPoints)}%)
+                                  </span>
+                                : <span className="muted">—</span>}
+                            </td>
+                            <td className="actions-cell">
+                              {userRole === 'student' ? (
+                                <span style={{ 
+                                  display: 'inline-flex', 
+                                  alignItems: 'center', 
+                                  gap: '0.35rem', 
+                                  padding: '0.3rem 0.7rem', 
+                                  borderRadius: '8px', 
+                                  fontSize: '0.78rem', 
+                                  fontWeight: 700, 
+                                  background: 'hsla(var(--mood-happy), 0.15)', 
+                                  color: 'hsl(var(--mood-happy))' 
+                                }}>
+                                  <CheckCircle2 size={13} /> {isAlbanian ? 'E Vlerësuar' : 'Graded'}
+                                </span>
+                              ) : (
+                                <>
+                                  <button className="btn-grade glass bouncy" onClick={() => setGradeModal(a)}>
+                                    <Edit size={14} /> {isAlbanian ? 'Vlerëso' : 'Grade'}
+                                  </button>
+                                  <button className="icon-btn-destructive" onClick={() => deleteAssignment(a.id)}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </tbody>
+                </table>
+                {filteredAssignments.length === 0 && (
+                  <div className="empty-state">
+                    <AlertCircle size={28}/>
+                    <p>{isAlbanian ? 'Nuk u gjet asnjë detyrë.' : 'No assignments found.'}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── 3. Per-student final grade distribution & summary ── */}
+            {students.length > 0 && (
+              <div className="grade-summary-section" style={{ marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <h4 style={{ margin: 0, color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 800 }}>
+                    {isAlbanian ? 'Notat Përfundimtare të Nxënësve' : 'Student Final Grades & Distribution'}
+                  </h4>
+                  {userRole !== 'student' && (
+                    <span style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))' }}>
+                      💡 {isAlbanian ? 'Mësuesit mund të rregullojnë notën manualisht me butonin "Ndrysho".' : 'Teachers can manually override final scores with "Adjust".'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="co-table glass">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{t('leaderboard.student', 'Student')}</th>
+                        <th>{isAlbanian ? `Detyrat (${weights.Homework ?? 20}%)` : `Homework (${weights.Homework ?? 20}%)`}</th>
+                        <th>{isAlbanian ? `Angazhimi (${weights.Engagement ?? 15}%)` : `Engagement (${weights.Engagement ?? 15}%)`}</th>
+                        {Object.keys(weights).filter(c => c !== 'Homework' && c !== 'Engagement').map(cat => (
+                          <th key={cat}>{getCategoryDisplayName(cat, isAlbanian)} ({weights[cat]}%)</th>
+                        ))}
+                        <th>{isAlbanian ? 'Përfundimtare %' : 'Final %'}</th>
+                        <th>{isAlbanian ? 'Nota' : 'Grade'}</th>
+                        {userRole !== 'student' && <th>{isAlbanian ? 'Rregullim' : 'Override'}</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.map(s => {
+                        const data = calcStudentGradeData(s.id, assignments, grades, weights, studentTracking, gradingSettings);
+                        const pct = data.finalPct;
+                        return (
+                          <tr key={s.id}>
+                            <td>
+                              <div className="student-cell">
+                                <Avatar name={s.name} size={28} />
+                                <span style={{ fontWeight: 600 }}>{s.name}</span>
+                              </div>
+                            </td>
+                            {/* Homework */}
+                            <td className="centered">
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                <span style={{ fontWeight: 700 }}>{data.catScores.Homework.pct}%</span>
+                                <small className="muted" style={{ fontSize: '0.72rem' }}>
+                                  {data.missingHw > 0 ? `-${data.missingHw} min` : (isAlbanian ? 'E plotë' : 'Full')}
+                                </small>
+                              </div>
+                            </td>
+                            {/* Engagement */}
+                            <td className="centered">
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                <span style={{ fontWeight: 700 }}>{data.catScores.Engagement.pct}%</span>
+                                <small className="muted" style={{ fontSize: '0.72rem' }}>
+                                  +{data.engPluses} / -{data.engMinuses}
+                                </small>
+                              </div>
+                            </td>
+                            {/* Other categories */}
+                            {Object.keys(weights).filter(c => c !== 'Homework' && c !== 'Engagement').map(cat => (
                               <td key={cat} className="centered muted">
-                                {catScores[cat]
-                                  ? `${toPercent(catScores[cat].earned, catScores[cat].total)}%`
-                                  : '—'}
+                                {data.catScores[cat]?.pct !== null ? `${data.catScores[cat]?.pct}%` : '—'}
                               </td>
                             ))}
-                            <td className="centered"><strong style={{ color: gradeColor(pct) }}>{pct !== null ? `${pct}%` : '—'}</strong></td>
-                            <td className="centered"><span className="grade-badge" style={{ color: gradeColor(pct), border: `1px solid ${gradeColor(pct)}22` }}>{gradeLabel(pct)}</span></td>
+                            {/* Final % */}
+                            <td className="centered">
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <strong style={{ color: gradeColor(pct), fontSize: '1.05rem' }}>
+                                  {pct !== null ? `${pct}%` : '—'}
+                                </strong>
+                                {data.isOverridden && (
+                                  <span className="override-badge-pill" title={isAlbanian ? 'Notë e vendosur manualisht nga mësuesi' : 'Manually overridden by teacher'}>
+                                    {isAlbanian ? 'Manual' : 'Manual'}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            {/* Letter grade */}
+                            <td className="centered">
+                              <span className="grade-badge" style={{ color: gradeColor(pct), border: `1px solid ${gradeColor(pct)}33` }}>
+                                {gradeLabel(pct, isAlbanian)}
+                              </span>
+                            </td>
+                            {/* Override Action */}
+                            {userRole !== 'student' && (
+                              <td className="actions-cell">
+                                <button
+                                  type="button"
+                                  className="btn-grade glass bouncy"
+                                  style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem' }}
+                                  onClick={() => setManualOverrideModal({ student: s, ...data })}
+                                  title={isAlbanian ? 'Rregullo notën përfundimtare manualisht' : 'Manually adjust final grade'}
+                                >
+                                  <Edit size={13} /> {isAlbanian ? 'Ndrysho' : 'Adjust'}
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -899,7 +1534,29 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
       {/* ── Modals ── */}
       <AnimatePresence>
         {gradeModal   && <GradeModal assignment={gradeModal} students={students} grades={grades} onSave={saveGrades} onClose={() => setGradeModal(null)} />}
-        {weightsModal && <WeightsModal weights={weights} onSave={saveWeights} onClose={() => setWeightsModal(false)} />}
+        {weightsModal && (
+          <GradingSettingsModal 
+            weights={weights} 
+            gradingSettings={gradingSettings} 
+            curriculumStage={curriculumStage} 
+            onSave={saveGradingSettings} 
+            onClose={() => setWeightsModal(false)} 
+          />
+        )}
+        {manualOverrideModal && (
+          <ManualOverrideModal
+            studentData={manualOverrideModal}
+            onSave={(val) => {
+              updateStudentTracking(manualOverrideModal.student.id, { manualOverridePct: val });
+              setManualOverrideModal(null);
+            }}
+            onReset={() => {
+              updateStudentTracking(manualOverrideModal.student.id, { manualOverridePct: null });
+              setManualOverrideModal(null);
+            }}
+            onClose={() => setManualOverrideModal(null)}
+          />
+        )}
         {addModal     && <AddAssignmentModal onSave={addAssignment} onClose={() => setAddModal(false)} />}
 
         {/* Enroll Student Modal */}

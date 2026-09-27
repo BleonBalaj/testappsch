@@ -40,6 +40,15 @@ const cardItemVariants = {
   }
 };
 
+export const CURRICULUM_STAGES = [
+  { id: 'Shkalla I', labelSq: 'Shkalla I (Përgatitore, Klasa I - II)', labelEn: 'Stage I (Prep, Grades 1 - 2)' },
+  { id: 'Shkalla II', labelSq: 'Shkalla II (Klasa III - V)', labelEn: 'Stage II (Grades 3 - 5)' },
+  { id: 'Shkalla III', labelSq: 'Shkalla III (Klasa VI - VII)', labelEn: 'Stage III (Grades 6 - 7)' },
+  { id: 'Shkalla IV', labelSq: 'Shkalla IV (Klasa VIII - IX)', labelEn: 'Stage IV (Grades 8 - 9)' },
+  { id: 'Shkalla V', labelSq: 'Shkalla V (Klasa X - XI)', labelEn: 'Stage V (Grades 10 - 11)' },
+  { id: 'Shkalla VI', labelSq: 'Shkalla VI (Klasa XII)', labelEn: 'Stage VI (Grade 12)' }
+];
+
 const ClassCard = ({ 
   classInfo, 
   onClick, 
@@ -127,6 +136,11 @@ const ClassCard = ({
         <span className="class-schedule-badge">
           <Clock size={12} /> {classInfo.schedule || (isAlbanian ? 'E Rregullt' : 'Regular')}
         </span>
+        {classInfo.curriculumStage && (
+          <span className="class-stage-badge" title={isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}>
+            🏷️ {classInfo.curriculumStage}
+          </span>
+        )}
         {classInfo.period && (
           <span className="class-period-badge glass">
             {classInfo.period}
@@ -197,6 +211,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
   const [newClassRoom, setNewClassRoom] = useState('Room 301');
   const [newClassSchedule, setNewClassSchedule] = useState('Mon, Wed 10:00 AM');
   const [newClassColor, setNewClassColor] = useState('--primary');
+  const [newClassCurriculumStage, setNewClassCurriculumStage] = useState('Shkalla III');
   const [formError, setFormError] = useState('');
 
   // Edit Class Form State
@@ -209,6 +224,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
     room: '',
     schedule: '',
     color: '--primary',
+    curriculumStage: 'Shkalla III',
     credits: 4,
     description: ''
   });
@@ -228,6 +244,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       room: cls.room || '',
       schedule: cls.schedule || '',
       color: cls.color || '--primary',
+      curriculumStage: cls.curriculumStage || 'Shkalla III',
       credits: cls.credits || 4,
       description: cls.description || ''
     });
@@ -261,6 +278,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       room: editForm.room.trim() || 'Room 101',
       schedule: editForm.schedule.trim() || 'Mon, Wed 10:00 AM',
       color: editForm.color || '--primary',
+      curriculumStage: editForm.curriculumStage || 'Shkalla III',
       credits: Number(editForm.credits) || 4,
       description: (editForm.description || '').trim()
     };
@@ -454,6 +472,9 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       room: newClassRoom.trim() || 'Room 101',
       schedule: newClassSchedule.trim() || 'Mon, Wed 10:00 AM',
       color: newClassColor || '--primary',
+      curriculumStage: newClassCurriculumStage || 'Shkalla III',
+      weights: { Homework: 20, Engagement: 15, Quiz: 20, Exam: 30, Project: 15 },
+      gradingSettings: { homeworkMinusValue: 1, engagementPlusValue: 1, engagementMinusValue: 1 },
       students: 0,
       progress: 0,
       enrolled: true,
@@ -466,6 +487,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
     setIsAddModalOpen(false);
     setNewClassName('');
     setNewClassCode('');
+    setNewClassCurriculumStage('Shkalla III');
   };
 
   const handleExportClasses = () => {
@@ -818,6 +840,21 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 </div>
 
                 <div className="input-group">
+                  <label>{isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}</label>
+                  <select
+                    value={newClassCurriculumStage}
+                    onChange={(e) => setNewClassCurriculumStage(e.target.value)}
+                    className="custom-form-select"
+                  >
+                    {CURRICULUM_STAGES.map(stage => (
+                      <option key={stage.id} value={stage.id}>
+                        {isAlbanian ? stage.labelSq : stage.labelEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="input-group">
                   <label>{isAlbanian ? 'Ngjyra e Kartelës' : 'Card Color Accent'}</label>
                   <div className="swatch-picker-row">
                     {SWATCH_OPTIONS.map(swatch => (
@@ -980,6 +1017,21 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                       onChange={(e) => setEditForm({ ...editForm, schedule: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="input-group">
+                  <label>{isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}</label>
+                  <select
+                    value={editForm.curriculumStage || 'Shkalla III'}
+                    onChange={(e) => setEditForm({ ...editForm, curriculumStage: e.target.value })}
+                    className="custom-form-select"
+                  >
+                    {CURRICULUM_STAGES.map(stage => (
+                      <option key={stage.id} value={stage.id}>
+                        {isAlbanian ? stage.labelSq : stage.labelEn}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="form-grid-2">
