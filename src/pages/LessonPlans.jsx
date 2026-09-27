@@ -12,8 +12,9 @@ import {
   createPlan, dateInTimeZone, duplicatePlan, getDateRange, getSubjectArea, listSubjects, stageForClass,
 } from '../features/lessonPlans/index.js';
 import { translate, translateCatalogValue } from '../features/lessonPlans/i18n';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { compressImageFile } from '../services/imageUtils';
 import LessonPlanDocument from './LessonPlanDocument';
 import LessonPlanAdminSettings from './LessonPlanAdminSettings';
 import './LessonPlans.css';
@@ -148,17 +149,54 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const t = (key, values) => translate(language, key, values);
   const ct = (value) => translateCatalogValue(language, value);
   const { staffList } = useSchoolData();
-  const { activeSchoolId, activeSchool } = useAuth();
-  const teacherId = currentUser?.email || currentUser?.uid || 'user@noesishorizon.edu';
+  const { 
+    activeSchoolId, 
+    activeSchool, 
+    currentUser: authUser, 
+    schoolPreferences, 
+    updateSchoolPreferences 
+  } = useAuth();
+  const effectiveUid = authUser?.uid || currentUser?.uid;
+  const teacherId = currentUser?.email || authUser?.email || effectiveUid || 'user@noesishorizon.edu';
   const repository = useMemo(() => createLessonPlanRepository(teacherId, { schoolId: activeSchoolId || 'default' }), [teacherId, activeSchoolId]);
   const [view, setView] = useState(initialView);
   const [plans, setPlans] = useState(() => repository.listPlans());
   const [preferences, setPreferences] = useState(() => {
     const saved = repository.getPreferences();
     const staff = staffList.find((person) => person.email?.toLowerCase() === teacherId.toLowerCase());
-    return { ...saved, teacherName: saved.teacherName || currentUser.name || staff?.name || 'Educator', schoolName: saved.schoolName || activeSchool?.name || 'Noesis Horizon' };
+    return { 
+      ...saved, 
+      ...(schoolPreferences || {}),
+      teacherName: schoolPreferences?.teacherName || saved.teacherName || currentUser.name || staff?.name || 'Educator', 
+      schoolName: schoolPreferences?.schoolName || activeSchool?.name || saved.schoolName || 'Noesis Horizon',
+      schoolLogo: schoolPreferences?.schoolLogo || activeSchool?.logo || activeSchool?.schoolLogo || saved.schoolLogo || ''
+    };
   });
   const [settingsDraft, setSettingsDraft] = useState(() => preferences);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Real-time synchronization of cloud schoolPreferences and school document (logo, name)
+  useEffect(() => {
+    if (!schoolPreferences && !activeSchool) return;
+    const currentSaved = repository.getPreferences();
+    const staff = staffList.find((person) => person.email?.toLowerCase() === teacherId.toLowerCase());
+    const merged = {
+      ...currentSaved,
+      ...(schoolPreferences || {}),
+      teacherName: schoolPreferences?.teacherName || currentSaved.teacherName || currentUser?.name || staff?.name || 'Educator',
+      schoolName: schoolPreferences?.schoolName || activeSchool?.name || currentSaved.schoolName || 'Noesis Horizon',
+      schoolLogo: schoolPreferences?.schoolLogo || activeSchool?.logo || activeSchool?.schoolLogo || currentSaved.schoolLogo || ''
+    };
+    try {
+      repository.savePreferences(merged);
+    } catch {}
+    setPreferences(merged);
+    setSettingsDraft(prev => ({
+      ...prev,
+      ...merged
+    }));
+  }, [schoolPreferences, activeSchool, repository, teacherId, currentUser?.name, staffList]);
+
   const [templates, setTemplates] = useState(() => repository.listTemplates());
   const [topics, setTopics] = useState(() => repository.listTopics());
   const [reusable, setReusable] = useState(() => repository.listReusableEntries());
@@ -166,9 +204,21 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [activePlan, setActivePlan] = useState(null);
   const [printTarget, setPrintTarget] = useState(null);
   const [documentLanguage, setDocumentLanguage] = useState(() => localStorage.getItem('lumi-lesson-document-language') === 'en' ? 'en' : 'sq');
-  const changeDocumentLanguage = (next) => { setDocumentLanguage(next); localStorage.setItem('lumi-lesson-document-language', next); };
+  const changeDocumentLanguage = (next) => { 
+    setDocumentLanguage(next); 
+    localStorage.setItem('lumi-lesson-document-language', next); 
+    if (updateSchoolPreferences) {
+      updateSchoolPreferences({ documentLanguage: next }).catch(() => {});
+    }
+  };
   const [showSchoolName, setShowSchoolName] = useState(() => localStorage.getItem('lumi-lesson-pdf-school-name') !== 'false');
-  const changeShowSchoolName = (next) => { setShowSchoolName(next); localStorage.setItem('lumi-lesson-pdf-school-name', String(next)); };
+  const changeShowSchoolName = (next) => { 
+    setShowSchoolName(next); 
+    localStorage.setItem('lumi-lesson-pdf-school-name', String(next)); 
+    if (updateSchoolPreferences) {
+      updateSchoolPreferences({ showSchoolName: next }).catch(() => {});
+    }
+  };
   const activePlanRef = useRef(null);
   const scheduledStartRef = useRef(null);
   const [saveState, setSaveState] = useState('saved');
@@ -539,12 +589,16 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
                     accept="image/*" 
                     id="lesson-school-logo-input"
                     style={{ display: 'none' }}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      const reader = new FileReader();
-                      reader.onload = (evt) => setSettingsDraft({ ...settingsDraft, schoolLogo: evt.target.result });
-                      reader.readAsDataURL(f);
+                      try {
+                        const compressed = await compressImageFile(f, 512, 256, 0.85);
+                        setSettingsDraft({ ...settingsDraft, schoolLogo: compressed });
+                      } catch (err) {
+                        console.error('Logo compression failed:', err);
+                        notify(language === 'sq' ? 'Gabim gjatë ngarkimit të logos: ' + err.message : 'Failed to load logo: ' + err.message);
+                      }
                     }}
                   />
                   <label htmlFor="lesson-school-logo-input" className="btn-secondary glass" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.5rem 1rem', borderRadius: '12px' }}>
@@ -559,7 +613,67 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           <label className="lesson-check-row"><input type="checkbox" checked={Boolean(settingsDraft.rememberLastUsed)} onChange={(event) => setSettingsDraft({ ...settingsDraft, rememberLastUsed: event.target.checked })} /> {t('settings.rememberLastUsed')}</label>
           <datalist id="lesson-assigned-classes">{(settingsDraft.assignedClasses || []).map((value) => <option key={value} value={value} />)}</datalist>
         </div>
-        <div className="lesson-settings-footer"><button type="button" className="btn-primary" onClick={() => { try { const next = repository.savePreferences(settingsDraft); setPreferences(next); setSettingsDraft(next); if (activeSchoolId && currentUser?.uid) { setDoc(doc(db, 'users', currentUser.uid, 'schoolPreferences', activeSchoolId), { ...settingsDraft, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {}); } notify(t('notice.settingsSaved')); } catch { notify(t('validation.saveFailed')); } }}><Save size={17} /> {t('settings.save')}</button></div>
+        <div className="lesson-settings-footer">
+          <button 
+            type="button" 
+            className="btn-primary" 
+            disabled={isSavingSettings}
+            onClick={async () => {
+              setIsSavingSettings(true);
+              try {
+                // 1. Local storage & state
+                const next = repository.savePreferences(settingsDraft);
+                setPreferences(next);
+                setSettingsDraft(next);
+
+                // 2. Cloud sync to user's school preferences
+                if (updateSchoolPreferences) {
+                  await updateSchoolPreferences({
+                    ...settingsDraft,
+                    updatedAt: new Date().toISOString()
+                  });
+                } else if (activeSchoolId && effectiveUid) {
+                  await setDoc(doc(db, 'users', effectiveUid, 'schoolPreferences', activeSchoolId), {
+                    ...settingsDraft,
+                    updatedAt: new Date().toISOString()
+                  }, { merge: true });
+                }
+
+                // 3. Cloud sync to school document if logo or name changed
+                if (activeSchoolId && (settingsDraft.schoolLogo !== undefined || settingsDraft.schoolName)) {
+                  try {
+                    const schoolPatch = {};
+                    if (settingsDraft.schoolLogo !== undefined) {
+                      schoolPatch.logo = settingsDraft.schoolLogo || null;
+                      schoolPatch.schoolLogo = settingsDraft.schoolLogo || null;
+                    }
+                    if (settingsDraft.schoolName) {
+                      schoolPatch.name = settingsDraft.schoolName.trim();
+                    }
+                    if (Object.keys(schoolPatch).length > 0) {
+                      await setDoc(doc(db, 'schools', activeSchoolId), {
+                        ...schoolPatch,
+                        updatedAt: serverTimestamp()
+                      }, { merge: true });
+                    }
+                  } catch (schoolDocErr) {
+                    console.warn('Notice saving school doc logo/name:', schoolDocErr.message);
+                  }
+                }
+
+                notify(t('notice.settingsSaved'));
+              } catch (err) {
+                console.error('Settings save error:', err);
+                notify(t('validation.saveFailed') + (err.message ? `: ${err.message}` : ''));
+              } finally {
+                setIsSavingSettings(false);
+              }
+            }}
+          >
+            <Save size={17} /> 
+            {isSavingSettings ? (language === 'sq' ? 'Duke ruajtur...' : 'Saving...') : t('settings.save')}
+          </button>
+        </div>
       </div>
       <div className="lesson-settings-side">
         <div className="lesson-settings-card glass"><div className="lesson-settings-heading"><span><BookOpen size={20} /></span><div><h2>{t('settings.topicHeading')}</h2><p>{t('settings.topicDescription')}</p></div></div>

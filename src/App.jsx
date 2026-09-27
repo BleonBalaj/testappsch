@@ -273,6 +273,7 @@ function AppContent() {
       case 'classes':
         return <Classes 
           userRole={userRole}
+          addNotification={addNotification}
           onClassSelect={(classData) => {
             setSelectedClass(classData);
             setCurrentPath('class-overview');
@@ -305,7 +306,7 @@ function AppContent() {
             key={`${currentPath}-${activeSchoolId}`} 
             initialView={currentPath === 'lesson-plans-settings' ? 'settings' : 'plans'} 
             userRole={userRole} 
-            currentUser={{ name: currentUser?.displayName, email: currentUser?.email, role: userRole }} 
+            currentUser={{ uid: currentUser?.uid, name: currentUser?.displayName, email: currentUser?.email, role: userRole }} 
             language={lessonLanguage} 
             onLanguageChange={(next) => { setLessonLanguage(next); localStorage.setItem('lumi-lesson-language', next); }} 
             scheduledLesson={currentPath === 'lesson-plans' ? pendingScheduledLesson : null} 

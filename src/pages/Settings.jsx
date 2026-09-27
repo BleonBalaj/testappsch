@@ -5,11 +5,12 @@ import {
   Settings as SettingsIcon, Camera, Moon, Sun, Laptop,
   Calendar, Book, CheckSquare, MessageSquare, Users, UserSquare2,
   Trophy, CalendarDays, Library, BarChart3, CheckCircle2, RotateCcw, Trash2,
-  KeyRound, Lock, Info, Mail, Sparkles, User
+  KeyRound, Lock, Info, Mail, Sparkles, User, Edit3, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { compressImageFile } from '../services/imageUtils';
 import { Avatar } from '../components/Avatar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -48,11 +49,16 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
   const { 
     currentUser, 
     activeSchool, 
+    activeSchoolId,
     currentRole, 
+    globalPreferences,
+    schoolPreferences,
     logoutUser, 
     updateGlobalPreferences,
+    updateSchoolPreferences,
     updateDisplayName,
     updateSchoolName,
+    updateSchoolLogo,
     updateUserPhoto,
     changeUserPassword
   } = useAuth();
@@ -76,6 +82,11 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
   const [userPhoto, setUserPhoto] = useState(currentUser?.photoURL || '');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  // School Logo state & input ref
+  const schoolLogoInputRef = useRef(null);
+  const [schoolLogo, setSchoolLogo] = useState(activeSchool?.logo || activeSchool?.schoolLogo || schoolPreferences?.schoolLogo || '');
+  const [isUploadingSchoolLogo, setIsUploadingSchoolLogo] = useState(false);
+
   // Permissions target tab: 'teacher' or 'student'
   const [permTargetRole, setPermTargetRole] = useState('teacher');
   const [isSavingPerms, setIsSavingPerms] = useState(false);
@@ -88,7 +99,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
   const [schoolNameInput, setSchoolNameInput] = useState(activeSchool?.name || '');
   const [isSavingSchool, setIsSavingSchool] = useState(false);
 
-  // Preferences
+  // Preferences (synced to cloud)
   const [notifications, setNotifications] = useState(true);
   const [animations, setAnimations] = useState(true);
   const [volume, setVolume] = useState(65);
@@ -113,6 +124,20 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
       setSchoolNameInput(activeSchool.name);
     }
   }, [activeSchool?.name]);
+
+  useEffect(() => {
+    const currentLogo = activeSchool?.logo || activeSchool?.schoolLogo || schoolPreferences?.schoolLogo || '';
+    setSchoolLogo(currentLogo);
+  }, [activeSchool?.logo, activeSchool?.schoolLogo, schoolPreferences?.schoolLogo]);
+
+  // Sync global preferences from cloud
+  useEffect(() => {
+    if (globalPreferences) {
+      if (globalPreferences.notifications !== undefined) setNotifications(Boolean(globalPreferences.notifications));
+      if (globalPreferences.animations !== undefined) setAnimations(Boolean(globalPreferences.animations));
+      if (globalPreferences.volume !== undefined) setVolume(Number(globalPreferences.volume));
+    }
+  }, [globalPreferences]);
 
   useEffect(() => {
     const handleExternalTheme = (e) => {
@@ -158,13 +183,70 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
     }
   };
 
-  const handleToggle = (setter, state, label) => {
-    setter(!state);
-    addNotification('success', `${label} ${!state ? 'enabled' : 'disabled'}! ✨`);
+  const handleTogglePreference = async (key, setter, state, label) => {
+    const next = !state;
+    setter(next);
+    try {
+      if (updateGlobalPreferences) {
+        await updateGlobalPreferences({ [key]: next });
+      }
+    } catch (e) {
+      console.warn('Could not save preference to cloud:', e);
+    }
+    addNotification('success', `${label} ${next ? 'enabled' : 'disabled'}! ✨`);
   };
 
-  const handleSlider = (e) => {
-    setVolume(e.target.value);
+  const handleSlider = async (e) => {
+    const val = Number(e.target.value);
+    setVolume(val);
+    try {
+      if (updateGlobalPreferences) {
+        await updateGlobalPreferences({ volume: val });
+      }
+    } catch (e) {
+      console.warn('Could not save volume to cloud:', e);
+    }
+  };
+
+  const handleSchoolLogoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      addNotification('error', 'Please choose a valid image file');
+      return;
+    }
+    setIsUploadingSchoolLogo(true);
+    try {
+      const compressed = await compressImageFile(file, 512, 256, 0.85);
+      setSchoolLogo(compressed);
+      if (updateSchoolLogo) {
+        await updateSchoolLogo(compressed);
+      }
+      addNotification('success', isAlbanian ? 'Logoja e shkollës u ruajt në re me sukses! ✨' : 'School logo saved to cloud successfully! ✨');
+    } catch (err) {
+      console.error('School logo upload error:', err);
+      addNotification('error', 'Failed to save school logo: ' + err.message);
+    } finally {
+      setIsUploadingSchoolLogo(false);
+      if (schoolLogoInputRef.current) schoolLogoInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveSchoolLogo = async () => {
+    setIsUploadingSchoolLogo(true);
+    try {
+      setSchoolLogo('');
+      if (updateSchoolLogo) {
+        await updateSchoolLogo('');
+      }
+      addNotification('success', isAlbanian ? 'Logoja e shkollës u hoq me sukses! ✨' : 'School logo removed successfully! ✨');
+    } catch (err) {
+      console.error('School logo removal error:', err);
+      addNotification('error', 'Failed to remove school logo: ' + err.message);
+    } finally {
+      setIsUploadingSchoolLogo(false);
+      if (schoolLogoInputRef.current) schoolLogoInputRef.current.value = '';
+    }
   };
 
   // Center-crop and compress uploaded photo on canvas to 256x256 JPEG (~15KB)
@@ -497,6 +579,124 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                 </div>
               </div>
 
+              {/* School Logo - Editable for Admins */}
+              <div className="input-group">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label>{isAlbanian ? 'Logoja e Shkollës' : 'School Logo'}</label>
+                  {isAdmin ? (
+                    <span style={{ fontSize: '0.75rem', color: 'hsl(var(--primary))', fontWeight: 700 }}>
+                      🛡️ {t('settings.adminEditable')}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))' }}>
+                      {t('settings.adminOnly')}
+                    </span>
+                  )}
+                </div>
+                
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  background: 'hsla(var(--background), 0.5)',
+                  padding: '0.85rem 1rem',
+                  borderRadius: '16px',
+                  border: '1px solid hsla(var(--border), 0.6)',
+                  marginTop: '0.25rem'
+                }}>
+                  {schoolLogo ? (
+                    <div style={{
+                      width: '72px',
+                      height: '48px',
+                      borderRadius: '10px',
+                      overflow: 'hidden',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid hsla(var(--border), 0.6)',
+                      flexShrink: 0
+                    }}>
+                      <img 
+                        src={schoolLogo} 
+                        alt="School Logo" 
+                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+                      />
+                    </div>
+                  ) : (
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '12px',
+                      background: 'hsla(var(--primary), 0.12)',
+                      color: 'hsl(var(--primary))',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <ImageIcon size={22} />
+                    </div>
+                  )}
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ display: 'block', fontSize: '0.88rem', color: 'hsl(var(--foreground))' }}>
+                      {schoolLogo ? (isAlbanian ? 'Logoja Aktive e Shkollës' : 'Active School Logo') : (isAlbanian ? 'Nuk ka logo të ngarkuar' : 'No school logo set')}
+                    </strong>
+                    <span style={{ display: 'block', fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginTop: '0.1rem' }}>
+                      {isAlbanian ? 'Sinkronizohet në re për të gjithë stafin dhe shfaqet në planet mësimore' : 'Synced to cloud for all staff and displayed on lesson plan PDFs'}
+                    </span>
+                  </div>
+
+                  {isAdmin && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                      <input 
+                        type="file" 
+                        ref={schoolLogoInputRef}
+                        accept="image/*" 
+                        onChange={handleSchoolLogoChange}
+                        style={{ display: 'none' }}
+                        id="settings-school-logo-file"
+                      />
+                      <label 
+                        htmlFor="settings-school-logo-file"
+                        className="btn-secondary glass"
+                        style={{ 
+                          cursor: isUploadingSchoolLogo ? 'wait' : 'pointer', 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          gap: '0.4rem',
+                          padding: '0.5rem 0.9rem',
+                          fontSize: '0.82rem',
+                          borderRadius: '12px',
+                          margin: 0
+                        }}
+                      >
+                        <Upload size={14} />
+                        <span>{isUploadingSchoolLogo ? (isAlbanian ? 'Duke ngarkuar...' : 'Uploading...') : (schoolLogo ? (isAlbanian ? 'Ndrysho' : 'Change') : (isAlbanian ? 'Ngarko Logo' : 'Upload Logo'))}</span>
+                      </label>
+                      {schoolLogo && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{
+                            padding: '0.5rem 0.75rem',
+                            fontSize: '0.82rem',
+                            color: 'hsl(var(--destructive))',
+                            borderRadius: '12px'
+                          }}
+                          disabled={isUploadingSchoolLogo}
+                          onClick={handleRemoveSchoolLogo}
+                          title={isAlbanian ? 'Hiq logon' : 'Remove logo'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Active Role - STRICTLY READ-ONLY BADGE (Users CANNOT change role) */}
               <div className="input-group">
                 <label>{t('settings.activeRole')}</label>
@@ -821,12 +1021,29 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
             <Toggle 
               label={t('settings.pushNotifications')} 
               active={notifications} 
-              onToggle={() => handleToggle(setNotifications, notifications, 'Notifications')} 
+              onToggle={() => handleTogglePreference('notifications', setNotifications, notifications, 'Notifications')} 
             />
             <Toggle 
               label={t('settings.enableAnimations')} 
               active={animations} 
-              onToggle={() => handleToggle(setAnimations, animations, 'Animations')} 
+              onToggle={() => handleTogglePreference('animations', setAnimations, animations, 'Animations')} 
+            />
+          </div>
+
+          <div className="input-group" style={{ marginTop: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <label style={{ margin: 0, textTransform: 'uppercase', fontSize: '0.78rem', fontWeight: 700, color: 'hsl(var(--muted-foreground))' }}>
+                {isAlbanian ? 'Volumi i Efekteve Zanore' : 'Sound Effects Volume'}
+              </label>
+              <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'hsl(var(--primary))' }}>{volume}%</span>
+            </div>
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              value={volume} 
+              onChange={handleSlider}
+              style={{ width: '100%', accentColor: 'hsl(var(--primary))', cursor: 'pointer' }}
             />
           </div>
         </section>
@@ -1012,6 +1229,71 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                 );
               })}
             </div>
+
+            {permTargetRole === 'teacher' && (
+              <div className="teacher-actions-perm-section" style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid hsla(var(--border), 0.5)' }}>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'hsl(var(--foreground))' }}>
+                    {isAlbanian ? 'Lejet e Veprimeve të Mësimdhënësve' : 'Teacher Action Privileges'}
+                  </h4>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
+                    {isAlbanian 
+                      ? 'Përcaktoni nëse mësimdhënësit kanë të drejtë të modifikojnë dhe fshijnë lëndët nga katalogu i shkollës.'
+                      : 'Control whether teachers can edit course information and delete classes from the catalog.'}
+                  </p>
+                </div>
+
+                <div className="permissions-toggle-grid">
+                  <div className="permission-card glass">
+                    <div className="permission-card-info">
+                      <div className="permission-icon-box" style={{ background: 'hsla(var(--primary), 0.15)', color: 'hsl(var(--primary))' }}>
+                        <Edit3 size={18} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <strong>{isAlbanian ? 'Përpunimi & Fshirja e Lëndëve' : 'Edit & Delete Classes'}</strong>
+                        <p>
+                          {isAlbanian 
+                            ? 'Lejon mësimdhënësit të ndryshojnë emrin e lëndës, arsimtarin, sallën, orarin dhe të fshijnë lëndët' 
+                            : 'Allow teachers to edit class name, teacher, schedule, room, and delete classes'}
+                        </p>
+                      </div>
+                    </div>
+                    <Toggle 
+                      active={(rolePermissions?.teacher?.canEditDeleteClasses ?? DEFAULT_ROLE_PERMISSIONS.teacher.canEditDeleteClasses) ?? true}
+                      onToggle={() => {
+                        const currentVal = (rolePermissions?.teacher?.canEditDeleteClasses ?? DEFAULT_ROLE_PERMISSIONS.teacher.canEditDeleteClasses) ?? true;
+                        handleTogglePermission('teacher', 'canEditDeleteClasses', !currentVal);
+                      }}
+                      label=""
+                    />
+                  </div>
+
+                  <div className="permission-card glass">
+                    <div className="permission-card-info">
+                      <div className="permission-icon-box" style={{ background: 'hsla(var(--accent), 0.15)', color: 'hsl(var(--accent))' }}>
+                        <Users size={18} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <strong>{isAlbanian ? 'Përpunimi & Fshirja e Nxënësve' : 'Edit & Delete Students'}</strong>
+                        <p>
+                          {isAlbanian 
+                            ? 'Lejon mësimdhënësit të modifikojnë profilin e nxënësve, lëndët e caktuara dhe të fshijnë nxënës' 
+                            : 'Allow teachers to edit student profiles, course enrollments, and delete students'}
+                        </p>
+                      </div>
+                    </div>
+                    <Toggle 
+                      active={(rolePermissions?.teacher?.canEditDeleteStudents ?? DEFAULT_ROLE_PERMISSIONS.teacher.canEditDeleteStudents) ?? true}
+                      onToggle={() => {
+                        const currentVal = (rolePermissions?.teacher?.canEditDeleteStudents ?? DEFAULT_ROLE_PERMISSIONS.teacher.canEditDeleteStudents) ?? true;
+                        handleTogglePermission('teacher', 'canEditDeleteStudents', !currentVal);
+                      }}
+                      label=""
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
 

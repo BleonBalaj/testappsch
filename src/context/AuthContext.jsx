@@ -531,6 +531,24 @@ const DEFAULT_SCHOOL_ROLES = [
     }
   };
 
+  // Update school logo (Admin or Teacher)
+  const updateSchoolLogo = async (logoDataUrl) => {
+    if (!activeSchoolId) return;
+    const schoolRef = doc(db, 'schools', activeSchoolId);
+    await setDoc(schoolRef, {
+      logo: logoDataUrl || null,
+      schoolLogo: logoDataUrl || null,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    if (currentUser?.uid) {
+      const schoolPrefRef = doc(db, 'users', currentUser.uid, 'schoolPreferences', activeSchoolId);
+      await setDoc(schoolPrefRef, {
+        schoolLogo: logoDataUrl || '',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+  };
+
   // Accept school invitation
   const acceptInvitation = async (schoolId, invitationId) => {
     const token = await getIdTokenSafe();
@@ -761,6 +779,7 @@ const DEFAULT_SCHOOL_ROLES = [
     registerNewUserAndSchool,
     createNewSchool,
     updateSchoolName,
+    updateSchoolLogo,
     updateDisplayName,
     updateUserPhoto,
     changeUserPassword,

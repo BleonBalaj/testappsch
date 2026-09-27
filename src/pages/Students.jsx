@@ -1,12 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, UserPlus, Filter, MoreVertical, Mail, Phone, 
   MapPin, X, Check, Download, Trash2, Edit3, Award, Star, 
   GraduationCap, BookOpen, ShieldAlert, Archive, ArchiveRestore,
-  AlertTriangle, AlertCircle, CheckCircle2, RotateCcw, Users
+  AlertTriangle, AlertCircle, CheckCircle2, RotateCcw, Users, ChevronDown
 } from 'lucide-react';
-import { useSchoolData } from '../context/SchoolDataContext';
+import { useSchoolData, DEFAULT_ROLE_PERMISSIONS } from '../context/SchoolDataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import './Students.css';
@@ -30,7 +30,149 @@ const itemVariants = {
   }
 };
 
-const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchive, isAdmin }) => {
+const SearchableCourseSelector = ({ 
+  classesList = [], 
+  selectedClasses = [], 
+  onChange, 
+  isAlbanian
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const filteredCourses = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return classesList;
+    return classesList.filter(c => 
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.code || '').toLowerCase().includes(q) ||
+      (c.teacher || '').toLowerCase().includes(q) ||
+      (c.department || '').toLowerCase().includes(q)
+    );
+  }, [classesList, search]);
+
+  const handleToggle = (courseString) => {
+    if (selectedClasses.includes(courseString)) {
+      onChange(selectedClasses.filter(c => c !== courseString));
+    } else {
+      onChange([...selectedClasses, courseString]);
+    }
+  };
+
+  const handleRemove = (courseString, e) => {
+    e.stopPropagation();
+    onChange(selectedClasses.filter(c => c !== courseString));
+  };
+
+  return (
+    <div className="searchable-course-dropdown" ref={dropdownRef}>
+      {/* Selected Tags Chips */}
+      {selectedClasses.length > 0 && (
+        <div className="selected-course-tags-row">
+          {selectedClasses.map(clsStr => (
+            <span key={clsStr} className="selected-course-tag">
+              <BookOpen size={12} />
+              <span>{clsStr}</span>
+              <button 
+                type="button" 
+                className="selected-course-tag-remove" 
+                onClick={(e) => handleRemove(clsStr, e)}
+                title={isAlbanian ? "Hiq lëndën" : "Remove course"}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Trigger Button */}
+      <button 
+        type="button" 
+        className={`searchable-dropdown-trigger ${isOpen ? 'open' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span style={{ color: selectedClasses.length > 0 ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))' }}>
+          {selectedClasses.length === 0 
+            ? (isAlbanian ? 'Zgjidhni lëndët nga lista...' : 'Select courses from school catalog...') 
+            : (isAlbanian ? `+ Shto / Ndrysho lëndë (${selectedClasses.length} të zgjedhura)` : `+ Add / Change courses (${selectedClasses.length} selected)`)}
+        </span>
+        <ChevronDown size={16} style={{ color: 'hsl(var(--muted-foreground))', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="searchable-dropdown-menu">
+          <div className="dropdown-search-input-wrap">
+            <Search size={14} style={{ color: 'hsl(var(--muted-foreground))' }} />
+            <input 
+              type="text" 
+              autoFocus
+              className="dropdown-search-input"
+              placeholder={isAlbanian ? 'Kërko lëndë (p.sh. Matematikë, BIO-101)...' : 'Search courses (e.g. Physics, CS-101)...'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="dropdown-course-list">
+            {classesList.length === 0 ? (
+              <div style={{ padding: '1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.84rem' }}>
+                {isAlbanian ? 'Nuk ka lëndë aktive në shkollë. Krijoni lëndë te "Kurset & Klasat".' : 'No courses created in school yet. Add courses in "Courses & Classes".'}
+              </div>
+            ) : filteredCourses.length === 0 ? (
+              <div style={{ padding: '1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.84rem' }}>
+                {isAlbanian ? 'Asnjë lëndë nuk përputhet me kërkimin.' : 'No courses match your search.'}
+              </div>
+            ) : (
+              filteredCourses.map(course => {
+                const courseIdentifier = `${course.name} (${course.code || 'CLS'})`;
+                const isSelected = selectedClasses.includes(courseIdentifier);
+                return (
+                  <button
+                    key={course.id || course.code}
+                    type="button"
+                    className={`dropdown-course-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleToggle(courseIdentifier)}
+                  >
+                    <div className="dropdown-course-item-info">
+                      <span className="dropdown-course-item-title">
+                        {course.name} <code style={{ fontSize: '0.75rem', color: 'hsl(var(--primary))' }}>{course.code}</code>
+                      </span>
+                      <span className="dropdown-course-item-meta">
+                        {course.department || 'Academic'} • {course.teacher || 'Faculty'} {course.room ? `• ${course.room}` : ''}
+                      </span>
+                    </div>
+                    {isSelected && <Check size={16} style={{ color: 'hsl(var(--primary))', flexShrink: 0 }} />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const StudentCard = ({ student, index, onSelect, onEdit, onRequestDelete, onToggleArchive, canManage, isAlbanian }) => {
   const isArchived = student.status === 'archived';
   const isUnassigned = !isArchived && (!student.assignedClasses || student.assignedClasses.length === 0);
 
@@ -56,24 +198,32 @@ const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchiv
           {/* Status Badges */}
           {isArchived ? (
             <span className="student-status-badge archived">
-              <Archive size={12} /> Archived
+              <Archive size={12} /> {isAlbanian ? 'I Arkivuar' : 'Archived'}
             </span>
           ) : isUnassigned ? (
-            <span className="student-status-badge unassigned" title="Student is active but not assigned to any classes yet">
-              <AlertTriangle size={12} /> No Classes
+            <span className="student-status-badge unassigned" title={isAlbanian ? "Nxënësi nuk është regjistruar në asnjë lëndë ende" : "Student is active but not assigned to any classes yet"}>
+              <AlertTriangle size={12} /> {isAlbanian ? 'Pa Lëndë' : 'No Classes'}
             </span>
           ) : (
             <span className="student-status-badge active">
-              <CheckCircle2 size={12} /> Active
+              <CheckCircle2 size={12} /> {isAlbanian ? 'Aktiv' : 'Active'}
             </span>
           )}
           
-          {isAdmin && (
+          {canManage && (
             <div className="admin-card-actions">
               <button 
                 type="button"
+                className="edit-student-card-btn" 
+                title={isAlbanian ? 'Ndrysho Profilin e Nxënësit' : 'Edit Student Profile'}
+                onClick={() => onEdit && onEdit(student)}
+              >
+                <Edit3 size={14} />
+              </button>
+              <button 
+                type="button"
                 className="archive-student-card-btn" 
-                title={isArchived ? 'Restore / Unarchive Student' : 'Archive Student'}
+                title={isArchived ? (isAlbanian ? 'Rikthe Nxënësin' : 'Restore / Unarchive Student') : (isAlbanian ? 'Arkivo Nxënësin' : 'Archive Student')}
                 onClick={() => onToggleArchive && onToggleArchive(student.id)}
               >
                 {isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
@@ -81,7 +231,7 @@ const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchiv
               <button 
                 type="button"
                 className="delete-student-card-btn" 
-                title="Permanently Delete Student"
+                title={isAlbanian ? 'Fshij Përgjithmonë Nxënësin' : 'Permanently Delete Student'}
                 onClick={() => onRequestDelete && onRequestDelete(student)}
               >
                 <Trash2 size={14} />
@@ -107,7 +257,7 @@ const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchiv
             ))
           ) : (
             <span className="student-class-pill unassigned-pill">
-              <AlertTriangle size={11} /> No Active Classes Enrolled
+              <AlertTriangle size={11} /> {isAlbanian ? 'Pa Lëndë të Regjistruara' : 'No Active Classes Enrolled'}
             </span>
           )}
         </div>
@@ -127,9 +277,20 @@ const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchiv
 };
 
 const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
-  const { studentsList, addStudent, deleteStudent, toggleArchiveStudent } = useSchoolData();
+  const { 
+    studentsList, 
+    classesList = [], 
+    addStudent, 
+    updateStudent, 
+    deleteStudent, 
+    toggleArchiveStudent,
+    rolePermissions
+  } = useSchoolData();
   const { language, t, isAlbanian } = useLanguage();
   const isAdmin = userRole === 'admin';
+  const isTeacher = userRole === 'teacher';
+  const teacherCanManage = (rolePermissions?.teacher?.canEditDeleteStudents ?? DEFAULT_ROLE_PERMISSIONS.teacher.canEditDeleteStudents) ?? true;
+  const canManage = isAdmin || (isTeacher && teacherCanManage);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'archived', 'unassigned'
@@ -150,8 +311,79 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
     gpa: '3.85',
     points: 1000,
     attendance: 98,
-    assignedClassInput: 'Advanced Math (MATH-301)'
+    assignedClasses: []
   });
+
+  // Edit Student Form State
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editStudentForm, setEditStudentForm] = useState({
+    name: '',
+    studentId: '',
+    grade: '10A',
+    email: '',
+    phone: '',
+    guardian: '',
+    gpa: '3.85',
+    points: 1000,
+    attendance: 98,
+    assignedClasses: [],
+    status: 'active'
+  });
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  const handleOpenEditStudent = useCallback((s) => {
+    setEditingStudent(s);
+    setEditStudentForm({
+      name: s.name || '',
+      studentId: s.studentId || '',
+      grade: s.grade || '10A',
+      email: s.email || '',
+      phone: s.phone || '',
+      guardian: s.guardian || '',
+      gpa: s.gpa || 3.8,
+      points: s.points || 500,
+      attendance: s.attendance || 100,
+      assignedClasses: Array.isArray(s.assignedClasses) ? [...s.assignedClasses] : (s.assignedClasses ? [s.assignedClasses] : []),
+      status: s.status || 'active'
+    });
+  }, []);
+
+  const handleSaveEditStudent = async (e) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    if (!editStudentForm.name.trim() || !editStudentForm.email.trim()) return;
+
+    setIsSubmittingEdit(true);
+    try {
+      if (updateStudent) {
+        await updateStudent(editingStudent.id, {
+          name: editStudentForm.name.trim(),
+          studentId: editStudentForm.studentId.trim(),
+          grade: editStudentForm.grade.trim(),
+          email: editStudentForm.email.trim(),
+          phone: editStudentForm.phone.trim(),
+          guardian: editStudentForm.guardian.trim(),
+          gpa: Number(editStudentForm.gpa) || 3.8,
+          points: Number(editStudentForm.points) || 500,
+          attendance: Number(editStudentForm.attendance) || 100,
+          assignedClasses: editStudentForm.assignedClasses || [],
+          status: editStudentForm.status || 'active'
+        });
+      }
+
+      if (addNotification) {
+        addNotification('success', isAlbanian ? `Profili i nxënësit "${editStudentForm.name}" u përditësua me sukses! ✨` : `Student profile "${editStudentForm.name}" updated successfully! ✨`);
+      }
+      setEditingStudent(null);
+    } catch (err) {
+      console.error('Failed to update student:', err);
+      if (addNotification) {
+        addNotification('error', err.message || 'Failed to update student profile.');
+      }
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
 
   const grades = useMemo(() => {
     const uniqueGrades = Array.from(new Set(studentsList.map(s => s.grade).filter(Boolean)));
@@ -203,9 +435,9 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       return;
     }
 
-    const classesArray = studentForm.assignedClassInput
-      ? [studentForm.assignedClassInput]
-      : [];
+    const classesArray = Array.isArray(studentForm.assignedClasses)
+      ? studentForm.assignedClasses
+      : (studentForm.assignedClassInput ? [studentForm.assignedClassInput] : []);
 
     const customId = studentForm.studentId.trim() || `STU-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -237,7 +469,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
         gpa: '3.85',
         points: 1000,
         attendance: 98,
-        assignedClassInput: 'Advanced Math (MATH-301)'
+        assignedClasses: []
       });
     } catch (err) {
       console.error('Failed to enroll student:', err);
@@ -396,9 +628,11 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                 student={student} 
                 index={index} 
                 onSelect={onStudentSelect}
+                onEdit={handleOpenEditStudent}
                 onRequestDelete={setStudentToDelete}
                 onToggleArchive={toggleArchiveStudent}
-                isAdmin={isAdmin}
+                canManage={canManage}
+                isAlbanian={isAlbanian}
               />
             ))
           )}
@@ -593,18 +827,13 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                   </div>
 
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Regjistrimi Fillestar në Kurs' : 'Initial Course Enrollment'}</label>
-                    <select
-                      className="custom-form-select"
-                      value={studentForm.assignedClassInput}
-                      onChange={e => setStudentForm({ ...studentForm, assignedClassInput: e.target.value })}
-                    >
-                      <option value="Advanced Math (MATH-301)">{isAlbanian ? 'Matematikë e Avancuar (MATH-301)' : 'Advanced Math (MATH-301)'}</option>
-                      <option value="Physics 101 (PHYS-401)">{isAlbanian ? 'Fizikë 101 (PHYS-401)' : 'Physics 101 (PHYS-401)'}</option>
-                      <option value="World History (HIST-202)">{isAlbanian ? 'Histori Botërore (HIST-202)' : 'World History (HIST-202)'}</option>
-                      <option value="Digital Arts (ART-110)">{isAlbanian ? 'Arte Digjitale (ART-110)' : 'Digital Arts (ART-110)'}</option>
-                      <option value="">{isAlbanian ? 'I pacaktuar (Regjistro më vonë)' : 'Unassigned (Enroll Later)'}</option>
-                    </select>
+                    <label>{isAlbanian ? 'Regjistrimi Fillestar në Lëndë' : 'Initial Course Enrollment'}</label>
+                    <SearchableCourseSelector 
+                      classesList={classesList}
+                      selectedClasses={studentForm.assignedClasses || []}
+                      onChange={(nextClasses) => setStudentForm({ ...studentForm, assignedClasses: nextClasses })}
+                      isAlbanian={isAlbanian}
+                    />
                   </div>
                 </div>
 
@@ -616,6 +845,169 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                     {isSubmittingStudent 
                       ? (isAlbanian ? 'Duke krijuar llogarinë në Firebase...' : 'Creating User in Firebase...') 
                       : (isAlbanian ? 'Regjistro Studentin' : 'Enroll Student')}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: Edit Student Profile ── */}
+      <AnimatePresence>
+        {editingStudent && (
+          <div className="modal-overlay" onClick={() => !isSubmittingEdit && setEditingStudent(null)}>
+            <motion.div 
+              className="modal-content"
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h3>{isAlbanian ? 'Ndrysho Profilin e Nxënësit' : 'Edit Student Profile'}</h3>
+                <p className="modal-subtitle">
+                  {isAlbanian 
+                    ? `Përditësoni të dhënat akademike dhe regjistrimet për ${editingStudent.name}.` 
+                    : `Update academic profile, credentials, and course enrollments for ${editingStudent.name}.`}
+                </p>
+                <button type="button" className="icon-btn-close" onClick={() => !isSubmittingEdit && setEditingStudent(null)} aria-label="Close">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEditStudent} className="modal-form">
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Emri i Plotë' : 'Full Name'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span></label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={editStudentForm.name}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'ID e Nxënësit' : 'Student ID'}</label>
+                    <input 
+                      type="text" 
+                      value={editStudentForm.studentId}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, studentId: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Klasa / Niveli' : 'Grade / Class'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span></label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={editStudentForm.grade}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, grade: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Email Zyrtar' : 'Official Email'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span></label>
+                    <input 
+                      type="email" 
+                      required 
+                      value={editStudentForm.email}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, email: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Telefoni / Kontakti' : 'Phone / Contact'}</label>
+                    <input 
+                      type="tel" 
+                      value={editStudentForm.phone}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, phone: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Kujdestari / Prindi' : 'Guardian / Parent'}</label>
+                    <input 
+                      type="text" 
+                      value={editStudentForm.guardian}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, guardian: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Nota Mesatare (GPA)' : 'GPA Target'}</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      min="0.0"
+                      max="4.0"
+                      value={editStudentForm.gpa}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, gpa: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Pikët e Arritjeve' : 'Reward Points'}</label>
+                    <input 
+                      type="number" 
+                      value={editStudentForm.points}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, points: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Pjesëmarrja (%)' : 'Attendance (%)'}</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      value={editStudentForm.attendance}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, attendance: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Statusi' : 'Status'}</label>
+                    <select 
+                      className="custom-form-select"
+                      value={editStudentForm.status}
+                      onChange={e => setEditStudentForm({ ...editStudentForm, status: e.target.value })}
+                    >
+                      <option value="active">{isAlbanian ? 'Aktiv' : 'Active'}</option>
+                      <option value="archived">{isAlbanian ? 'I Arkivuar' : 'Archived'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Searchable Course Enrollment */}
+                <div className="input-group">
+                  <label>{isAlbanian ? 'Lëndët & Kurset e Regjistruara' : 'Enrolled Courses & Classes'}</label>
+                  <SearchableCourseSelector 
+                    classesList={classesList}
+                    selectedClasses={editStudentForm.assignedClasses || []}
+                    onChange={(nextClasses) => setEditStudentForm({ ...editStudentForm, assignedClasses: nextClasses })}
+                    isAlbanian={isAlbanian}
+                  />
+                </div>
+
+                <div className="modal-footer-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setEditingStudent(null)} disabled={isSubmittingEdit}>
+                    {isAlbanian ? 'Anulo' : 'Cancel'}
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={isSubmittingEdit}>
+                    {isSubmittingEdit 
+                      ? (isAlbanian ? 'Duke ruajtur ndryshimet...' : 'Saving Changes...') 
+                      : (isAlbanian ? 'Ruaj Ndryshimet' : 'Save Changes')}
                   </button>
                 </div>
               </form>

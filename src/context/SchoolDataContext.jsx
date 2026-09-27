@@ -52,6 +52,8 @@ export const DEFAULT_ROLE_PERMISSIONS = {
     resources: true,
     'mood-insights': true,
     transcript: false,
+    canEditDeleteClasses: true,
+    canEditDeleteStudents: true,
   }
 };
 

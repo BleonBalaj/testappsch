@@ -284,6 +284,7 @@
   gap: 0.35rem;
 }
 
+.edit-student-card-btn,
 .archive-student-card-btn,
 .delete-student-card-btn {
   width: 30px;
@@ -297,6 +298,20 @@
   border: 1px solid hsl(var(--border));
   cursor: pointer;
   transition: all 0.2s;
+}
+
+[data-theme='light'] .edit-student-card-btn,
+[data-theme='light'] .archive-student-card-btn,
+[data-theme='light'] .delete-student-card-btn {
+  background: #f4f0fa;
+  border: 1px solid hsla(270, 20%, 82%, 1);
+  color: hsl(270, 20%, 40%);
+}
+
+.edit-student-card-btn:hover {
+  color: hsl(var(--primary));
+  background: hsla(var(--primary), 0.15);
+  border-color: hsla(var(--primary), 0.4);
 }
 
 .archive-student-card-btn:hover {
@@ -545,5 +560,185 @@
   color: hsl(var(--foreground));
   font-size: 1.2rem;
   font-weight: 700;
+}
+
+/* ── Searchable Course Dropdown ── */
+.searchable-course-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-dropdown-trigger {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.5rem 0.85rem;
+  border-radius: 12px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+[data-theme='light'] .searchable-dropdown-trigger {
+  background: #ffffff;
+  border: 1px solid hsla(270, 25%, 75%, 1);
+  color: hsl(270, 30%, 15%);
+}
+
+.searchable-dropdown-trigger:hover,
+.searchable-dropdown-trigger.open {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+}
+
+.searchable-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+}
+
+[data-theme='light'] .searchable-dropdown-menu {
+  background: #ffffff;
+  border: 1px solid hsla(270, 20%, 82%, 1);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+.dropdown-search-input-wrap {
+  padding: 0.65rem;
+  border-bottom: 1px solid hsla(var(--border), 0.6);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: hsla(var(--card), 0.95);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.dropdown-search-input {
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  font-size: 0.85rem;
+  outline: none;
+}
+
+[data-theme='light'] .dropdown-search-input {
+  background: #f8f6fc;
+  border: 1px solid hsla(270, 25%, 78%, 1);
+  color: hsl(270, 30%, 15%);
+}
+
+.dropdown-search-input:focus {
+  border-color: hsl(var(--primary));
+}
+
+.dropdown-course-list {
+  overflow-y: auto;
+  max-height: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0;
+}
+
+.dropdown-course-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  gap: 0.75rem;
+}
+
+.dropdown-course-item:hover {
+  background: hsla(var(--primary), 0.1);
+}
+
+.dropdown-course-item.selected {
+  background: hsla(var(--primary), 0.15);
+}
+
+.dropdown-course-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.dropdown-course-item-title {
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-course-item-meta {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-course-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.selected-course-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 8px;
+  background: hsla(var(--primary), 0.15);
+  border: 1px solid hsla(var(--primary), 0.35);
+  color: hsl(var(--primary));
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.selected-course-tag-remove {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  opacity: 0.75;
+}
+
+.selected-course-tag-remove:hover {
+  opacity: 1;
 }
 

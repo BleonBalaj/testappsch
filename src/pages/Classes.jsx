@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Book, CheckSquare, Users, Plus, Search, Filter, 
   Download, Sparkles, BookOpen, Layers, X, Check,
-  GraduationCap, Clock, MapPin
+  GraduationCap, Clock, MapPin, Edit3, Trash2, AlertTriangle
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -40,7 +40,17 @@ const cardItemVariants = {
   }
 };
 
-const ClassCard = ({ classInfo, onClick, userRole = 'student', isTaughtByMe, isEnrolled, isAlbanian }) => {
+const ClassCard = ({ 
+  classInfo, 
+  onClick, 
+  userRole = 'student', 
+  isTaughtByMe, 
+  isEnrolled, 
+  isAlbanian,
+  canManage,
+  onEdit,
+  onDelete
+}) => {
   const isLead = isTaughtByMe !== undefined ? isTaughtByMe : Boolean(classInfo.taughtByMe);
   const enrolled = isEnrolled !== undefined ? isEnrolled : Boolean(classInfo.enrolled);
 
@@ -79,6 +89,35 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student', isTaughtByMe, isE
           </div>
           <p>{classInfo.code} • {classInfo.teacher}</p>
         </div>
+
+        {canManage && (
+          <div className="class-card-actions" onClick={e => e.stopPropagation()}>
+            <button 
+              type="button" 
+              className="class-card-action-btn edit" 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onEdit) onEdit(classInfo);
+              }} 
+              title={isAlbanian ? "Ndrysho Lëndën" : "Edit Course"}
+              aria-label={isAlbanian ? "Ndrysho Lëndën" : "Edit Course"}
+            >
+              <Edit3 size={15} />
+            </button>
+            <button 
+              type="button" 
+              className="class-card-action-btn delete" 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onDelete) onDelete(classInfo);
+              }} 
+              title={isAlbanian ? "Fshij Lëndën" : "Delete Course"}
+              aria-label={isAlbanian ? "Fshij Lëndën" : "Delete Course"}
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="class-meta-row">
@@ -117,8 +156,16 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student', isTaughtByMe, isE
   );
 };
 
-const Classes = ({ onClassSelect, userRole = 'student' }) => {
-  const { staffList = [], studentsList = [], classesList = [], addClass } = useSchoolData();
+const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
+  const { 
+    staffList = [], 
+    studentsList = [], 
+    classesList = [], 
+    addClass,
+    updateClass,
+    deleteClass,
+    rolePermissions
+  } = useSchoolData();
   const { currentUser } = useAuth();
   const { language, t, isAlbanian } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,6 +184,11 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
   // Superadmins never have a personal "My Classes" view; strictly lock to full curriculum catalog
   const effectiveTab = userRole === 'admin' ? 'all-classes' : activeTab;
 
+  const isAdmin = userRole === 'admin';
+  const isTeacher = userRole === 'teacher';
+  const teacherCanEditDelete = (rolePermissions?.teacher?.canEditDeleteClasses ?? true);
+  const canManageClass = isAdmin || (isTeacher && teacherCanEditDelete);
+
   // New Class Form State
   const [newClassName, setNewClassName] = useState('');
   const [newClassCode, setNewClassCode] = useState('');
@@ -146,6 +198,107 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
   const [newClassSchedule, setNewClassSchedule] = useState('Mon, Wed 10:00 AM');
   const [newClassColor, setNewClassColor] = useState('--primary');
   const [formError, setFormError] = useState('');
+
+  // Edit Class Form State
+  const [editingClass, setEditingClass] = useState(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    code: '',
+    department: 'Science',
+    teacher: '',
+    room: '',
+    schedule: '',
+    color: '--primary',
+    credits: 4,
+    description: ''
+  });
+  const [editFormError, setEditFormError] = useState('');
+
+  // Delete Class Confirmation State
+  const [classToDelete, setClassToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleOpenEdit = useCallback((cls) => {
+    setEditingClass(cls);
+    setEditForm({
+      name: cls.name || '',
+      code: cls.code || '',
+      department: cls.department || 'Science',
+      teacher: cls.teacher || staffList[0]?.name || currentUser?.displayName || '',
+      room: cls.room || '',
+      schedule: cls.schedule || '',
+      color: cls.color || '--primary',
+      credits: cls.credits || 4,
+      description: cls.description || ''
+    });
+    setEditFormError('');
+  }, [staffList, currentUser]);
+
+  const handleSaveEditClass = async (e) => {
+    e.preventDefault();
+    if (!editingClass) return;
+    if (!editForm.name.trim()) {
+      setEditFormError(isAlbanian ? 'Ju lutem shënoni titullin e kursit.' : 'Please enter the course title.');
+      return;
+    }
+    if (!editForm.code.trim()) {
+      setEditFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm.' : 'Course code is required.');
+      return;
+    }
+
+    const teacherName = editForm.teacher.trim();
+    const matchedStaff = staffList.find(s => s.name === teacherName);
+    const teacherId = matchedStaff?.id || (teacherName === currentUser?.displayName ? currentUser?.uid : editingClass.teacherId || '');
+    const teacherEmail = matchedStaff?.email || (teacherName === currentUser?.displayName ? currentUser?.email : editingClass.teacherEmail || '');
+
+    const updates = {
+      name: editForm.name.trim(),
+      code: editForm.code.trim().toUpperCase(),
+      department: editForm.department,
+      teacher: teacherName,
+      teacherId,
+      teacherEmail,
+      room: editForm.room.trim() || 'Room 101',
+      schedule: editForm.schedule.trim() || 'Mon, Wed 10:00 AM',
+      color: editForm.color || '--primary',
+      credits: Number(editForm.credits) || 4,
+      description: (editForm.description || '').trim()
+    };
+
+    try {
+      if (updateClass) {
+        await updateClass(editingClass.id, updates);
+      }
+      if (addNotification) {
+        addNotification('success', isAlbanian ? `Lënda "${updates.name}" u përditësua me sukses! ✨` : `Course "${updates.name}" updated successfully! ✨`);
+      }
+      setEditingClass(null);
+    } catch (err) {
+      console.error('Error updating class:', err);
+      setEditFormError(err.message || 'Failed to update course');
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!classToDelete) return;
+    setIsDeleting(true);
+    try {
+      if (deleteClass) {
+        await deleteClass(classToDelete.id);
+      }
+      if (addNotification) {
+        addNotification('info', isAlbanian ? `Lënda "${classToDelete.name}" u fshi me sukses. 🗑️` : `Course "${classToDelete.name}" was deleted successfully. 🗑️`);
+      }
+      setClassToDelete(null);
+    } catch (err) {
+      console.error('Error deleting class:', err);
+      if (addNotification) {
+        addNotification('error', isAlbanian ? 'Gabim gjatë fshirjes së lëndës.' : 'Failed to delete course: ' + err.message);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const departments = [
     { id: 'All', labelEn: 'All', labelSq: 'Të Gjitha' },
@@ -489,6 +642,9 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
                 isTaughtByMe={isClassTaughtByMe(classItem)}
                 isEnrolled={isClassEnrolledByMe(classItem)}
                 isAlbanian={isAlbanian}
+                canManage={canManageClass}
+                onEdit={handleOpenEdit}
+                onDelete={(cls) => setClassToDelete(cls)}
               />
             ))
           ) : (
@@ -688,6 +844,259 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: Edit Course ── */}
+      <AnimatePresence>
+        {editingClass && (
+          <div className="modal-overlay" onClick={() => setEditingClass(null)}>
+            <motion.div 
+              className="modal-content"
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h3>{isAlbanian ? 'Ndrysho Detajet e Kursit' : 'Edit Course Details'}</h3>
+                <p className="modal-subtitle">
+                  {isAlbanian 
+                    ? 'Modifikoni emrin e kursit, mësimdhënësin kryesor, orarin dhe sallën.' 
+                    : 'Modify course name, lead instructor, schedule, room, and attributes.'}
+                </p>
+                <button type="button" className="icon-btn-close" onClick={() => setEditingClass(null)} aria-label="Close">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEditClass} className="modal-form">
+                {editFormError && (
+                  <div style={{
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '10px',
+                    background: 'hsla(var(--destructive), 0.15)',
+                    border: '1px solid hsla(var(--destructive), 0.35)',
+                    color: 'hsl(var(--destructive))',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    marginBottom: '0.5rem'
+                  }}>
+                    {editFormError}
+                  </div>
+                )}
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>
+                      {isAlbanian ? 'Titulli i Kursit' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder={isAlbanian ? 'p.sh. Kimi Organike II' : 'e.g. Organic Chemistry II'}
+                      value={editForm.name}
+                      onChange={(e) => { setEditForm({ ...editForm, name: e.target.value }); if (editFormError) setEditFormError(''); }}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>
+                      {isAlbanian ? 'Kodi i Kursit' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="e.g. CHEM-302, MATH-101"
+                      value={editForm.code}
+                      onChange={(e) => { setEditForm({ ...editForm, code: e.target.value }); if (editFormError) setEditFormError(''); }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>
+                      {isAlbanian ? 'Mësimdhënësi Udhëheqës' : 'Lead Instructor'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                    </label>
+                    <select 
+                      value={editForm.teacher}
+                      onChange={(e) => setEditForm({ ...editForm, teacher: e.target.value })}
+                      className="custom-form-select"
+                    >
+                      {staffList.length > 0 ? (
+                        staffList.map(s => (
+                          <option key={s.id} value={s.name}>{s.name} ({s.department || s.roleName || 'Faculty'})</option>
+                        ))
+                      ) : (
+                        <option value={editForm.teacher || currentUser?.displayName || 'Lead Instructor'}>
+                          {editForm.teacher || currentUser?.displayName || 'Lead Instructor'}
+                        </option>
+                      )}
+                      {editForm.teacher && !staffList.some(s => s.name === editForm.teacher) && (
+                        <option value={editForm.teacher}>{editForm.teacher}</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="input-group">
+                    <label>
+                      {isAlbanian ? 'Departamenti' : 'Department'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                    </label>
+                    <select 
+                      value={editForm.department}
+                      onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                      className="custom-form-select"
+                    >
+                      <option value="Science">{isAlbanian ? 'Shkenca & Laboratore' : 'Science & Labs'}</option>
+                      <option value="Mathematics">{isAlbanian ? 'Matematikë' : 'Mathematics'}</option>
+                      <option value="Humanities">{isAlbanian ? 'Shkenca Shoqërore & Gjuhë' : 'Humanities & Languages'}</option>
+                      <option value="Technology">{isAlbanian ? 'Teknologji & Informatikë' : 'Technology & Computer Science'}</option>
+                      <option value="Arts">{isAlbanian ? 'Arte & Muzikë' : 'Fine Arts & Music'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Salla / Dhoma e Caktuar' : 'Assigned Room'}</label>
+                    <input 
+                      type="text" 
+                      placeholder={isAlbanian ? 'p.sh. Salla 104' : 'e.g. Chemistry Lab 3'}
+                      value={editForm.room}
+                      onChange={(e) => setEditForm({ ...editForm, room: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Orari & Dita' : 'Schedule & Time'}</label>
+                    <input 
+                      type="text" 
+                      placeholder={isAlbanian ? 'p.sh. E Martë, E Enjte 09:30' : 'e.g. Tue, Thu 09:30 AM'}
+                      value={editForm.schedule}
+                      onChange={(e) => setEditForm({ ...editForm, schedule: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Kredite të Kursit' : 'Course Credits'}</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      max="12"
+                      value={editForm.credits}
+                      onChange={(e) => setEditForm({ ...editForm, credits: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>{isAlbanian ? 'Ngjyra e Kartelës' : 'Card Color Accent'}</label>
+                    <div className="swatch-picker-row">
+                      {SWATCH_OPTIONS.map(swatch => (
+                        <button
+                          key={swatch.value}
+                          type="button"
+                          className={`swatch-btn ${editForm.color === swatch.value ? 'selected' : ''}`}
+                          style={{ backgroundColor: `hsl(var(${swatch.value}))` }}
+                          onClick={() => setEditForm({ ...editForm, color: swatch.value })}
+                          title={swatch.label}
+                        >
+                          {editForm.color === swatch.value && <Check size={14} color="#fff" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer-actions">
+                  <button type="button" className="btn-secondary" onClick={() => { setEditingClass(null); setEditFormError(''); }}>
+                    {isAlbanian ? 'Anulo' : 'Cancel'}
+                  </button>
+                  <button type="submit" className="btn-primary">
+                    {isAlbanian ? 'Ruaj Ndryshimet' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: Delete Course Confirmation ── */}
+      <AnimatePresence>
+        {classToDelete && (
+          <div className="modal-overlay" onClick={() => !isDeleting && setClassToDelete(null)}>
+            <motion.div 
+              className="modal-content delete-class-modal"
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'hsl(var(--destructive))' }}>
+                  <AlertTriangle size={20} />
+                  {isAlbanian ? 'Fshij Lëndën' : 'Delete Course'}
+                </h3>
+                <p className="modal-subtitle">
+                  {isAlbanian ? 'Konfirmoni heqjen e këtij kursi nga kurrikula shkollore.' : 'Confirm removal of this course from the school curriculum.'}
+                </p>
+                <button type="button" className="icon-btn-close" onClick={() => !isDeleting && setClassToDelete(null)} aria-label="Close">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="modal-form" style={{ gap: '1rem', display: 'flex', flexDirection: 'column' }}>
+                <div className="delete-warning-banner">
+                  <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong>{isAlbanian ? 'Kujdes: Veprim i Pakthyeshëm' : 'Warning: Permanent Action'}</strong>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.84rem' }}>
+                      {isAlbanian 
+                        ? 'Kjo lëndë do të fshihet përgjithmonë nga baza e të dhënave, oraret e mësimdhënësve dhe listat e nxënësve.'
+                        : 'This course will be permanently removed from the database, faculty timetables, and student enrollment records.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="delete-class-course-preview">
+                  <div className="class-icon" style={{ backgroundColor: `hsla(var(${classToDelete.color || '--primary'}), 0.2)`, color: `hsl(var(${classToDelete.color || '--primary'}))` }}>
+                    <Book size={20} />
+                  </div>
+                  <div>
+                    <strong>{classToDelete.name}</strong>
+                    <span>{classToDelete.code} • {classToDelete.teacher} ({classToDelete.room || 'Room 101'})</span>
+                  </div>
+                </div>
+
+                <div className="modal-footer-actions">
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    onClick={() => setClassToDelete(null)}
+                    disabled={isDeleting}
+                  >
+                    {isAlbanian ? 'Anulo' : 'Cancel'}
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn-destructive" 
+                    onClick={handleConfirmDelete}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 size={16} />
+                    {isDeleting 
+                      ? (isAlbanian ? 'Duke fshirë...' : 'Deleting...') 
+                      : (isAlbanian ? 'Po, Fshij Lëndën' : 'Yes, Delete Course')}
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

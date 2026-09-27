@@ -153,9 +153,10 @@
 
 .main-content:has(.full-messages-view),
 .main-content:has(.messages-page) {
-  padding: 1rem 1.5rem !important;
+  padding: 1.25rem 1.5rem !important;
   height: 100vh !important;
   max-height: 100vh !important;
+  box-sizing: border-box !important;
   overflow: hidden !important;
 }
 

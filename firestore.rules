@@ -88,7 +88,7 @@ service cloud.firestore {
     match /schools/{schoolId} {
       allow read: if (isSignedIn() && resource.data.creatorUid == request.auth.uid) || isSchoolMember(schoolId) || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)/schoolLinks/$(schoolId)));
       allow create: if isSignedIn();
-      allow update: if isSchoolAdmin(schoolId);
+      allow update: if isSchoolTeacherOrAdmin(schoolId);
       allow delete: if false;
 
       // Roles
@@ -188,11 +188,11 @@ service cloud.firestore {
       // School curriculum mappings
       match /subjectMappings/{mappingId} {
         allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolAdmin(schoolId);
+        allow write: if isSchoolTeacherOrAdmin(schoolId);
       }
       match /stageMappings/{mappingId} {
         allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolAdmin(schoolId);
+        allow write: if isSchoolTeacherOrAdmin(schoolId);
       }
 
       // Resources

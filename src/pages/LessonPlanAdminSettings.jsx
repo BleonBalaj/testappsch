@@ -1,7 +1,10 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { BookOpen, Layers3, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { CURRICULAR_AREAS, parseClassLabel } from '../features/lessonPlans';
 import { translateCatalogValue } from '../features/lessonPlans/i18n';
+import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { useAuth } from '../context/AuthContext';
 import './LessonPlanAdminSettings.css';
 
 const copy = {
@@ -174,6 +177,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
   const t = (key, values) => textFor(language, key, values);
   const idPrefix = useId();
   const deleteTrigger = useRef(null);
+  const { activeSchoolId } = useAuth();
   const [subjects, setSubjects] = useState(() => repository.listSubjectMappings());
   const [stages, setStages] = useState(() => repository.listStageMappings());
   const [subjectDraft, setSubjectDraft] = useState(EMPTY_SUBJECT);
@@ -183,6 +187,36 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
   const [subjectError, setSubjectError] = useState('');
   const [stageError, setStageError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  // Real-time synchronization of curriculum mappings from Firestore
+  useEffect(() => {
+    if (!activeSchoolId) return;
+
+    const subCol = collection(db, 'schools', activeSchoolId, 'subjectMappings');
+    const unsubSub = onSnapshot(subCol, (snap) => {
+      snap.forEach(docSnap => {
+        try {
+          repository.saveSubjectMapping({ id: docSnap.id, ...docSnap.data() }, { isAdmin: true });
+        } catch {}
+      });
+      setSubjects(repository.listSubjectMappings());
+    }, (err) => console.warn('Subject mappings cloud sync notice:', err.message));
+
+    const stageCol = collection(db, 'schools', activeSchoolId, 'stageMappings');
+    const unsubStage = onSnapshot(stageCol, (snap) => {
+      snap.forEach(docSnap => {
+        try {
+          repository.saveStageMapping({ id: docSnap.id, ...docSnap.data() }, { isAdmin: true });
+        } catch {}
+      });
+      setStages(repository.listStageMappings());
+    }, (err) => console.warn('Stage mappings cloud sync notice:', err.message));
+
+    return () => {
+      unsubSub();
+      unsubStage();
+    };
+  }, [activeSchoolId, repository]);
 
   const closeConfirmation = () => {
     setConfirmDelete(null);
@@ -240,7 +274,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
       if (duplicate) throw validationError(t('duplicateSubject'));
       const targets = targetList(subjectDraft.targets, subjectDraft.scope, t);
       const previous = subjects.find((record) => record.id === editingSubjectId);
-      repository.saveSubjectMapping({
+      const saved = repository.saveSubjectMapping({
         ...(previous ?? {}),
         name,
         area: subjectDraft.area,
@@ -250,6 +284,9 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
         active: subjectDraft.active,
         validated: true,
       }, { isAdmin: true });
+      if (activeSchoolId && saved?.id) {
+        setDoc(doc(db, 'schools', activeSchoolId, 'subjectMappings', String(saved.id)), saved, { merge: true }).catch(() => {});
+      }
       const wasEditing = Boolean(editingSubjectId);
       resetSubject();
       refresh();
@@ -275,7 +312,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
       ));
       if (duplicate) throw validationError(t('duplicateStage'));
       const previous = stages.find((record) => record.id === editingStageId);
-      repository.saveStageMapping({
+      const saved = repository.saveStageMapping({
         ...(previous ?? {}),
         grade: stageDraft.scope === 'grade' ? parsed.gradeLabel : undefined,
         classLabel: stageDraft.scope === 'class' ? parsed.classLabel : '',
@@ -283,6 +320,9 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
         stage,
         validated: true,
       }, { isAdmin: true });
+      if (activeSchoolId && saved?.id) {
+        setDoc(doc(db, 'schools', activeSchoolId, 'stageMappings', String(saved.id)), saved, { merge: true }).catch(() => {});
+      }
       const wasEditing = Boolean(editingStageId);
       resetStage();
       refresh();
@@ -295,6 +335,9 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
   const removeSubject = (record) => {
     try {
       repository.deleteSubjectMapping(record.id, { isAdmin: true });
+      if (activeSchoolId && record?.id) {
+        deleteDoc(doc(db, 'schools', activeSchoolId, 'subjectMappings', String(record.id))).catch(() => {});
+      }
       if (editingSubjectId === record.id) resetSubject();
       refresh();
       notify?.(t('subjectRemoved'));
@@ -306,6 +349,9 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
   const removeStage = (record) => {
     try {
       repository.deleteStageMapping(record.id, { isAdmin: true });
+      if (activeSchoolId && record?.id) {
+        deleteDoc(doc(db, 'schools', activeSchoolId, 'stageMappings', String(record.id))).catch(() => {});
+      }
       if (editingStageId === record.id) resetStage();
       refresh();
       notify?.(t('stageRemoved'));
