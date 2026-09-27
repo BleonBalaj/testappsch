@@ -501,90 +501,6 @@
   margin: 0;
 }
 
-.lesson-ai-key-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.5rem 0.9rem;
-  border-radius: 12px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: hsl(var(--muted-foreground));
-  background: hsla(var(--background), 0.5);
-  border: 1px solid hsl(var(--border));
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.lesson-ai-key-toggle-btn:hover {
-  color: hsl(var(--primary));
-  border-color: hsla(var(--primary), 0.4);
-  background: hsla(var(--primary), 0.08);
-}
-
-[data-theme='light'] .lesson-ai-key-toggle-btn {
-  background: #f4f0fa;
-  border-color: hsla(270, 20%, 85%, 1);
-}
-
-.lesson-ai-key-drawer {
-  margin-top: 1rem;
-  padding: 1.1rem 1.25rem;
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-[data-theme='light'] .lesson-ai-key-drawer {
-  background: #f7f4fb;
-  border-color: hsla(270, 20%, 85%, 1);
-}
-
-.lesson-ai-key-drawer-header strong {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: hsl(var(--foreground));
-}
-
-.lesson-ai-key-drawer-header p {
-  font-size: 0.8rem;
-  color: hsl(var(--muted-foreground));
-  margin-top: 0.25rem;
-}
-
-.lesson-ai-key-drawer-header a {
-  color: hsl(var(--primary));
-  text-decoration: underline;
-  font-weight: 600;
-}
-
-.lesson-ai-key-row {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-}
-
-.lesson-ai-key-row input {
-  flex: 1;
-  min-width: 0;
-  height: 42px;
-  padding: 0 0.85rem;
-  font-size: 0.85rem;
-  border-radius: 12px;
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--input));
-  color: hsl(var(--foreground));
-}
-
-[data-theme='light'] .lesson-ai-key-row input {
-  background: #ffffff;
-  border-color: hsla(270, 25%, 75%, 1);
-}
-
 .lesson-ai-period-bar {
   margin-top: 1.15rem;
   padding: 0.95rem 1.15rem;
@@ -618,78 +534,32 @@
   color: hsl(var(--foreground));
 }
 
-.lesson-ai-period-badge {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: hsl(var(--primary));
-  background: hsla(var(--primary), 0.1);
-  border: 1px solid hsla(var(--primary), 0.25);
-  padding: 0.22rem 0.65rem;
-  border-radius: 999px;
-}
-
-.lesson-ai-period-buttons {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.55rem;
-}
-
-@media (max-width: 650px) {
-  .lesson-ai-period-buttons {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.lesson-ai-pbtn {
+.lesson-ai-period-input-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.18rem;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.lesson-ai-period-input-row input {
+  width: 6rem;
+  min-width: 0;
   padding: 0.55rem 0.65rem;
   border-radius: 12px;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  text-align: center;
+  color: hsl(var(--foreground));
+  font: inherit;
 }
 
-[data-theme='light'] .lesson-ai-pbtn {
+[data-theme='light'] .lesson-ai-period-input-row input {
   background: #ffffff;
   border-color: hsla(270, 20%, 85%, 1);
 }
 
-.lesson-ai-pbtn strong {
-  font-size: 0.85rem;
-  color: hsl(var(--foreground));
-}
-
-.lesson-ai-pbtn span {
-  font-size: 0.72rem;
+.lesson-ai-period-input-row span {
+  font-size: 0.78rem;
   color: hsl(var(--muted-foreground));
-  white-space: nowrap;
-}
-
-.lesson-ai-pbtn:hover {
-  border-color: hsla(var(--primary), 0.4);
-  transform: translateY(-2px);
-}
-
-.lesson-ai-pbtn.active {
-  background: linear-gradient(135deg, hsla(var(--primary), 0.16), hsla(var(--accent), 0.16));
-  border-color: hsl(var(--primary));
-  box-shadow: 0 4px 14px hsla(var(--primary), 0.2);
-}
-
-.lesson-ai-pbtn.active strong {
-  color: hsl(var(--primary));
-}
-
-.lesson-ai-pbtn.active span {
-  color: hsl(var(--foreground));
-  font-weight: 600;
 }
 
 .lesson-ai-notice-box {
@@ -841,6 +711,21 @@
   margin: 0;
   flex: 1 1 280px;
   font-weight: 500;
+}
+
+.lesson-ai-quota-note {
+  display: block;
+  margin-top: 0.4rem;
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.lesson-ai-undo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  white-space: nowrap;
 }
 
 .lesson-ai-generate-btn:disabled {

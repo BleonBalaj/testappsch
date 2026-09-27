@@ -12,9 +12,10 @@ import {
   createPlan, dateInTimeZone, duplicatePlan, getDateRange, getSubjectArea, listSubjects, stageForClass,
 } from '../features/lessonPlans/index.js';
 import { translate, translateCatalogValue } from '../features/lessonPlans/i18n';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { compressImageFile } from '../services/imageUtils';
+import { createLessonCloudAutosave } from '../features/lessonPlans/cloudAutosave';
 import LessonPlanDocument from './LessonPlanDocument';
 import LessonPlanAdminSettings from './LessonPlanAdminSettings';
 import LessonAiAssistanceCard from '../components/LessonAiAssistanceCard';
@@ -190,7 +191,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     };
     try {
       repository.savePreferences(merged);
-    } catch {}
+    } catch (error) { console.warn('Could not cache lesson preferences:', error); }
     setPreferences(merged);
     setSettingsDraft(prev => ({
       ...prev,
@@ -221,6 +222,9 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     }
   };
   const activePlanRef = useRef(null);
+  const activeSchoolIdRef = useRef(activeSchoolId);
+  activeSchoolIdRef.current = activeSchoolId;
+  const cloudReadyRef = useRef(false);
   const scheduledStartRef = useRef(null);
   const [saveState, setSaveState] = useState('saved');
   const [message, setMessage] = useState('');
@@ -239,36 +243,56 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [templateName, setTemplateName] = useState('');
   const [pendingTopic, setPendingTopic] = useState(null);
 
-  const savePlanToCloud = useCallback(async (plan) => {
-    if (!activeSchoolId || !plan?.id) return;
-    try {
-      const planDocRef = doc(db, 'schools', activeSchoolId, 'lessonPlans', String(plan.id));
-      await setDoc(planDocRef, {
-        ...plan,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    } catch (err) {
-      console.warn('Notice saving plan to Firestore:', err.message);
-    }
-  }, [activeSchoolId]);
+  const autosaveRef = useRef(null);
+  if (!autosaveRef.current) {
+    autosaveRef.current = createLessonCloudAutosave({
+      write: (plan, schoolId) => setDoc(doc(db, 'schools', schoolId, 'lessonPlans', String(plan.id)), plan),
+      onStatus: (planId, schoolId, status, error) => {
+        if (error) console.warn('Lesson plan cloud save failed:', error);
+        if (activeSchoolIdRef.current === schoolId && activePlanRef.current?.id === planId) setSaveState(status);
+      }
+    });
+  }
 
   // Real-time Cloud Sync with Firestore
   useEffect(() => {
     if (!activeSchoolId) return;
+    cloudReadyRef.current = false;
 
     // 1. Sync Lesson Plans from Firestore
     const plansCol = collection(db, 'schools', activeSchoolId, 'lessonPlans');
+    let initialSnapshot = true;
     const unsubPlans = onSnapshot(plansCol, (snapshot) => {
       let hasChanges = false;
-      snapshot.forEach(docSnap => {
+      snapshot.docChanges().forEach(({ type, doc: docSnap }) => {
+        if (type === 'removed') return;
         const cloudPlan = { id: docSnap.id, ...docSnap.data() };
         try {
-          repository.savePlan(cloudPlan);
-          hasChanges = true;
+          if (repository.mergeCloudPlan(cloudPlan)) {
+            hasChanges = true;
+            if (activePlanRef.current?.id === cloudPlan.id && !autosaveRef.current.hasUnconfirmed(activeSchoolId, cloudPlan.id)) {
+              activePlanRef.current = cloudPlan;
+              setActivePlan(cloudPlan);
+            }
+          }
         } catch (e) {
           console.warn('Could not sync cloud plan locally:', e.message);
         }
       });
+      if (initialSnapshot && !snapshot.metadata.fromCache) {
+        initialSnapshot = false;
+        cloudReadyRef.current = true;
+        const cloudById = new Map(snapshot.docs.map((entry) => [entry.id, entry.data()]));
+        for (const localPlan of repository.listPlans()) {
+          const cloudPlan = cloudById.get(String(localPlan.id));
+          if ((!cloudPlan || String(localPlan.updatedAt ?? '') > String(cloudPlan.updatedAt ?? ''))
+            && !autosaveRef.current.hasUnconfirmed(activeSchoolId, localPlan.id)) {
+            autosaveRef.current.enqueue(localPlan, activeSchoolId, true);
+          }
+        }
+        const current = activePlanRef.current;
+        if (current && !autosaveRef.current.hasUnconfirmed(activeSchoolId, current.id)) setSaveState('saved');
+      }
       if (hasChanges || snapshot.empty) {
         setPlans(repository.listPlans());
       }
@@ -280,7 +304,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       snapshot.forEach(docSnap => {
         try {
           repository.saveTemplate({ id: docSnap.id, ...docSnap.data() });
-        } catch (e) {}
+        } catch (error) { console.warn('Could not cache template:', error); }
       });
       setTemplates(repository.listTemplates());
     }, (err) => console.warn('Templates cloud sync notice:', err.message));
@@ -291,7 +315,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       snapshot.forEach(docSnap => {
         try {
           repository.saveTopic({ id: docSnap.id, ...docSnap.data() });
-        } catch (e) {}
+        } catch (error) { console.warn('Could not cache topic:', error); }
       });
       setTopics(repository.listTopics());
     }, (err) => console.warn('Topics cloud sync notice:', err.message));
@@ -302,7 +326,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       snapshot.forEach(docSnap => {
         try {
           repository.saveReusableEntry({ id: docSnap.id, ...docSnap.data() });
-        } catch (e) {}
+        } catch (error) { console.warn('Could not cache reusable entry:', error); }
       });
       setReusable(repository.listReusableEntries());
     }, (err) => console.warn('Reusable entries cloud sync notice:', err.message));
@@ -323,29 +347,24 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     setSchoolSubjects(repository.listSubjectMappings());
   }, [repository]);
 
-  useEffect(() => { activePlanRef.current = activePlan; }, [activePlan]);
+  const previousRepositoryRef = useRef(repository);
   useEffect(() => {
-    if (!activePlan || view !== 'editor') return;
-    const timeout = setTimeout(() => {
-      setSaveState('saving');
-      try {
-        repository.savePlan(activePlan);
-        savePlanToCloud(activePlan);
-        if (preferences.rememberLastUsed) {
-          repository.savePreferences({ lastUsedClass: activePlan.classLabel, lastUsedSubject: activePlan.subject });
-          setPreferences((current) => ({ ...current, lastUsedClass: activePlan.classLabel, lastUsedSubject: activePlan.subject }));
-        }
-        setSaveState('saved'); refresh();
-      }
-      catch { setSaveState('error'); }
-    }, 550);
-    return () => clearTimeout(timeout);
-  }, [activePlan, preferences.rememberLastUsed, repository, refresh, view, savePlanToCloud]);
+    if (previousRepositoryRef.current === repository) return;
+    autosaveRef.current.flush();
+    previousRepositoryRef.current = repository;
+    activePlanRef.current = null;
+    setActivePlan(null);
+    setSaveState('saving');
+    setView('plans');
+    refresh();
+  }, [repository, refresh]);
+
   useEffect(() => {
-    const flush = () => { if (activePlanRef.current) { try { repository.savePlan(activePlanRef.current); } catch { /* Visible save error remains in the editor. */ } } };
+    const flush = () => autosaveRef.current.flush();
     window.addEventListener('pagehide', flush);
-    return () => { window.removeEventListener('pagehide', flush); flush(); };
-  }, [repository]);
+    window.addEventListener('online', flush);
+    return () => { window.removeEventListener('pagehide', flush); window.removeEventListener('online', flush); flush(); };
+  }, []);
 
   useEffect(() => {
     if (!printTarget) return;
@@ -358,27 +377,26 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   }, [printTarget, documentLanguage]);
 
   const notify = (value) => { setMessage(value); window.setTimeout(() => setMessage(''), 4000); };
-  const saveNow = () => {
+  const updatePlan = (change, { immediate = false } = {}) => {
     const current = activePlanRef.current;
     if (!current) return;
+    const next = typeof change === 'function' ? change(current) : { ...current, ...change };
+    activePlanRef.current = next;
+    setActivePlan(next);
     try {
-      const saved = repository.savePlan(current);
-      savePlanToCloud(saved);
+      const saved = repository.savePlan(next);
+      activePlanRef.current = saved;
+      setActivePlan(saved);
+      setPlans(repository.listPlans());
       if (preferences.rememberLastUsed) {
-        repository.savePreferences({ lastUsedClass: current.classLabel, lastUsedSubject: current.subject });
-        setPreferences((previous) => ({ ...previous, lastUsedClass: current.classLabel, lastUsedSubject: current.subject }));
+        repository.savePreferences({ lastUsedClass: saved.classLabel, lastUsedSubject: saved.subject });
+        setPreferences((previous) => ({ ...previous, lastUsedClass: saved.classLabel, lastUsedSubject: saved.subject }));
       }
-      setSaveState('saved'); refresh(); return saved;
+      if (!autosaveRef.current.enqueue(saved, activeSchoolId, immediate)) setSaveState('error');
+    } catch (error) {
+      console.warn('Lesson plan local save failed:', error);
+      setSaveState('error');
     }
-    catch { setSaveState('error'); return null; }
-  };
-  const updatePlan = (change) => {
-    setSaveState('unsaved');
-    setActivePlan((current) => {
-      const next = typeof change === 'function' ? change(current) : { ...current, ...change };
-      activePlanRef.current = next;
-      return next;
-    });
   };
   const startPlan = (template = null) => {
     try {
@@ -386,8 +404,8 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
         ? duplicatePlan(template.plan || template, { date: todayLocal(), teacherId })
         : createPlan({ preferences, schoolData: { subjectMappings: schoolSubjects, stageMappings: repository.listStageMappings(), teacherName: currentUser.name }, teacherId, now: new Date() });
       const saved = repository.savePlan(plan);
-      savePlanToCloud(saved);
-      activePlanRef.current = saved; setActivePlan(saved); setSaveState('saved'); refresh(); setMobilePane('editor'); setView('editor');
+      activePlanRef.current = saved; setActivePlan(saved); refresh(); setMobilePane('editor'); setView('editor');
+      if (!autosaveRef.current.enqueue(saved, activeSchoolId, true)) setSaveState('error');
     } catch { notify(t('validation.saveFailed')); }
   };
   useEffect(() => {
@@ -400,16 +418,16 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       try {
         const plan = createPlan({ preferences, schoolData: { subjectMappings: schoolSubjects, stageMappings: repository.listStageMappings(), teacherName: currentUser.name }, scheduledLesson, teacherId, now: new Date() });
         const saved = repository.savePlan(plan);
-        savePlanToCloud(saved);
         activePlanRef.current = saved;
-        setActivePlan(saved); setSaveState('saved'); refresh(); setMobilePane('editor'); setView('editor');
+        setActivePlan(saved); refresh(); setMobilePane('editor'); setView('editor');
+        if (!autosaveRef.current.enqueue(saved, activeSchoolId, true)) setSaveState('error');
       } catch { setMessage(translate(language, 'validation.saveFailed')); }
       onScheduledLessonConsumed?.();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [scheduledLesson, preferences, schoolSubjects, repository, teacherId, currentUser.name, language, refresh, onScheduledLessonConsumed, savePlanToCloud]);
-  const openPlan = (plan, pane = 'editor') => { activePlanRef.current = plan; setActivePlan(plan); setSaveState('saved'); setMobilePane(pane); setView('editor'); };
-  const leaveEditor = () => { if (!saveNow()) return; setView('plans'); setActivePlan(null); activePlanRef.current = null; };
+  }, [scheduledLesson, preferences, schoolSubjects, repository, teacherId, currentUser.name, language, refresh, onScheduledLessonConsumed, activeSchoolId]);
+  const openPlan = (plan, pane = 'editor') => { activePlanRef.current = plan; setActivePlan(plan); setSaveState(autosaveRef.current.getStatus(activeSchoolId, plan.id) || (cloudReadyRef.current ? 'saved' : 'saving')); setMobilePane(pane); setView('editor'); };
+  const leaveEditor = () => { autosaveRef.current.flush(activeSchoolId, activePlanRef.current?.id); setView('plans'); setActivePlan(null); activePlanRef.current = null; };
   const changeSubject = (subject) => updatePlan((current) => changePlanSubject(current, subject, { schoolSubjects }));
   const changeClass = (classLabel) => updatePlan((current) => changePlanClass(current, classLabel, { schoolSubjects, schoolStages: repository.listStageMappings() }));
   const updateArray = (key, values) => updatePlan({ [key]: values });
@@ -424,15 +442,12 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const duplicate = (plan) => {
     const copy = duplicatePlan(plan, { date: todayLocal(), teacherId });
     const saved = repository.savePlan(copy);
-    savePlanToCloud(saved);
     refresh(); openPlan(saved); notify(t('notice.duplicateCreated'));
+    if (!autosaveRef.current.enqueue(saved, activeSchoolId, true)) setSaveState('error');
   };
   const changeStatus = (plan, status) => {
-    if (status === 'archived') repository.archivePlan(plan.id);
-    else repository.restorePlan(plan.id);
-    if (activeSchoolId && plan.id) {
-      updateDoc(doc(db, 'schools', activeSchoolId, 'lessonPlans', String(plan.id)), { status }).catch(() => {});
-    }
+    const saved = status === 'archived' ? repository.archivePlan(plan.id) : repository.restorePlan(plan.id);
+    if (saved) autosaveRef.current.enqueue(saved, activeSchoolId, true);
     refresh(); notify(t(status === 'archived' ? 'notice.archived' : 'notice.restored'));
   };
   const makeTemplate = (plan) => { setTemplateSource(plan); setTemplateName(plan.lessonUnit || ct(plan.subject) || t('templates.newName')); };
@@ -448,7 +463,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     } catch { notify(t('validation.saveFailed')); }
   };
   const printPlan = (plan) => {
-    if (activePlanRef.current && !saveNow()) return;
+    autosaveRef.current.flush(activeSchoolId, activePlanRef.current?.id);
     setPrintTarget({ plan: plan || activePlanRef.current });
   };
 
@@ -700,7 +715,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     {view === 'editor' && activePlan && <>
       <div className="lesson-editor-toolbar glass">
         <div className="lesson-editor-toolbar-left"><button type="button" className="lesson-icon-button" onClick={leaveEditor} aria-label={t('editor.backAria')}><ArrowLeft size={20} /></button><div><h1>{activePlan.lessonUnit || t('editor.newPlanTitle')}</h1><span className={`lesson-save-state lesson-save-${saveState}`}>{t(`save.${saveState}`)}</span></div></div>
-        <div className="lesson-editor-toolbar-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={saveNow}><Save size={16} /> {t('editor.save')}</button><button type="button" className="btn-secondary" onClick={() => { if (!saveNow()) return; setMobilePane('preview'); document.getElementById('lesson-preview')?.scrollIntoView({ block: 'nearest' }); }}><FileText size={16} /> {t('editor.preview')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)}><Printer size={16} /> {t('editor.print')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)} title={t('editor.pdfTitle')}><Download size={16} /> {t('editor.pdf')}</button></div>
+        <div className="lesson-editor-toolbar-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={() => { autosaveRef.current.flush(activeSchoolId, activePlanRef.current?.id); setMobilePane('preview'); document.getElementById('lesson-preview')?.scrollIntoView({ block: 'nearest' }); }}><FileText size={16} /> {t('editor.preview')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)}><Printer size={16} /> {t('editor.print')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)} title={t('editor.pdfTitle')}><Download size={16} /> {t('editor.pdf')}</button></div>
       </div>
       <div className="lesson-editor-subbar"><div><span className={`lesson-status lesson-status-${activePlan.status}`}>{t(`status.${activePlan.status}`)}</span><span>{dateLabel(activePlan.date, language)} · {activePlan.classLabel || t('editor.noClass')}</span></div><div>
         <button type="button" onClick={() => makeTemplate(activePlan)}><LayoutTemplate size={15} /> {t('editor.saveAsTemplate')}</button>
@@ -713,7 +728,8 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           <LessonAiAssistanceCard
             activePlan={activePlan}
             updatePlan={updatePlan}
-            saveNow={saveNow}
+            schoolId={activeSchoolId}
+            accountId={effectiveUid}
             language={language}
             notify={notify}
           />

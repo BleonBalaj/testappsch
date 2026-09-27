@@ -13,6 +13,7 @@ import {
   persistentMultipleTabManager 
 } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,6 +25,7 @@ const firebaseConfig = {
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const functions = getFunctions(app, 'us-central1');
 
 // Initialize Auth with persistent local session
 const auth = getAuth(app);
@@ -57,10 +59,12 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
   const authPort = Number(import.meta.env.VITE_AUTH_EMULATOR_PORT) || 9099;
   const firestorePort = Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT) || 8080;
   const storagePort = Number(import.meta.env.VITE_STORAGE_EMULATOR_PORT) || 9199;
+  const functionsPort = Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT) || 5002;
 
   try {
     connectAuthEmulator(auth, `http://${host}:${authPort}`, { disableWarnings: true });
     connectFirestoreEmulator(db, host, firestorePort);
+    connectFunctionsEmulator(functions, host, functionsPort);
     if (storage) {
       connectStorageEmulator(storage, host, storagePort);
     }
@@ -70,4 +74,4 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
   }
 }
 
-export { app, auth, db, storage, firebaseConfig };
+export { app, auth, db, storage, functions, firebaseConfig };

@@ -242,6 +242,10 @@
   padding: 0; /* Remove container padding so wrap touches edges */
 }
 
+.sidebar.collapsed .logo-text-group {
+  display: none;
+}
+
 .sidebar.collapsed .sidebar-header {
   padding: 1.25rem 0.5rem;
   margin-bottom: 1.25rem;
@@ -280,6 +284,7 @@
   }
 
   .sidebar .logo-text,
+  .sidebar .logo-text-group,
   .sidebar .collapse-btn,
   .sidebar .label,
   .sidebar .user-info {

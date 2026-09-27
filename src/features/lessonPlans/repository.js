@@ -1,4 +1,4 @@
-// Browser-local persistence only. No server identity, cross-device sync, or security boundary exists in this app.
+// Browser-local copy of lesson data; Firestore synchronization is handled by the page.
 export const LESSON_PLAN_STORAGE_VERSION = 1;
 export const DEFAULT_PREFERENCES = Object.freeze({
   defaultClass: '',
@@ -111,6 +111,19 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
       if (plan?.teacherId && String(plan.teacherId) !== teacher) throw new Error('Cannot save another teacher’s plan');
       if (!['draft', 'completed', 'archived'].includes(plan?.status)) throw new TypeError('Plan status must be draft, completed, or archived');
       return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'plans', plan, { teacherId: teacher }, stamp);
+    },
+    mergeCloudPlan(plan) {
+      if (!plan?.id || !['draft', 'completed', 'archived'].includes(plan.status)) return false;
+      if (plan.teacherId && String(plan.teacherId) !== teacher) return false;
+      const data = readPersonal(true).data;
+      const index = data.plans.findIndex((entry) => entry.id === plan.id);
+      const local = index >= 0 ? data.plans[index] : null;
+      if (local && String(local.updatedAt ?? '') >= String(plan.updatedAt ?? '')) return false;
+      const merged = { ...copy(plan), teacherId: teacher };
+      if (index >= 0) data.plans[index] = merged;
+      else data.plans.push(merged);
+      writeEnvelope(store, personalKey, data);
+      return true;
     },
     deletePlan(planId) { return removeFromCollection(store, personalKey, initialPersonal, personalCollections, 'plans', planId); },
     setPlanStatus(planId, status) {

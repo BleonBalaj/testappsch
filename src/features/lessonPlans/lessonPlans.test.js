@@ -16,10 +16,22 @@ const memoryStorage = () => {
 };
 const now = '2026-09-26T12:00:00Z';
 
+test('cloud merge preserves remote timestamp and cannot replace a newer local edit', () => {
+  const repository = createLessonPlanRepository('teacher@example.com', { storage: memoryStorage(), schoolId: 'school', now: () => new Date(now) });
+  const local = repository.savePlan({ id: 'plan-1', teacherId: 'teacher@example.com', status: 'draft', topic: 'newer' });
+  assert.equal(repository.mergeCloudPlan({ ...local, topic: 'older', updatedAt: '2026-09-25T12:00:00.000Z' }), false);
+  assert.equal(repository.getPlan('plan-1').topic, 'newer');
+  assert.equal(repository.mergeCloudPlan({ ...local, topic: 'remote', updatedAt: '2026-09-27T12:00:00.000Z' }), true);
+  assert.equal(repository.getPlan('plan-1').topic, 'remote');
+  assert.equal(repository.getPlan('plan-1').updatedAt, '2026-09-27T12:00:00.000Z');
+});
+
 test('class labels separate grade and section and general stage mapping is correct', () => {
   assert.deepEqual(parseClassLabel('Klasa VI/2'), { grade: 6, gradeLabel: 'VI', section: '2', classLabel: 'VI/2' });
   assert.equal(parseClassLabel('10A').grade, 10);
   assert.equal(parseClassLabel('VII-1').section, '1');
+  assert.deepEqual([parseClassLabel('II-4')?.grade, parseClassLabel('II-4')?.section], [2, '4']);
+  assert.deepEqual([parseClassLabel('Klasa II–4')?.grade, parseClassLabel('Klasa II–4')?.section], [2, '4']);
   assert.equal(parseClassLabel('Përgatitore').grade, 0);
   assert.equal(parseClassLabel('XIII/2'), null);
   assert.equal(stageForClass('Përgatitore'), 'Shkalla I');

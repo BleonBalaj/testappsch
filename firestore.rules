@@ -46,6 +46,17 @@ service cloud.firestore {
       );
     }
 
+    // AI generation quota is written only by the server. Users may inspect
+    // their own usage, but cannot grant themselves more generations.
+    match /lessonAiUsage/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+      match /requests/{requestId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
     // ──────────────────────────────────────────────────────────
     // USERS COLLECTION & PRIVATE PREFERENCES
     // ──────────────────────────────────────────────────────────
