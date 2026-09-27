@@ -25,6 +25,25 @@ export const getRoleIcon = (iconName, size = 14) => {
   }
 };
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: 'easeOut' }
+  }
+};
+
 const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectProfile, onMessage, currentUser }) => {
   const badgeColor = roleInfo?.color || '270 35% 42%';
 
@@ -333,9 +352,14 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
   };
 
   return (
-    <div className="staff-page">
+    <motion.div 
+      className="staff-page"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <header className="page-header">
+      <motion.header className="page-header" variants={itemVariants}>
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -371,10 +395,10 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
             </div>
           )}
         </div>
-      </header>
+      </motion.header>
 
       {/* Role and Department Filters */}
-      <div className="staff-controls-container glass">
+      <motion.div className="staff-controls-container glass" variants={itemVariants}>
         {/* Search Input */}
         <div className="search-bar-wrap">
           <Search size={18} className="search-icon" />
@@ -438,7 +462,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Staff Grid */}
       {filteredStaff.length === 0 ? (
@@ -456,7 +480,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
           </button>
         </div>
       ) : (
-        <div className="staff-grid">
+        <motion.div className="staff-grid" variants={itemVariants}>
           <AnimatePresence>
             {filteredStaff.map(staff => {
               const roleInfo = rolesList.find(r => r.id === staff.roleId);
@@ -475,7 +499,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
               );
             })}
           </AnimatePresence>
-        </div>
+        </motion.div>
       )}
 
       {/* ── MODAL: Add Staff Member ── */}
@@ -1080,7 +1104,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };
 

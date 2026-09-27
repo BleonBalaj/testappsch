@@ -63,7 +63,8 @@ export const translations = {
     'common.all': 'All',
 
     // Dashboard
-    'dashboard.welcomeBack': 'Welcome back',
+    'dashboard.welcome': 'Welcome',
+    'dashboard.welcomeBack': 'Welcome',
     'dashboard.dailyVibe': 'Daily Vibe',
     'dashboard.todaysVibe': "Today's Vibe",
     'dashboard.great': 'Great',
@@ -284,6 +285,19 @@ export const translations = {
 
     // Extra Classes & Overview
     'classes.allClasses': 'All Classes',
+    'classes.myTeachingClasses': 'My Teaching Classes',
+    'classes.myClasses': 'My Classes',
+    'classes.exportSchedule': 'Export Schedule',
+    'classes.exportCsv': 'Export CSV',
+    'classes.showingClassesYouTeach': 'Showing classes you teach',
+    'classes.showingEnrolled': 'Showing courses you are enrolled in',
+    'classes.browsingFull': 'Browsing full school curriculum catalog',
+    'classes.enrolled': 'Enrolled',
+    'classes.openElective': 'Open Elective',
+    'classes.myClassBadge': 'My Class',
+    'classes.noCoursesFound': 'No courses found',
+    'classes.browseAll': 'Browse All Classes',
+    'classes.clearFilters': 'Clear Filters',
     'classes.enrollStudent': 'Enroll Student',
     'classes.progress': 'Progress',
     'classes.classAvg': 'Class Avg',
@@ -297,6 +311,11 @@ export const translations = {
     'classes.materials': 'Course Materials',
     'classes.addMaterial': 'Add Material',
     'classes.markAttendance': 'Mark Attendance',
+    'schedule.mySchedule': 'My Schedule',
+    'schedule.myTimetable': 'My Timetable',
+    'schedule.allCampus': 'All Campus',
+    'schedule.exportMaster': 'Export Master',
+    'schedule.exportTimetable': 'Export Timetable',
 
     // Extra Events
     'events.export': 'Export Events',
@@ -450,7 +469,8 @@ export const translations = {
     'common.all': 'Të gjitha',
 
     // Paneli Kryesor (Dashboard)
-    'dashboard.welcomeBack': 'Mirë se vini përsëri',
+    'dashboard.welcome': 'Mirë se vini',
+    'dashboard.welcomeBack': 'Mirë se vini',
     'dashboard.dailyVibe': 'Gjendja Ditore',
     'dashboard.todaysVibe': 'Gjendja e Sotme',
     'dashboard.great': 'Shkëlqyeshëm',
@@ -671,6 +691,19 @@ export const translations = {
 
     // Klasat dhe Përmbledhja Shtesë
     'classes.allClasses': 'Të Gjitha Klasat',
+    'classes.myTeachingClasses': 'Kurset e Mia Mësimdhënëse',
+    'classes.myClasses': 'Lëndët e Mia të Regjistruara',
+    'classes.exportSchedule': 'Eksporto Orarin',
+    'classes.exportCsv': 'Eksporto CSV',
+    'classes.showingClassesYouTeach': 'Po shfaqen kurset që ligjëroni ju',
+    'classes.showingEnrolled': 'Po shfaqen lëndët ku jeni të regjistruar',
+    'classes.browsingFull': 'Shfletoni katalogun e plotë kurrikular të shkollës',
+    'classes.enrolled': 'I Regjistruar',
+    'classes.openElective': 'Lëndë me Zgjedhje',
+    'classes.myClassBadge': 'Lënda Ime',
+    'classes.noCoursesFound': 'Nuk u gjet asnjë lëndë',
+    'classes.browseAll': 'Shfleto Të Gjitha Lëndët',
+    'classes.clearFilters': 'Pastro Filtrat',
     'classes.enrollStudent': 'Regjistro Nxënës',
     'classes.progress': 'Progresi',
     'classes.classAvg': 'Mesatarja e Klasës',
@@ -684,6 +717,11 @@ export const translations = {
     'classes.materials': 'Materialet e Kursit',
     'classes.addMaterial': 'Shto Material',
     'classes.markAttendance': 'Shëno Vijueshmërinë',
+    'schedule.mySchedule': 'Orari Im',
+    'schedule.myTimetable': 'Orari Im Mësimor',
+    'schedule.allCampus': 'I Gjithë Kampusi',
+    'schedule.exportMaster': 'Eksporto Orarin e Përgjithshëm',
+    'schedule.exportTimetable': 'Eksporto Orarin',
 
     // Ngjarjet Shtesë
     'events.export': 'Eksporto Ngjarjet',

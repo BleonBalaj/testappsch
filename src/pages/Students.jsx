@@ -11,6 +11,25 @@ import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import './Students.css';
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: 'easeOut' }
+  }
+};
+
 const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchive, isAdmin }) => {
   const isArchived = student.status === 'archived';
   const isUnassigned = !isArchived && (!student.assignedClasses || student.assignedClasses.length === 0);
@@ -266,8 +285,8 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   };
 
   return (
-    <div className="students-page">
-      <header className="page-header">
+    <motion.div className="students-page" variants={containerVariants} initial="hidden" animate="visible">
+      <motion.header className="page-header" variants={itemVariants}>
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -279,19 +298,19 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
           <p>{t('students.subtitle')}</p>
         </div>
         <div className="header-actions">
-          <button className="btn-secondary glass" onClick={handleExportStudents} title="Export Student Directory">
+          <button className="btn-secondary glass" onClick={handleExportStudents} title={isAlbanian ? "Eksporto Regjistrin e Nxënësve" : "Export Student Directory"}>
             <Download size={18} />
-            Export Roster
+            {isAlbanian ? 'Eksporto Regjistrin' : 'Export Roster'}
           </button>
           <button className="btn-primary" onClick={() => setIsAddStudentOpen(true)}>
             <UserPlus size={20} />
             {t('students.addStudent')}
           </button>
         </div>
-      </header>
+      </motion.header>
 
       {/* Status & Grade Filters & Search */}
-      <div className="students-controls-container glass">
+      <motion.div className="students-controls-container glass" variants={itemVariants}>
         {/* Search Bar */}
         <div className="search-bar-wrap">
           <Search size={18} className="search-icon" />
@@ -310,38 +329,38 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
         {/* Status Filter Bar */}
         <div className="status-filter-pills-row">
-          <span className="filter-label">Status:</span>
+          <span className="filter-label">{isAlbanian ? 'Statusi:' : 'Status:'}</span>
           <div className="status-pills">
             <button 
               className={`status-pill ${statusFilter === 'all' ? 'active' : ''}`}
               onClick={() => setStatusFilter('all')}
             >
-              All ({statusCounts.all})
+              {isAlbanian ? 'Të Gjithë' : 'All'} ({statusCounts.all})
             </button>
             <button 
               className={`status-pill active-status ${statusFilter === 'active' ? 'active' : ''}`}
               onClick={() => setStatusFilter('active')}
             >
-              Active ({statusCounts.active})
+              {isAlbanian ? 'Aktivë' : 'Active'} ({statusCounts.active})
             </button>
             <button 
               className={`status-pill archived-status ${statusFilter === 'archived' ? 'active' : ''}`}
               onClick={() => setStatusFilter('archived')}
             >
-              <Archive size={13} /> Archived ({statusCounts.archived})
+              <Archive size={13} /> {isAlbanian ? 'Të Arkivuar' : 'Archived'} ({statusCounts.archived})
             </button>
             <button 
               className={`status-pill unassigned-status ${statusFilter === 'unassigned' ? 'active' : ''}`}
               onClick={() => setStatusFilter('unassigned')}
             >
-              <AlertTriangle size={13} /> No Classes ({statusCounts.unassigned})
+              <AlertTriangle size={13} /> {isAlbanian ? 'Pa Lëndë' : 'No Classes'} ({statusCounts.unassigned})
             </button>
           </div>
         </div>
 
         {/* Grade Filter Bar */}
         <div className="grade-pills-row">
-          <span className="filter-label">Grade Filter:</span>
+          <span className="filter-label">{isAlbanian ? 'Filtro Klasën:' : 'Grade Filter:'}</span>
           <div className="grade-pills">
             {grades.map(grade => (
               <button 
@@ -349,25 +368,25 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                 className={`grade-pill ${selectedGrade === grade ? 'active' : ''}`}
                 onClick={() => setSelectedGrade(grade)}
               >
-                {grade === 'all' ? `All Grades` : `Grade ${grade}`}
+                {grade === 'all' ? (isAlbanian ? 'Të Gjitha Klasat' : 'All Grades') : (isAlbanian ? `Klasa ${grade}` : `Grade ${grade}`)}
               </button>
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      <motion.div className="students-grid" layout>
+      <motion.div className="students-grid" layout variants={itemVariants}>
         <AnimatePresence>
           {filteredStudents.length === 0 ? (
             <div className="students-empty-state glass">
               <AlertCircle size={32} />
-              <h3>No Students Match Filters</h3>
-              <p>Try clearing your search query, or switch status filter to All.</p>
+              <h3>{isAlbanian ? 'Asnjë Nxënës Nuk Përputhet' : 'No Students Match Filters'}</h3>
+              <p>{isAlbanian ? 'Provoni të pastroni kërkimin ose zgjidhni statusin Të Gjithë.' : 'Try clearing your search query, or switch status filter to All.'}</p>
               <button 
                 className="btn-secondary btn-sm" 
                 onClick={() => { setSearchTerm(''); setStatusFilter('all'); setSelectedGrade('all'); }}
               >
-                <RotateCcw size={14} /> Reset Filters
+                <RotateCcw size={14} /> {isAlbanian ? 'Pastro Filtrat' : 'Reset Filters'}
               </button>
             </div>
           ) : (
@@ -604,7 +623,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };
 

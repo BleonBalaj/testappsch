@@ -8,7 +8,24 @@ import { useSchoolData } from '../context/SchoolDataContext';
 import { useLanguage } from '../context/LanguageContext';
 import './Events.css';
 
-const INITIAL_EVENTS = [];
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: 'easeOut' }
+  }
+};
 
 const EventCard = ({ event, onToggleStar, t, isAlbanian }) => (
   <motion.div 
@@ -156,8 +173,13 @@ const Events = ({ userRole = 'student' }) => {
   };
 
   return (
-    <div className="events-page">
-      <header className="page-header">
+    <motion.div 
+      className="events-page"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.header className="page-header" variants={itemVariants}>
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -185,9 +207,9 @@ const Events = ({ userRole = 'student' }) => {
             </button>
           )}
         </div>
-      </header>
+      </motion.header>
 
-      <div className="events-controls glass">
+      <motion.div className="events-controls glass" variants={itemVariants}>
         <div className="filter-scroll">
           {types.map(filt => (
             <button 
@@ -199,9 +221,9 @@ const Events = ({ userRole = 'student' }) => {
             </button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
-      <div className="events-feed">
+      <motion.div className="events-feed" variants={itemVariants}>
         <AnimatePresence>
           {filteredEvents.map(event => (
             <EventCard key={event.id} event={event} onToggleStar={toggleStar} t={t} isAlbanian={isAlbanian} />
@@ -218,7 +240,7 @@ const Events = ({ userRole = 'student' }) => {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
 
       {/* ── MODAL: Add New Event ── */}
       <AnimatePresence>
@@ -345,7 +367,7 @@ const Events = ({ userRole = 'student' }) => {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };
 

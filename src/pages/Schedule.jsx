@@ -17,69 +17,92 @@ import { SUBJECTS } from '../features/lessonPlans/catalog';
 import { translateCatalogValue } from '../features/lessonPlans/i18n';
 import './Schedule.css';
 
-const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot, isAlbanian }) => (
-  <motion.div 
-    className={`schedule-item glass bouncy ${item.isEvent ? 'event-type' : ''}`}
-    initial={{ opacity: 0, x: 20 }}
-    animate={{ opacity: 1, x: 0 }}
-    exit={{ opacity: 0, scale: 0.95 }}
-    transition={{ delay }}
-    onClick={() => onClick(item)}
-    layout
-  >
-    <div className="time-strip" style={{ backgroundColor: `hsl(var(${item.color}))` }}></div>
-    <div className="schedule-content">
-      <div className="schedule-header">
-        <div className="header-left" style={{ flexWrap: 'wrap' }}>
-          <span className="class-time">{item.time}</span>
-          {item.isEvent && (
-            <span className="event-tag">
-              <Calendar size={11} /> {isAlbanian ? 'Ngjarje' : 'Event'}
-            </span>
-          )}
-          {item.classLabel && !item.isEvent && (
-            <span className="category-tag glass">{isAlbanian ? `Klasa ${item.classLabel} · P${item.period}` : `Class ${item.classLabel} · P${item.period}`}</span>
-          )}
-          {item.subjectCategory && !item.isEvent && !item.classLabel && (
-            <span className="category-tag glass">{item.subjectCategory}</span>
-          )}
-          {activeTab === 'all-schedule' && userRole !== 'admin' && item.enrolled && !item.isEvent && (
-            <span className="enrolled-status-pill">
-              <CheckCircle2 size={11} /> {userRole === 'teacher' ? (isAlbanian ? 'Lënda Ime' : 'My Class') : (isAlbanian ? 'I Regjistruar' : 'Enrolled')}
-            </span>
-          )}
-        </div>
-        <span className="class-room"><MapPin size={12} /> {item.room}</span>
-      </div>
-      <h3>{item.subject}</h3>
-      <div className="schedule-footer">
-        <div className="teacher-small">
-          <div className="avatar-xs">
-            {item.isEvent ? (
-              <div className="icon-avatar-xs" style={{ background: `hsla(var(${item.color}), 0.2)`, color: `hsl(var(${item.color}))` }}>
-                <Clock size={15} />
-              </div>
-            ) : (
-              <Avatar alt={item.teacher} />
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: 'easeOut' }
+  }
+};
+
+const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot, isAlbanian, isMine }) => {
+  const isEnrolledOrTaught = isMine !== undefined ? isMine : Boolean(item.enrolled);
+
+  return (
+    <motion.div 
+      className={`schedule-item glass bouncy ${item.isEvent ? 'event-type' : ''}`}
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ delay }}
+      onClick={() => onClick(item)}
+      layout
+    >
+      <div className="time-strip" style={{ backgroundColor: `hsl(var(${item.color}))` }}></div>
+      <div className="schedule-content">
+        <div className="schedule-header">
+          <div className="header-left" style={{ flexWrap: 'wrap' }}>
+            <span className="class-time">{item.time}</span>
+            {item.isEvent && (
+              <span className="event-tag">
+                <Calendar size={11} /> {isAlbanian ? 'Ngjarje' : 'Event'}
+              </span>
+            )}
+            {item.classLabel && !item.isEvent && (
+              <span className="category-tag glass">{isAlbanian ? `Klasa ${item.classLabel} · P${item.period}` : `Class ${item.classLabel} · P${item.period}`}</span>
+            )}
+            {item.subjectCategory && !item.isEvent && !item.classLabel && (
+              <span className="category-tag glass">{item.subjectCategory}</span>
+            )}
+            {activeTab === 'all-schedule' && userRole !== 'admin' && isEnrolledOrTaught && !item.isEvent && (
+              <span className="enrolled-status-pill">
+                <CheckCircle2 size={11} /> {userRole === 'teacher' ? (isAlbanian ? 'Lënda Ime' : 'My Class') : (isAlbanian ? 'I Regjistruar' : 'Enrolled')}
+              </span>
             )}
           </div>
-          <span className="teacher-name">{item.isEvent ? (isAlbanian ? `${item.attendees || 50} Të Regjistruar` : `${item.attendees || 50} Registered`) : item.teacher}</span>
+          <span className="class-room"><MapPin size={12} /> {item.room || (isAlbanian ? 'Salla Kryesore' : 'Main Hall')}</span>
         </div>
-        {userRole !== 'student' && !item.isEvent && onDeleteSlot && (
-          <button 
-            type="button" 
-            className="icon-action-btn delete glass"
-            style={{ marginLeft: 'auto', padding: '4px', opacity: 0.7 }}
-            onClick={(e) => { e.stopPropagation(); onDeleteSlot(item.id); }}
-            title={isAlbanian ? 'Fshij Orën' : 'Delete Slot'}
-          >
-            <Trash2 size={13} />
-          </button>
-        )}
+        <h3>{item.subject}</h3>
+        <div className="schedule-footer">
+          <div className="teacher-small">
+            <div className="avatar-xs">
+              {item.isEvent ? (
+                <div className="icon-avatar-xs" style={{ background: `hsla(var(${item.color}), 0.2)`, color: `hsl(var(${item.color}))` }}>
+                  <Clock size={15} />
+                </div>
+              ) : (
+                <Avatar alt={item.teacher} />
+              )}
+            </div>
+            <span className="teacher-name">{item.isEvent ? (isAlbanian ? `${item.attendees || 50} Të Regjistruar` : `${item.attendees || 50} Registered`) : item.teacher}</span>
+          </div>
+          {userRole !== 'student' && !item.isEvent && onDeleteSlot && (
+            <button 
+              type="button" 
+              className="icon-action-btn delete glass"
+              style={{ marginLeft: 'auto', padding: '4px', opacity: 0.7 }}
+              onClick={(e) => { e.stopPropagation(); onDeleteSlot(item.id); }}
+              title={isAlbanian ? 'Fshij Orën' : 'Delete Slot'}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
 
 const INITIAL_SCHEDULE = {
   'Monday': [],
@@ -106,7 +129,7 @@ function dateForDay(monday, day) {
 }
 
 const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonPlan }) => {
-  const { staffList } = useSchoolData();
+  const { staffList = [], classesList = [], studentsList = [] } = useSchoolData();
   const { activeSchoolId, currentUser } = useAuth();
   const { language, t, isAlbanian } = useLanguage();
   const [scheduleState, setScheduleState] = useState(INITIAL_SCHEDULE);
@@ -175,6 +198,26 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   // Superadmins NEVER have a personal schedule tab; strictly locked to master campus schedule
   const effectiveTab = userRole === 'admin' ? 'all-schedule' : activeTab;
 
+  // Resolve staff & student records
+  const currentStaff = useMemo(() => {
+    return staffList.find(s => 
+      s.id === currentUser?.uid || 
+      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase())
+    );
+  }, [staffList, currentUser]);
+
+  const currentStudent = useMemo(() => {
+    return studentsList.find(s => 
+      s.id === currentUser?.uid || 
+      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (s.studentId && s.studentId === currentUser?.uid)
+    );
+  }, [studentsList, currentUser]);
+
+  const defaultTeacherName = useMemo(() => {
+    return currentStaff?.name || currentUser?.displayName || currentUser?.name || (staffList[0]?.name || 'Teacher');
+  }, [currentStaff, currentUser, staffList]);
+
   // Week navigation state
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -194,7 +237,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     period: '',
     subjectCategory: 'Academic',
     room: 'Room 101',
-    teacher: 'Noesis',
+    teacher: defaultTeacherName,
     isEvent: false,
     color: '--primary',
     enrolled: true
@@ -237,12 +280,82 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
 
   // Determine if an item belongs in My Schedule
   const isItemInMySchedule = useCallback((item) => {
+    if (!item) return false;
+    if (item.isEvent) return true;
+
     if (userRole === 'teacher') {
-      return item.teacher === 'Noesis' || item.isEvent;
+      // 1. Direct creator / teacher ID match
+      if (item.createdByUid && item.createdByUid === currentUser?.uid) return true;
+      if (item.teacherId && (item.teacherId === currentUser?.uid || (currentStaff && (item.teacherId === currentStaff.id || item.teacherId === currentStaff.staffId)))) return true;
+
+      // 2. Teacher name match
+      const itemTeacher = (item.teacher || '').toLowerCase().trim();
+      if (itemTeacher) {
+        const candidateNames = [
+          currentUser?.displayName,
+          currentUser?.name,
+          currentStaff?.name
+        ].filter(Boolean).map(n => n.toLowerCase().trim());
+
+        for (const name of candidateNames) {
+          if (name && (itemTeacher === name || itemTeacher.includes(name) || name.includes(itemTeacher))) {
+            return true;
+          }
+        }
+      }
+
+      // 3. Match subject to classes taught by this teacher in classesList
+      if (classesList.length > 0) {
+        const itemSubject = (item.subject || item.curriculumSubject || '').toLowerCase().trim();
+        const myTaughtClasses = classesList.filter(c => {
+          const cTeacher = (c.teacher || '').toLowerCase();
+          const candidateNames = [currentUser?.displayName, currentUser?.name, currentStaff?.name].filter(Boolean).map(n => n.toLowerCase());
+          return (c.teacherId && c.teacherId === currentUser?.uid) || candidateNames.some(n => n && (cTeacher.includes(n) || n.includes(cTeacher)));
+        });
+        if (myTaughtClasses.some(c => {
+          const cName = (c.name || '').toLowerCase();
+          const cCode = (c.code || '').toLowerCase();
+          return (cName && itemSubject.includes(cName)) || (cCode && itemSubject.includes(cCode));
+        })) {
+          return true;
+        }
+      }
+
+      // 4. Fallback for legacy demo slots
+      return item.teacher === 'Noesis' || Boolean(item.taughtByMe);
     }
-    // For students and general users
-    return Boolean(item.enrolled || item.isEvent);
-  }, [userRole]);
+
+    // For students:
+    // 1. Enrolled student IDs array
+    const uid = currentUser?.uid;
+    const sId = currentStudent?.id;
+    const customId = currentStudent?.studentId;
+    if (Array.isArray(item.enrolledStudentIds)) {
+      if (uid && item.enrolledStudentIds.includes(uid)) return true;
+      if (sId && item.enrolledStudentIds.includes(sId)) return true;
+      if (customId && item.enrolledStudentIds.includes(customId)) return true;
+    }
+
+    // 2. Match student's assignedClasses
+    const assigned = currentStudent?.assignedClasses || [];
+    if (Array.isArray(assigned) && assigned.length > 0) {
+      const subj = (item.subject || '').toLowerCase().trim();
+      const currSubj = (item.curriculumSubject || '').toLowerCase().trim();
+      const label = (item.classLabel || '').toLowerCase().trim();
+      const isAssigned = assigned.some(a => {
+        const aLower = (a || '').toLowerCase().trim();
+        if (!aLower) return false;
+        if (subj && (aLower.includes(subj) || subj.includes(aLower))) return true;
+        if (currSubj && (aLower.includes(currSubj) || currSubj.includes(aLower))) return true;
+        if (label && (aLower.includes(label) || label.includes(aLower))) return true;
+        return false;
+      });
+      if (isAssigned) return true;
+    }
+
+    // 3. Fallback to enrolled flag
+    return Boolean(item.enrolled);
+  }, [userRole, currentUser, currentStaff, currentStudent, classesList]);
 
   // Day counts for My Schedule vs All Schedule
   const myScheduleCount = useMemo(() => {
@@ -328,6 +441,8 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     const newItem = {
       ...newSlotForm,
       id: slotId,
+      teacher: newSlotForm.teacher || defaultTeacherName,
+      teacherId: currentUser?.uid || '',
       createdByUid: currentUser?.uid || '',
       createdAt: serverTimestamp()
     };
@@ -355,7 +470,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
       period: '',
       subjectCategory: 'Academic',
       room: 'Room 101',
-      teacher: 'Noesis',
+      teacher: defaultTeacherName,
       isEvent: false,
       color: '--primary',
       enrolled: true
@@ -396,9 +511,14 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   const hasActiveFilters = searchTerm !== '' || teacherFilter !== 'all' || categoryFilter !== 'all' || typeFilter !== 'all';
 
   return (
-    <div className="schedule-page">
+    <motion.div 
+      className="schedule-page"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <header className="page-header">
+      <motion.header className="page-header" variants={itemVariants}>
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -487,10 +607,10 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             </button>
           )}
         </div>
-      </header>
+      </motion.header>
 
       {/* Filter Controls Bar */}
-      <div className="schedule-filters-container glass">
+      <motion.div className="schedule-filters-container glass" variants={itemVariants}>
         {/* Search Bar */}
         <div className="search-bar-wrap">
           <Search size={18} className="search-icon" />
@@ -586,10 +706,10 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Day Selector with Clean Shadows */}
-      <div className="day-selector-container">
+      <motion.div className="day-selector-container" variants={itemVariants}>
         {days.map(day => {
           const count = (scheduleState[day] || []).filter(item => effectiveTab === 'my-schedule' ? isItemInMySchedule(item) : true).length;
           return (
@@ -603,10 +723,10 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             </button>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Timeline and Schedule List */}
-      <div className="schedule-timeline">
+      <motion.div className="schedule-timeline" variants={itemVariants}>
         <div className="timeline-labels">
           <span>08:00 AM</span>
           <span>10:00 AM</span>
@@ -659,12 +779,13 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                   userRole={userRole}
                   onDeleteSlot={handleDeleteSlot}
                   isAlbanian={isAlbanian}
+                  isMine={isItemInMySchedule(item)}
                 />
               ))}
             </AnimatePresence>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* ── MODAL: Add Period / Event ── */}
       <AnimatePresence>
@@ -859,10 +980,10 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         onClose={() => setIsDetailOpen(false)} 
         classInfo={selectedClass} 
         userRole={userRole}
-        onCreateLessonPlan={selectedClass && (userRole === 'admin' || (userRole === 'teacher' && selectedClass.teacher === 'Noesis')) ? handleCreateLessonPlan : undefined}
+        onCreateLessonPlan={selectedClass && (userRole === 'admin' || (userRole === 'teacher' && isItemInMySchedule(selectedClass))) ? handleCreateLessonPlan : undefined}
         lessonLanguage={lessonLanguage}
       />
-    </div>
+    </motion.div>
   );
 };
 

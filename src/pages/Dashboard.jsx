@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, GraduationCap, Calendar, TrendingUp, Star, 
@@ -269,8 +269,68 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
     }));
   }, [eventsList]);
 
+  // Resolve current staff and student for accurate matching
+  const currentStaff = useMemo(() => {
+    return staffList.find(s => 
+      s.id === currentUser?.uid || 
+      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase())
+    );
+  }, [staffList, currentUser]);
+
+  const currentStudent = useMemo(() => {
+    return studentsList.find(s => 
+      s.id === currentUser?.uid || 
+      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (s.studentId && s.studentId === currentUser?.uid)
+    );
+  }, [studentsList, currentUser]);
+
+  const isClassTaughtByMe = useCallback((c) => {
+    if (!c) return false;
+    if (c.teacherId && (c.teacherId === currentUser?.uid || (currentStaff && (c.teacherId === currentStaff.id || c.teacherId === currentStaff.staffId)))) return true;
+    if (c.createdByUid && c.createdByUid === currentUser?.uid) return true;
+    const teacherEmail = (c.teacherEmail || '').toLowerCase().trim();
+    const userEmail = (currentUser?.email || '').toLowerCase().trim();
+    const staffEmail = (currentStaff?.email || '').toLowerCase().trim();
+    if (teacherEmail && (teacherEmail === userEmail || teacherEmail === staffEmail)) return true;
+    const classTeacher = (c.teacher || c.instructor || '').toLowerCase().trim();
+    if (classTeacher) {
+      const candidateNames = [currentUser?.displayName, currentUser?.name, currentStaff?.name].filter(Boolean).map(n => n.toLowerCase().trim());
+      for (const name of candidateNames) {
+        if (name && (classTeacher === name || classTeacher.includes(name) || name.includes(classTeacher))) return true;
+      }
+    }
+    return Boolean(c.taughtByMe);
+  }, [currentUser, currentStaff]);
+
+  const isClassEnrolledByMe = useCallback((c) => {
+    if (!c) return false;
+    const uid = currentUser?.uid;
+    const sId = currentStudent?.id;
+    const customId = currentStudent?.studentId;
+    if (Array.isArray(c.enrolledStudentIds)) {
+      if (uid && c.enrolledStudentIds.includes(uid)) return true;
+      if (sId && c.enrolledStudentIds.includes(sId)) return true;
+      if (customId && c.enrolledStudentIds.includes(customId)) return true;
+    }
+    const assigned = currentStudent?.assignedClasses || [];
+    if (Array.isArray(assigned) && assigned.length > 0) {
+      const code = (c.code || '').toLowerCase().trim();
+      const name = (c.name || '').toLowerCase().trim();
+      const isAssigned = assigned.some(a => {
+        const aLower = (a || '').toLowerCase().trim();
+        if (!aLower) return false;
+        if (code && (aLower.includes(code) || code.includes(aLower))) return true;
+        if (name && (aLower.includes(name) || name.includes(aLower))) return true;
+        return false;
+      });
+      if (isAssigned) return true;
+    }
+    return Boolean(c.enrolled);
+  }, [currentUser, currentStudent]);
+
   const teacherClasses = useMemo(() => {
-    return classesList.filter(c => c.taughtByMe).map(c => ({
+    return classesList.filter(isClassTaughtByMe).map(c => ({
       id: c.id,
       name: c.name,
       time: c.schedule || 'Scheduled',
@@ -278,10 +338,10 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       students: c.students || 0,
       status: 'Upcoming'
     }));
-  }, [classesList]);
+  }, [classesList, isClassTaughtByMe]);
 
   const studentScheduleToday = useMemo(() => {
-    return classesList.filter(c => c.enrolled).map((c, idx) => ({
+    return classesList.filter(isClassEnrolledByMe).map((c, idx) => ({
       id: c.id || idx,
       period: c.period || `Period ${idx + 1}`,
       time: c.schedule || 'Scheduled',
@@ -290,7 +350,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       room: c.room || 'Main Hall',
       status: 'upcoming'
     }));
-  }, [classesList]);
+  }, [classesList, isClassEnrolledByMe]);
 
   const completedStudentTasksCount = studentTasks.filter(t => t.completed).length;
   const pendingStudentTasksCount = studentTasks.filter(t => !t.completed).length;
@@ -318,7 +378,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       <header className="dashboard-hero">
         <motion.div className="hero-welcome" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
           <h1 className="gradient-text">
-            {`${t('dashboard.welcomeBack')}${currentUser?.displayName || currentUser?.name ? `, ${currentUser.displayName || currentUser.name}` : ''}! ${isStudent ? '🎓✨' : '✨'}`}
+            {`${t('dashboard.welcome', 'Welcome')}${currentUser?.displayName || currentUser?.name ? `, ${currentUser.displayName || currentUser.name}` : ''}! ${isStudent ? '🎓✨' : '✨'}`}
           </h1>
           <p>
             {isStudent 

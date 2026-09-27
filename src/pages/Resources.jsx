@@ -29,6 +29,25 @@ import './Resources.css';
 
 const INITIAL_RESOURCES = [];
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: 'easeOut' }
+  }
+};
+
 
 const RESOURCE_CLASS_GROUPS = [
   {
@@ -320,8 +339,13 @@ const Resources = () => {
   });
 
   return (
-    <div className="resources-page">
-      <header className="page-header">
+    <motion.div 
+      className="resources-page"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.header className="page-header" variants={itemVariants}>
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -345,7 +369,7 @@ const Resources = () => {
             </button>
           </div>
         </div>
-      </header>
+      </motion.header>
 
       {/* Notification Toast */}
       {downloadNotice && (
@@ -361,7 +385,7 @@ const Resources = () => {
       )}
 
       {/* Search & Filter Bar */}
-      <div className="resources-toolbar glass">
+      <motion.div className="resources-toolbar glass" variants={itemVariants}>
         <div className="toolbar-top-row">
           <div className="res-search glass">
             <Search size={18} />
@@ -377,7 +401,7 @@ const Resources = () => {
           {/* Class Filter Dropdown */}
           <div className="resource-class-filter-container" ref={classDropdownRef}>
             <button 
-              type="button"
+              type="button" 
               className={`resource-class-trigger glass ${isClassDropdownOpen ? 'active' : ''}`}
               onClick={() => setIsClassDropdownOpen(!isClassDropdownOpen)}
             >
@@ -404,8 +428,8 @@ const Resources = () => {
                     <Search size={15} className="dropdown-search-icon" />
                     <input 
                       ref={classSearchInputRef}
-                      type="text"
-                      placeholder={isAlbanian ? 'Kërko lëndët, kurset, apo fushat...' : 'Search classes, subjects, or courses...'}
+                      type="text" 
+                      placeholder={isAlbanian ? 'Kërko lëndët, kurset, apo fushat...' : 'Search classes, subjects, or courses...'} 
                       value={classDropdownSearch}
                       onChange={(e) => setClassDropdownSearch(e.target.value)}
                     />
@@ -436,7 +460,7 @@ const Resources = () => {
                           </div>
                           {group.items.map(item => (
                             <button 
-                              key={item.id}
+                              key={item.id} 
                               type="button"
                               className={`dropdown-option-row ${activeCategory === item.id ? 'active' : ''}`}
                               onClick={() => {
@@ -482,10 +506,10 @@ const Resources = () => {
             </button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* Resources Feed */}
-      <div className={view === 'grid' ? 'resources-grid' : 'resources-list'}>
+      <motion.div className={view === 'grid' ? 'resources-grid' : 'resources-list'} variants={itemVariants}>
         <AnimatePresence mode="popLayout">
           {filteredResources.map(res => (
             <ResourceCard 
@@ -506,7 +530,7 @@ const Resources = () => {
             <p>{isAlbanian ? 'Provoni të rregulloni kërkimin ose filtrin e formatit.' : 'Try adjusting your search query or format filter.'}</p>
           </motion.div>
         )}
-      </div>
+      </motion.div>
 
       {/* ── MODAL: Add Resource ── */}
       <AnimatePresence>
@@ -616,7 +640,7 @@ const Resources = () => {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Book, CheckSquare, Users, Plus, Search, Filter, 
@@ -21,12 +21,35 @@ const SWATCH_OPTIONS = [
   { label: 'Violet', value: '--chart-5' },
 ];
 
-const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const cardItemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: 'easeOut' }
+  }
+};
+
+const ClassCard = ({ classInfo, onClick, userRole = 'student', isTaughtByMe, isEnrolled, isAlbanian }) => {
+  const isLead = isTaughtByMe !== undefined ? isTaughtByMe : Boolean(classInfo.taughtByMe);
+  const enrolled = isEnrolled !== undefined ? isEnrolled : Boolean(classInfo.enrolled);
+
   return (
     <motion.div 
       className="class-card glass bouncy"
       onClick={() => onClick(classInfo)}
       layout
+      variants={cardItemVariants}
       whileHover={{ y: -5, scale: 1.02 }}
       style={{ borderTop: `4px solid hsl(var(${classInfo.color || '--primary'}))` }}
     >
@@ -38,19 +61,19 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
           <div className="class-title-top">
             <h3>{classInfo.name}</h3>
             {userRole === 'student' && (
-              classInfo.enrolled ? (
-                <span className="class-enroll-badge enrolled" title="You are enrolled in this class">
-                  <Check size={11} /> Enrolled
+              enrolled ? (
+                <span className="class-enroll-badge enrolled" title={isAlbanian ? "Jeni të regjistruar në këtë lëndë" : "You are enrolled in this class"}>
+                  <Check size={11} /> {isAlbanian ? 'I Regjistruar' : 'Enrolled'}
                 </span>
               ) : (
-                <span className="class-enroll-badge elective" title="Elective course available in curriculum">
-                  Open Elective
+                <span className="class-enroll-badge elective" title={isAlbanian ? "Lëndë me zgjedhje në kurrikulë" : "Elective course available in curriculum"}>
+                  {isAlbanian ? 'Lëndë me Zgjedhje' : 'Open Elective'}
                 </span>
               )
             )}
-            {userRole === 'teacher' && classInfo.taughtByMe && (
-              <span className="class-enroll-badge instructor" title="You are the lead instructor for this course">
-                My Class
+            {userRole === 'teacher' && isLead && (
+              <span className="class-enroll-badge instructor" title={isAlbanian ? "Ju jeni mësimdhënësi për këtë kurs" : "You are the lead instructor for this course"}>
+                {isAlbanian ? 'Lënda Ime' : 'My Class'}
               </span>
             )}
           </div>
@@ -60,10 +83,10 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
 
       <div className="class-meta-row">
         <span className="class-room-badge">
-          <MapPin size={12} /> {classInfo.room || 'Main Hall'}
+          <MapPin size={12} /> {classInfo.room || (isAlbanian ? 'Salla Kryesore' : 'Main Hall')}
         </span>
         <span className="class-schedule-badge">
-          <Clock size={12} /> {classInfo.schedule || 'Regular'}
+          <Clock size={12} /> {classInfo.schedule || (isAlbanian ? 'E Rregullt' : 'Regular')}
         </span>
         {classInfo.period && (
           <span className="class-period-badge glass">
@@ -72,22 +95,22 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
         )}
       </div>
 
-      {userRole === 'student' && classInfo.enrolled && classInfo.myGrade && (
+      {userRole === 'student' && enrolled && classInfo.myGrade && (
         <div className="student-card-standing glass">
-          <span className="sc-label">Standing:</span>
+          <span className="sc-label">{isAlbanian ? 'Përparimi:' : 'Standing:'}</span>
           <span className="sc-val">{classInfo.myGrade} ({classInfo.letterGrade})</span>
-          <span className="sc-credit">• {classInfo.credits || 4} Credits</span>
+          <span className="sc-credit">• {classInfo.credits || 4} {isAlbanian ? 'Kredi' : 'Credits'}</span>
         </div>
       )}
 
       <div className="class-card-stats">
         <div className="stat">
           <CheckSquare size={16} />
-          <span>{classInfo.progress || 0}% Complete</span>
+          <span>{classInfo.progress || 0}% {isAlbanian ? 'Përfunduar' : 'Complete'}</span>
         </div>
         <div className="stat">
           <Users size={16} />
-          <span>{classInfo.students || 0} Students</span>
+          <span>{classInfo.students || 0} {isAlbanian ? 'Nxënës' : 'Students'}</span>
         </div>
       </div>
     </motion.div>
@@ -95,7 +118,7 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
 };
 
 const Classes = ({ onClassSelect, userRole = 'student' }) => {
-  const { staffList, classesList = [], addClass } = useSchoolData();
+  const { staffList = [], studentsList = [], classesList = [], addClass } = useSchoolData();
   const { currentUser } = useAuth();
   const { language, t, isAlbanian } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
@@ -124,27 +147,122 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
   const [newClassColor, setNewClassColor] = useState('--primary');
   const [formError, setFormError] = useState('');
 
-  const departments = ['All', 'Science', 'Mathematics', 'Humanities', 'Technology'];
+  const departments = [
+    { id: 'All', labelEn: 'All', labelSq: 'Të Gjitha' },
+    { id: 'Science', labelEn: 'Science', labelSq: 'Shkencë' },
+    { id: 'Mathematics', labelEn: 'Mathematics', labelSq: 'Matematikë' },
+    { id: 'Humanities', labelEn: 'Humanities', labelSq: 'Shkenca Humane' },
+    { id: 'Technology', labelEn: 'Technology', labelSq: 'Teknologji' }
+  ];
+
+  // Resolve current logged-in staff member or student record
+  const currentStaff = useMemo(() => {
+    return staffList.find(s => 
+      s.id === currentUser?.uid || 
+      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase())
+    );
+  }, [staffList, currentUser]);
+
+  const currentStudent = useMemo(() => {
+    return studentsList.find(s => 
+      s.id === currentUser?.uid || 
+      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (s.studentId && s.studentId === currentUser?.uid)
+    );
+  }, [studentsList, currentUser]);
+
+  // Robust teacher matching
+  const isClassTaughtByMe = useCallback((c) => {
+    if (!c) return false;
+    
+    // 1. Direct ID / UID matches
+    if (c.teacherId && (c.teacherId === currentUser?.uid || (currentStaff && (c.teacherId === currentStaff.id || c.teacherId === currentStaff.staffId)))) {
+      return true;
+    }
+    if (c.createdByUid && c.createdByUid === currentUser?.uid) {
+      return true;
+    }
+
+    // 2. Email matches
+    const teacherEmail = (c.teacherEmail || '').toLowerCase().trim();
+    const userEmail = (currentUser?.email || '').toLowerCase().trim();
+    const staffEmail = (currentStaff?.email || '').toLowerCase().trim();
+    if (teacherEmail && (teacherEmail === userEmail || teacherEmail === staffEmail)) {
+      return true;
+    }
+
+    // 3. Name matches
+    const classTeacher = (c.teacher || c.instructor || '').toLowerCase().trim();
+    if (classTeacher) {
+      const candidateNames = [
+        currentUser?.displayName,
+        currentUser?.name,
+        currentStaff?.name
+      ].filter(Boolean).map(n => n.toLowerCase().trim());
+
+      for (const name of candidateNames) {
+        if (name && (classTeacher === name || classTeacher.includes(name) || name.includes(classTeacher))) {
+          return true;
+        }
+      }
+    }
+
+    // 4. Fallback for demo mock seed data
+    return Boolean(c.taughtByMe);
+  }, [currentUser, currentStaff]);
+
+  // Robust student enrollment matching
+  const isClassEnrolledByMe = useCallback((c) => {
+    if (!c) return false;
+
+    // 1. Direct enrolled IDs
+    const uid = currentUser?.uid;
+    const sId = currentStudent?.id;
+    const customId = currentStudent?.studentId;
+
+    if (Array.isArray(c.enrolledStudentIds)) {
+      if (uid && c.enrolledStudentIds.includes(uid)) return true;
+      if (sId && c.enrolledStudentIds.includes(sId)) return true;
+      if (customId && c.enrolledStudentIds.includes(customId)) return true;
+    }
+
+    // 2. Match student's assignedClasses array
+    const assigned = currentStudent?.assignedClasses || [];
+    if (Array.isArray(assigned) && assigned.length > 0) {
+      const code = (c.code || '').toLowerCase().trim();
+      const name = (c.name || '').toLowerCase().trim();
+      const isAssigned = assigned.some(a => {
+        const aLower = (a || '').toLowerCase().trim();
+        if (!aLower) return false;
+        if (code && (aLower.includes(code) || code.includes(aLower))) return true;
+        if (name && (aLower.includes(name) || name.includes(aLower))) return true;
+        return false;
+      });
+      if (isAssigned) return true;
+    }
+
+    // 3. Fallback for demo mock seed data
+    return Boolean(c.enrolled);
+  }, [currentUser, currentStudent]);
 
   // Calculate my classes count based on role
   const myClassesCount = useMemo(() => {
     if (userRole === 'teacher') {
-      return classesList.filter(c => c.taughtByMe).length;
+      return classesList.filter(isClassTaughtByMe).length;
     }
-    // Default to student enrollment
-    return classesList.filter(c => c.enrolled).length;
-  }, [classesList, userRole]);
+    return classesList.filter(isClassEnrolledByMe).length;
+  }, [classesList, userRole, isClassTaughtByMe, isClassEnrolledByMe]);
 
   // Classes filtered by tab first
   const tabFilteredClasses = useMemo(() => {
     if (effectiveTab === 'my-classes') {
       if (userRole === 'teacher') {
-        return classesList.filter(c => c.taughtByMe);
+        return classesList.filter(isClassTaughtByMe);
       }
-      return classesList.filter(c => c.enrolled);
+      return classesList.filter(isClassEnrolledByMe);
     }
     return classesList;
-  }, [classesList, effectiveTab, userRole]);
+  }, [classesList, effectiveTab, userRole, isClassTaughtByMe, isClassEnrolledByMe]);
 
   // Classes filtered by search & department
   const filteredClasses = useMemo(() => {
@@ -171,18 +289,22 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
 
     setFormError('');
 
+    const teacherName = newClassTeacher || currentStaff?.name || currentUser?.displayName || 'Lead Instructor';
     const newClass = {
       name: newClassName.trim(),
       code: newClassCode.trim().toUpperCase(),
       department: newClassDept,
-      teacher: newClassTeacher || staffList[0]?.name || currentUser?.displayName || 'Lead Instructor',
+      teacher: teacherName,
+      teacherId: currentUser?.uid || '',
+      teacherEmail: currentUser?.email || '',
+      createdByUid: currentUser?.uid || '',
       room: newClassRoom.trim() || 'Room 101',
       schedule: newClassSchedule.trim() || 'Mon, Wed 10:00 AM',
       color: newClassColor || '--primary',
       students: 0,
       progress: 0,
       enrolled: true,
-      taughtByMe: true
+      taughtByMe: userRole === 'teacher' || (!staffList.length && currentUser?.role !== 'student')
     };
 
     if (addClass) {
@@ -209,8 +331,13 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
   };
 
   return (
-    <div className="classes-page">
-      <header className="page-header">
+    <motion.div 
+      className="classes-page"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.header className="page-header" variants={cardItemVariants}>
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -226,7 +353,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
         <div className="header-actions">
           <button type="button" className="btn-secondary glass" onClick={handleExportClasses}>
             <Download size={16} />
-            {userRole === 'student' ? 'Export Schedule' : 'Export CSV'}
+            {userRole === 'student' ? (isAlbanian ? 'Eksporto Orarin' : 'Export Schedule') : (isAlbanian ? 'Eksporto CSV' : 'Export CSV')}
           </button>
           {userRole !== 'student' && (
             <button type="button" className="btn-primary" onClick={() => setIsAddModalOpen(true)}>
@@ -235,11 +362,11 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
             </button>
           )}
         </div>
-      </header>
+      </motion.header>
 
       {/* Role-Based Tabs (My Classes vs All Classes) - ONLY for Students and Teachers */}
       {userRole !== 'admin' && (
-        <div className="classes-nav-tabs-bar glass">
+        <motion.div className="classes-nav-tabs-bar glass" variants={cardItemVariants}>
           <div className="classes-nav-tabs">
             <button
               type="button"
@@ -247,7 +374,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
               onClick={() => setActiveTab('my-classes')}
             >
               <BookOpen size={16} />
-              <span>{userRole === 'teacher' ? 'My Teaching Classes' : 'My Classes'}</span>
+              <span>{userRole === 'teacher' ? (isAlbanian ? 'Kurset e Mia Mësimdhënëse' : 'My Teaching Classes') : (isAlbanian ? 'Lëndët e Mia të Regjistruara' : 'My Classes')}</span>
               <span className="tab-pill-counter">{myClassesCount}</span>
             </button>
             <button
@@ -256,7 +383,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
               onClick={() => setActiveTab('all-classes')}
             >
               <Layers size={16} />
-              <span>All Classes</span>
+              <span>{isAlbanian ? 'Të Gjitha Lëndët' : 'All Classes'}</span>
               <span className="tab-pill-counter">{classesList.length}</span>
             </button>
           </div>
@@ -265,38 +392,61 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
           <div className="classes-tabs-hint">
             {effectiveTab === 'my-classes' ? (
               <span>
-                Showing {userRole === 'student' ? 'courses you are enrolled in' : 'classes you teach'}
+                {userRole === 'teacher'
+                  ? (isAlbanian ? 'Po shfaqen kurset që ligjëroni ju' : 'Showing classes you teach')
+                  : (isAlbanian ? 'Po shfaqen lëndët ku jeni të regjistruar' : 'Showing courses you are enrolled in')}
               </span>
             ) : (
-              <span>Browsing full school curriculum catalog</span>
+              <span>{isAlbanian ? 'Shfletoni katalogun e plotë kurrikular të shkollës' : 'Browsing full school curriculum catalog'}</span>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Student Banner when in My Classes */}
       {userRole === 'student' && effectiveTab === 'my-classes' && (
-        <div className="student-classes-summary-strip glass">
+        <motion.div className="student-classes-summary-strip glass" variants={cardItemVariants}>
           <div className="strip-info">
             <div className="strip-avatar-badge">
               <GraduationCap size={22} />
             </div>
             <div>
-              <h4>{currentUser?.name ? `${currentUser.name}'s Enrolled Schedule` : 'My Enrolled Schedule'}</h4>
-              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? 'Active Subject' : 'Active Subjects'} Enrolled</p>
+              <h4>{isAlbanian ? (currentUser?.name ? `Orari i Regjistrimit të ${currentUser.name}` : 'Orari Im i Regjistrimit') : (currentUser?.name ? `${currentUser.name}'s Enrolled Schedule` : 'My Enrolled Schedule')}</h4>
+              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? (isAlbanian ? 'Lëndë Aktive e Regjistruar' : 'Active Subject Enrolled') : (isAlbanian ? 'Lëndë Aktive të Regjistruara' : 'Active Subjects Enrolled')}</p>
             </div>
           </div>
           <div className="strip-stats">
             <div className="strip-stat-item">
-              <span className="strip-stat-label">Enrolled Status</span>
-              <strong className="strip-stat-val text-success">Good Standing</strong>
+              <span className="strip-stat-label">{isAlbanian ? 'Statusi i Regjistrimit' : 'Enrolled Status'}</span>
+              <strong className="strip-stat-val text-success">{isAlbanian ? 'Në Rregull' : 'Good Standing'}</strong>
             </div>
           </div>
-        </div>
+        </motion.div>
+      )}
+
+      {/* Teacher Banner when in My Classes */}
+      {userRole === 'teacher' && effectiveTab === 'my-classes' && (
+        <motion.div className="student-classes-summary-strip glass" variants={cardItemVariants}>
+          <div className="strip-info">
+            <div className="strip-avatar-badge" style={{ background: 'hsla(var(--primary), 0.18)', color: 'hsl(var(--primary))' }}>
+              <BookOpen size={22} />
+            </div>
+            <div>
+              <h4>{currentUser?.displayName || currentUser?.name ? (isAlbanian ? `Kurset Mësimdhënëse të ${currentUser.displayName || currentUser.name}` : `${currentUser.displayName || currentUser.name}'s Teaching Schedule`) : (isAlbanian ? 'Kurset e Mia Mësimdhënëse' : 'My Teaching Schedule')}</h4>
+              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? (isAlbanian ? 'Kurs Aktiv Mësimdhënës' : 'Active Course Taught') : (isAlbanian ? 'Kurse Aktive Mësimdhënëse' : 'Active Courses Taught')}</p>
+            </div>
+          </div>
+          <div className="strip-stats">
+            <div className="strip-stat-item">
+              <span className="strip-stat-label">{isAlbanian ? 'Statusi i Mësimdhënies' : 'Teaching Status'}</span>
+              <strong className="strip-stat-val text-success">{isAlbanian ? 'Aktiv / Në Orar' : 'Active / On Schedule'}</strong>
+            </div>
+          </div>
+        </motion.div>
       )}
 
       {/* Filter and Search Bar */}
-      <div className="classes-controls-bar">
+      <motion.div className="classes-controls-bar" variants={cardItemVariants}>
         <div className="classes-search-box">
           <Search size={17} className="search-icon" />
           <input 
@@ -315,16 +465,16 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
         <div className="classes-filter-pills">
           {departments.map(dept => (
             <button
-              key={dept}
+              key={dept.id}
               type="button"
-              className={`dept-pill ${selectedDept === dept ? 'active' : ''}`}
-              onClick={() => setSelectedDept(dept)}
+              className={`dept-pill ${selectedDept === dept.id ? 'active' : ''}`}
+              onClick={() => setSelectedDept(dept.id)}
             >
-              {dept}
+              {isAlbanian ? dept.labelSq : dept.labelEn}
             </button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* Classes Grid */}
       <div className="classes-grid">
@@ -336,6 +486,9 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
                 classInfo={classItem} 
                 onClick={onClassSelect} 
                 userRole={userRole}
+                isTaughtByMe={isClassTaughtByMe(classItem)}
+                isEnrolled={isClassEnrolledByMe(classItem)}
+                isAlbanian={isAlbanian}
               />
             ))
           ) : (
@@ -348,19 +501,25 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
               <div className="empty-icon-wrap">
                 <BookOpen size={40} className="muted" />
               </div>
-              <h3>No courses found</h3>
+              <h3>{isAlbanian ? 'Nuk u gjet asnjë lëndë' : 'No courses found'}</h3>
               <p>
                 {effectiveTab === 'my-classes'
-                  ? 'No classes match your search in your enrolled list. Try switching to "All Classes" to browse other subjects.'
-                  : 'No classes match your current search criteria or department filter.'}
+                  ? (isAlbanian
+                      ? (userRole === 'teacher'
+                          ? 'Nuk ka kurse që ligjëroni që përputhen me kërkimin tuaj. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.'
+                          : 'Nuk ka lëndë që përputhen me kërkimin tuaj në listën tuaj të regjistrimeve. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.')
+                      : 'No classes match your search in your personal list. Try switching to "All Classes" to browse other subjects.')
+                  : (isAlbanian
+                      ? 'Nuk ka lëndë që përputhen me kriteret aktuale të kërkimit ose filtrin e departamentit.'
+                      : 'No classes match your current search criteria or department filter.')}
               </p>
               {effectiveTab === 'my-classes' ? (
                 <button type="button" className="btn-secondary glass btn-sm" onClick={() => setActiveTab('all-classes')}>
-                  Browse All Classes
+                  {isAlbanian ? 'Shfleto Të Gjitha Lëndët' : 'Browse All Classes'}
                 </button>
               ) : (
                 <button type="button" className="btn-secondary glass btn-sm" onClick={() => { setSearchQuery(''); setSelectedDept('All'); }}>
-                  Clear Filters
+                  {isAlbanian ? 'Pastro Filtrat' : 'Clear Filters'}
                 </button>
               )}
             </motion.div>
@@ -533,7 +692,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };
 
