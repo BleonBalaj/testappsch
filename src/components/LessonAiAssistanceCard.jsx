@@ -122,7 +122,7 @@ export function LessonAiAssistanceCard({
           <div className="lesson-ai-title-group">
             <div className="lesson-ai-title-row">
               <h3>{isSq ? 'Asistenca Inteligjente me AI' : 'AI Pedagogical Assistant'}</h3>
-              <span className="lesson-ai-pill-badge">Gemini 2.5 Flash</span>
+              <span className="lesson-ai-pill-badge">Gemini 2.0 Flash</span>
               {isReady ? (
                 <span className="lesson-ai-status-pill ready">
                   <Check size={12} /> {isSq ? 'Gati për gjenerim' : 'Ready'}
