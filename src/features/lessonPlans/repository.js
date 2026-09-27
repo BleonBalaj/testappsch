@@ -5,6 +5,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   defaultSubject: '',
   teacherName: '',
   schoolName: '',
+  schoolLogo: '',
   academicYear: '',
   assignedClasses: [],
   duration: '',
@@ -84,7 +85,7 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
   if (!teacher) throw new TypeError('A stable teacherId is required');
   const school = compact(schoolId) || 'default';
   const store = resolveStorage(storage);
-  const personalKey = `lumi-lesson-plans:v1:teacher:${encodeURIComponent(teacher)}`;
+  const personalKey = `lumi-lesson-plans:v1:teacher:${encodeURIComponent(teacher)}:school:${encodeURIComponent(school)}`;
   const schoolKey = `lumi-lesson-plans:v1:school:${encodeURIComponent(school)}`;
   const initialPersonal = { version: LESSON_PLAN_STORAGE_VERSION, teacherId: teacher, plans: [], preferences: copy(DEFAULT_PREFERENCES), templates: [], reusableEntries: [], topics: [] };
   const initialSchool = { version: LESSON_PLAN_STORAGE_VERSION, schoolId: school, subjectMappings: [], stageMappings: [], topics: [] };

@@ -16,279 +16,35 @@ import {
   ArrowUpRight, 
   HelpCircle,
   Copy,
-  Check
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import './Transcript.css';
 
-// Complete Official Student Profile
-const STUDENT_PROFILE = {
-  name: 'Aria Montgomery',
-  studentId: 'STU-1008',
-  stateId: 'SASID-9482019',
-  dateOfBirth: '2010-04-14',
-  grade: 'Grade 10 (Sophomore)',
-  homeroom: 'Room 105 • Class 10A',
-  admitDate: 'September 3, 2024',
-  expectedGraduation: 'June 2028',
-  counselor: 'Ms. Emily Brown (Student Affairs)',
-  program: 'College Preparatory Honors Scholar Track',
-  academicStanding: 'Dean\'s Honors List with High Distinction',
-  cumulativeGpa: 3.92,
-  weightedGpa: 4.15,
-  classRank: '4 of 128 (Top 3%)',
-  totalCreditsEarned: 44.0,
-  totalCreditsRequired: 48.0,
-  inProgressCredits: 4.0,
-  verificationCode: 'LUMI-TR-2026-9081-AM',
-  issuedDate: 'September 19, 2026'
+// Student profile default structure
+const DEFAULT_STUDENT_PROFILE = {
+  name: 'Student',
+  studentId: 'STU-0000',
+  stateId: 'SASID-0000000',
+  dateOfBirth: '—',
+  grade: 'Enrolled Student',
+  homeroom: 'Main Campus',
+  admitDate: '—',
+  expectedGraduation: '—',
+  counselor: 'Academic Advising Office',
+  program: 'General Academic Curriculum',
+  academicStanding: 'Good Standing',
+  cumulativeGpa: 0,
+  weightedGpa: 0,
+  classRank: 'N/A',
+  totalCreditsEarned: 0,
+  totalCreditsRequired: 0,
+  inProgressCredits: 0,
+  verificationCode: 'LUMI-TR-0000',
+  issuedDate: '—'
 };
 
 // Historical Course Records Organized by Academic Terms
-const TRANSCRIPT_TERMS = [
-  {
-    id: 'term-g10-fall-2026',
-    termName: 'Grade 10 – Fall Semester 2026',
-    academicYear: '2026–2027',
-    termStatus: 'In Progress (Midterm Certified)',
-    termGpa: 3.89,
-    termCredits: 17.0,
-    termHonor: 'High Honors Roll',
-    courses: [
-      {
-        code: 'MATH-301',
-        title: 'Advanced Mathematics (Calculus & Functions)',
-        department: 'Mathematics',
-        type: 'Honors',
-        instructor: 'Dr. Sarah Smith',
-        credits: 4.0,
-        gradePercentage: 95,
-        letterGrade: 'A',
-        gpaPoints: 4.0,
-        dateAwarded: 'Sep 18, 2026',
-        status: 'Midterm Graded',
-        remarks: 'Exemplary differential calculus synthesis and proof structure.'
-      },
-      {
-        code: 'PHYS-401',
-        title: 'Physics Mechanics & Dynamics Lab',
-        department: 'Science',
-        type: 'AP / Advanced',
-        instructor: 'Prof. James Wilson',
-        credits: 4.0,
-        gradePercentage: 91,
-        letterGrade: 'A-',
-        gpaPoints: 3.7,
-        dateAwarded: 'Sep 16, 2026',
-        status: 'Midterm Graded',
-        remarks: 'Superior kinematic experimentation and lab report precision.'
-      },
-      {
-        code: 'HIST-202',
-        title: 'World History Seminar: Modern Civilizations',
-        department: 'Humanities',
-        type: 'Honors',
-        instructor: 'Mr. David Clark',
-        credits: 3.0,
-        gradePercentage: 92,
-        letterGrade: 'A-',
-        gpaPoints: 3.7,
-        dateAwarded: 'Sep 15, 2026',
-        status: 'Midterm Graded',
-        remarks: 'Insightful historiographical comparative analysis of Enlightenment essays.'
-      },
-      {
-        code: 'ENG-101',
-        title: 'English Literature Analysis & Rhetoric',
-        department: 'Language Arts',
-        type: 'Core',
-        instructor: 'Ms. Emily Brown',
-        credits: 3.0,
-        gradePercentage: 97,
-        letterGrade: 'A+',
-        gpaPoints: 4.0,
-        dateAwarded: 'Sep 14, 2026',
-        status: 'Midterm Graded',
-        remarks: 'Exceptional textual evidence and eloquent rhetorical synthesis.'
-      },
-      {
-        code: 'CS-501',
-        title: 'Computer Science & Algorithmic Logic',
-        department: 'Technology',
-        type: 'Honors',
-        instructor: 'Mr. Alex Vance',
-        credits: 3.0,
-        gradePercentage: 98,
-        letterGrade: 'A+',
-        gpaPoints: 4.0,
-        dateAwarded: 'Sep 12, 2026',
-        status: 'Midterm Graded',
-        remarks: 'Flawless graph algorithm traversal and clean modular architecture.'
-      }
-    ]
-  },
-  {
-    id: 'term-g9-spring-2026',
-    termName: 'Grade 9 – Spring Semester 2026',
-    academicYear: '2025–2026',
-    termStatus: 'Completed & Certified',
-    termGpa: 3.94,
-    termCredits: 16.0,
-    termHonor: 'Dean\'s Academic List',
-    courses: [
-      {
-        code: 'MATH-201',
-        title: 'Honors Euclidean Geometry & Trigonometry',
-        department: 'Mathematics',
-        type: 'Honors',
-        instructor: 'Dr. Sarah Smith',
-        credits: 4.0,
-        gradePercentage: 96,
-        letterGrade: 'A',
-        gpaPoints: 4.0,
-        dateAwarded: 'Jun 10, 2026',
-        status: 'Final Certified',
-        remarks: 'Mastered deductive geometric proof reasoning and spherical projection.'
-      },
-      {
-        code: 'CHEM-101',
-        title: 'Introductory Chemistry & Quantitative Lab',
-        department: 'Science',
-        type: 'Core Lab',
-        instructor: 'Dr. Aris Thorne',
-        credits: 4.0,
-        gradePercentage: 92,
-        letterGrade: 'A-',
-        gpaPoints: 3.7,
-        dateAwarded: 'Jun 08, 2026',
-        status: 'Final Certified',
-        remarks: 'Precise titration lab methodology and thermodynamic calculations.'
-      },
-      {
-        code: 'GEO-101',
-        title: 'World Geography & Cultural Anthropology',
-        department: 'Humanities',
-        type: 'Core',
-        instructor: 'Mr. David Clark',
-        credits: 3.0,
-        gradePercentage: 94,
-        letterGrade: 'A',
-        gpaPoints: 4.0,
-        dateAwarded: 'Jun 06, 2026',
-        status: 'Final Certified',
-        remarks: 'Delivered top-ranked capstone presentation on urban sustainability.'
-      },
-      {
-        code: 'ENG-092',
-        title: 'Composition & Critical Literary Reading',
-        department: 'Language Arts',
-        type: 'Core',
-        instructor: 'Ms. Emily Brown',
-        credits: 3.0,
-        gradePercentage: 95,
-        letterGrade: 'A',
-        gpaPoints: 4.0,
-        dateAwarded: 'Jun 05, 2026',
-        status: 'Final Certified',
-        remarks: 'Consistently articulate argumentative essays and thesis defense.'
-      },
-      {
-        code: 'ART-110',
-        title: 'Digital Media, Typography & Visual Arts',
-        department: 'Fine Arts',
-        type: 'Elective',
-        instructor: 'Ms. Clara Oswald',
-        credits: 2.0,
-        gradePercentage: 98,
-        letterGrade: 'A+',
-        gpaPoints: 4.0,
-        dateAwarded: 'Jun 04, 2026',
-        status: 'Final Certified',
-        remarks: 'Curated student visual portfolio showcased in regional exhibition.'
-      }
-    ]
-  },
-  {
-    id: 'term-g9-fall-2025',
-    termName: 'Grade 9 – Fall Semester 2025',
-    academicYear: '2025–2026',
-    termStatus: 'Completed & Certified',
-    termGpa: 3.88,
-    termCredits: 15.0,
-    termHonor: 'Academic Honor Roll',
-    courses: [
-      {
-        code: 'MATH-101',
-        title: 'Honors Algebra II & Polynomial Systems',
-        department: 'Mathematics',
-        type: 'Honors',
-        instructor: 'Dr. Sarah Smith',
-        credits: 4.0,
-        gradePercentage: 94,
-        letterGrade: 'A',
-        gpaPoints: 4.0,
-        dateAwarded: 'Jan 15, 2026',
-        status: 'Final Certified',
-        remarks: 'Comprehensive understanding of complex numbers and matrices.'
-      },
-      {
-        code: 'SCI-091',
-        title: 'Integrated Physical Sciences & Inquiry',
-        department: 'Science',
-        type: 'Core',
-        instructor: 'Prof. James Wilson',
-        credits: 4.0,
-        gradePercentage: 90,
-        letterGrade: 'A-',
-        gpaPoints: 3.7,
-        dateAwarded: 'Jan 14, 2026',
-        status: 'Final Certified',
-        remarks: 'Active lab investigator with keen attention to error margins.'
-      },
-      {
-        code: 'HIST-101',
-        title: 'Classical Civilizations & Governance',
-        department: 'Humanities',
-        type: 'Core',
-        instructor: 'Mr. David Clark',
-        credits: 3.0,
-        gradePercentage: 91,
-        letterGrade: 'A-',
-        gpaPoints: 3.7,
-        dateAwarded: 'Jan 12, 2026',
-        status: 'Final Certified',
-        remarks: 'Strong debate performance in Hellenistic constitutional simulations.'
-      },
-      {
-        code: 'ENG-091',
-        title: 'Literary Foundations, Grammar & Rhetoric',
-        department: 'Language Arts',
-        type: 'Core',
-        instructor: 'Ms. Emily Brown',
-        credits: 3.0,
-        gradePercentage: 93,
-        letterGrade: 'A',
-        gpaPoints: 4.0,
-        dateAwarded: 'Jan 10, 2026',
-        status: 'Final Certified',
-        remarks: 'Rigorous grammatical clarity and strong prose voice.'
-      },
-      {
-        code: 'PE-101',
-        title: 'Physical Education & Lifelong Fitness',
-        department: 'Physical Education',
-        type: 'Core',
-        instructor: 'Coach Mike Tyson',
-        credits: 1.0,
-        gradePercentage: 100,
-        letterGrade: 'A+',
-        gpaPoints: 4.0,
-        dateAwarded: 'Jan 08, 2026',
-        status: 'Final Certified',
-        remarks: 'Exemplary leadership, teamwork, and athletic benchmark achievements.'
-      }
-    ]
-  }
-];
+const TRANSCRIPT_TERMS = [];
 
 const GRADING_SCALE = [
   { grade: 'A+', range: '97 – 100%', points: '4.0', desc: 'Distinguished Mastery' },
@@ -302,12 +58,35 @@ const GRADING_SCALE = [
 ];
 
 const Transcript = ({ userRole = 'student' }) => {
+  const { currentUser, activeSchool } = useAuth();
   const [selectedTermFilter, setSelectedTermFilter] = useState('all');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('terms'); // 'terms' or 'tabular'
   const [copiedHash, setCopiedHash] = useState(false);
   const [exportNotice, setExportNotice] = useState(false);
+
+  const STUDENT_PROFILE = useMemo(() => ({
+    name: currentUser?.name || currentUser?.displayName || DEFAULT_STUDENT_PROFILE.name,
+    studentId: currentUser?.studentId || (currentUser?.uid ? `STU-${currentUser.uid.slice(0, 6).toUpperCase()}` : DEFAULT_STUDENT_PROFILE.studentId),
+    stateId: currentUser?.stateId || DEFAULT_STUDENT_PROFILE.stateId,
+    dateOfBirth: currentUser?.dateOfBirth || DEFAULT_STUDENT_PROFILE.dateOfBirth,
+    grade: currentUser?.grade || currentUser?.class || DEFAULT_STUDENT_PROFILE.grade,
+    homeroom: currentUser?.homeroom || currentUser?.class || DEFAULT_STUDENT_PROFILE.homeroom,
+    admitDate: currentUser?.admitDate || DEFAULT_STUDENT_PROFILE.admitDate,
+    expectedGraduation: currentUser?.graduationYear || DEFAULT_STUDENT_PROFILE.expectedGraduation,
+    counselor: currentUser?.counselor || DEFAULT_STUDENT_PROFILE.counselor,
+    program: currentUser?.program || DEFAULT_STUDENT_PROFILE.program,
+    academicStanding: currentUser?.academicStanding || DEFAULT_STUDENT_PROFILE.academicStanding,
+    cumulativeGpa: Number(currentUser?.gpa || 0),
+    weightedGpa: Number(currentUser?.weightedGpa || currentUser?.gpa || 0),
+    classRank: currentUser?.classRank || DEFAULT_STUDENT_PROFILE.classRank,
+    totalCreditsEarned: Number(currentUser?.creditsEarned || 0),
+    totalCreditsRequired: Number(currentUser?.creditsRequired || 0),
+    inProgressCredits: Number(currentUser?.inProgressCredits || 0),
+    verificationCode: `LUMI-TR-${(currentUser?.uid || 'SCH').slice(0, 6).toUpperCase()}`,
+    issuedDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  }), [currentUser]);
 
   // Departments for filtering
   const departments = useMemo(() => {
@@ -754,15 +533,15 @@ const Transcript = ({ userRole = 'student' }) => {
 
           <div className="sig-column">
             <div className="sig-line"></div>
-            <span className="sig-name">Ms. Emily Brown, M.Ed.</span>
-            <span className="sig-title">Registrar & Lead Academic Counselor</span>
-            <span className="sig-date">Certified: September 19, 2026</span>
+            <span className="sig-name">Academic Administration Office</span>
+            <span className="sig-title">Office of the Registrar & Academic Records</span>
+            <span className="sig-date">Certified: {STUDENT_PROFILE.issuedDate}</span>
           </div>
         </div>
 
         {/* Footer Disclaimer */}
         <div className="transcript-doc-footer">
-          <p>This electronic academic transcript is a demonstration record for Noesis Horizon. For verification in a real deployment, contact the school registrar and cite Verification Code: {STUDENT_PROFILE.verificationCode}.</p>
+          <p>This official electronic academic transcript is issued by {activeSchool?.name || 'Noesis Horizon'}. For verification, contact the school records office and cite Verification Code: {STUDENT_PROFILE.verificationCode}.</p>
         </div>
 
       </div>

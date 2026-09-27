@@ -6,110 +6,10 @@ import {
   GraduationCap, Clock, MapPin
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
 import './Classes.css';
 
-export const INITIAL_CLASSES = [
-  { 
-    id: 1, 
-    name: 'Advanced Mathematics', 
-    code: 'MATH-301', 
-    department: 'Mathematics', 
-    color: '--primary', 
-    teacher: 'Dr. Sarah Smith', 
-    students: 24, 
-    progress: 75, 
-    room: 'Room 302', 
-    schedule: 'Mon, Wed 08:30 AM',
-    enrolled: true,
-    myGrade: '96%',
-    letterGrade: 'A',
-    credits: 4,
-    period: 'Period 1'
-  },
-  { 
-    id: 2, 
-    name: 'World History', 
-    code: 'HIST-202', 
-    department: 'Humanities', 
-    color: '--chart-2', 
-    teacher: 'Mr. David Clark', 
-    students: 30, 
-    progress: 40, 
-    room: 'Room 105', 
-    schedule: 'Tue, Thu 10:15 AM',
-    enrolled: true,
-    myGrade: '92%',
-    letterGrade: 'A-',
-    credits: 4,
-    period: 'Period 4'
-  },
-  { 
-    id: 3, 
-    name: 'Physics Mechanics', 
-    code: 'PHYS-401', 
-    department: 'Science', 
-    color: '--chart-1', 
-    teacher: 'Prof. James Wilson', 
-    students: 18, 
-    progress: 60, 
-    room: 'Physics Lab 2', 
-    schedule: 'Mon, Fri 01:00 PM',
-    enrolled: true,
-    taughtByMe: true,
-    myGrade: '95%',
-    letterGrade: 'A',
-    credits: 4,
-    period: 'Period 2'
-  },
-  { 
-    id: 4, 
-    name: 'English Literature', 
-    code: 'ENG-101', 
-    department: 'Humanities', 
-    color: '--chart-4', 
-    teacher: 'Ms. Emily Brown', 
-    students: 28, 
-    progress: 90, 
-    room: 'Room 204', 
-    schedule: 'Wed, Fri 11:00 AM',
-    enrolled: true,
-    myGrade: '94%',
-    letterGrade: 'A',
-    credits: 4,
-    period: 'Period 3'
-  },
-  { 
-    id: 5, 
-    name: 'Computer Science', 
-    code: 'CS-501', 
-    department: 'Technology', 
-    color: '--chart-5', 
-    teacher: 'Mr. Alan Turing', 
-    students: 22, 
-    progress: 85, 
-    room: 'Computer Lab A', 
-    schedule: 'Tue, Thu 02:30 PM',
-    enrolled: false,
-    credits: 4,
-    period: 'Elective'
-  },
-  { 
-    id: 6, 
-    name: 'Biology Labs', 
-    code: 'BIO-201', 
-    department: 'Science', 
-    color: '--accent', 
-    teacher: 'Dr. Jane Goodall', 
-    students: 15, 
-    progress: 50, 
-    room: 'Bio Lab 1', 
-    schedule: 'Mon, Thu 09:45 AM',
-    enrolled: false,
-    taughtByMe: true,
-    credits: 4,
-    period: 'Elective'
-  },
-];
+export const INITIAL_CLASSES = [];
 
 const SWATCH_OPTIONS = [
   { label: 'Magenta', value: '--primary' },
@@ -127,10 +27,10 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
       onClick={() => onClick(classInfo)}
       layout
       whileHover={{ y: -5, scale: 1.02 }}
-      style={{ borderTop: `4px solid hsl(var(${classInfo.color}))` }}
+      style={{ borderTop: `4px solid hsl(var(${classInfo.color || '--primary'}))` }}
     >
       <div className="class-card-header">
-        <div className="class-icon" style={{ backgroundColor: `hsla(var(${classInfo.color}), 0.2)`, color: `hsl(var(${classInfo.color}))` }}>
+        <div className="class-icon" style={{ backgroundColor: `hsla(var(${classInfo.color || '--primary'}), 0.2)`, color: `hsl(var(${classInfo.color || '--primary'}))` }}>
           <Book size={24} />
         </div>
         <div className="class-title">
@@ -182,11 +82,11 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
       <div className="class-card-stats">
         <div className="stat">
           <CheckSquare size={16} />
-          <span>{classInfo.progress}% Complete</span>
+          <span>{classInfo.progress || 0}% Complete</span>
         </div>
         <div className="stat">
           <Users size={16} />
-          <span>{classInfo.students} Students</span>
+          <span>{classInfo.students || 0} Students</span>
         </div>
       </div>
     </motion.div>
@@ -194,8 +94,8 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
 };
 
 const Classes = ({ onClassSelect, userRole = 'student' }) => {
-  const { staffList } = useSchoolData();
-  const [classesList, setClassesList] = useState(INITIAL_CLASSES);
+  const { staffList, classesList = [], addClass } = useSchoolData();
+  const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -216,7 +116,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
   const [newClassName, setNewClassName] = useState('');
   const [newClassCode, setNewClassCode] = useState('');
   const [newClassDept, setNewClassDept] = useState('Science');
-  const [newClassTeacher, setNewClassTeacher] = useState(staffList[0]?.name || 'Dr. Sarah Smith');
+  const [newClassTeacher, setNewClassTeacher] = useState(staffList[0]?.name || 'Staff Member');
   const [newClassRoom, setNewClassRoom] = useState('Room 301');
   const [newClassSchedule, setNewClassSchedule] = useState('Mon, Wed 10:00 AM');
   const [newClassColor, setNewClassColor] = useState('--primary');
@@ -248,33 +148,34 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
     return tabFilteredClasses.filter(c => {
       const matchesDept = selectedDept === 'All' || c.department === selectedDept;
       const matchesSearch = 
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.teacher.toLowerCase().includes(searchQuery.toLowerCase());
+        (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.code || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.teacher || '').toLowerCase().includes(searchQuery.toLowerCase());
       return matchesDept && matchesSearch;
     });
   }, [tabFilteredClasses, selectedDept, searchQuery]);
 
-  const handleCreateClass = (e) => {
+  const handleCreateClass = async (e) => {
     e.preventDefault();
     if (!newClassName.trim() || !newClassCode.trim()) return;
 
     const newClass = {
-      id: Date.now(),
       name: newClassName.trim(),
       code: newClassCode.trim().toUpperCase(),
       department: newClassDept,
-      teacher: newClassTeacher,
+      teacher: newClassTeacher || staffList[0]?.name || 'Instructor',
       room: newClassRoom.trim(),
       schedule: newClassSchedule.trim(),
       color: newClassColor,
-      students: 20,
+      students: 0,
       progress: 0,
       enrolled: false,
       taughtByMe: userRole === 'teacher'
     };
 
-    setClassesList(prev => [newClass, ...prev]);
+    if (addClass) {
+      await addClass(newClass);
+    }
     setIsAddModalOpen(false);
     setNewClassName('');
     setNewClassCode('');
@@ -377,15 +278,11 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
               <GraduationCap size={22} />
             </div>
             <div>
-              <h4>Aria Montgomery's Enrolled Schedule</h4>
-              <p>Grade 10 Honors • 4 Active Subjects • 16 Weekly Credit Hours</p>
+              <h4>{currentUser?.name ? `${currentUser.name}'s Enrolled Schedule` : 'My Enrolled Schedule'}</h4>
+              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? 'Active Subject' : 'Active Subjects'} Enrolled</p>
             </div>
           </div>
           <div className="strip-stats">
-            <div className="strip-stat-item">
-              <span className="strip-stat-label">Term GPA / Avg</span>
-              <strong className="strip-stat-val text-primary">94.3% (A)</strong>
-            </div>
             <div className="strip-stat-item">
               <span className="strip-stat-label">Enrolled Status</span>
               <strong className="strip-stat-val text-success">Good Standing</strong>

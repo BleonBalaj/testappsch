@@ -8,20 +8,10 @@ import {
 import { Avatar } from '../components/Avatar';
 import './ClassOverview.css';
 
-/* ─── Mock Data ──────────────────────────────────────────── */
+/* ─── Production Data State ──────────────────────────────── */
 
-const INITIAL_STUDENTS = [
-  { id: 1, name: 'Bella Blue',    email: 'bella@lumischool.edu',   avatar: 'Bella' },
-  { id: 2, name: 'Max Power',     email: 'max@lumischool.edu',     avatar: 'Max' },
-  { id: 3, name: 'Sophie Miller', email: 'sophie@lumischool.edu',  avatar: 'Sophie' },
-];
-
-const INITIAL_ASSIGNMENTS = [
-  { id: 1, title: 'Chapter 4 Homework',  category: 'Homework', date: 'Mar 10, 2026', totalPoints: 100 },
-  { id: 2, title: 'Midterm Quiz',        category: 'Quiz',     date: 'Mar 15, 2026', totalPoints: 50  },
-  { id: 3, title: 'Lab Report',          category: 'Project',  date: 'Mar 20, 2026', totalPoints: 100 },
-];
-
+const INITIAL_STUDENTS = [];
+const INITIAL_ASSIGNMENTS = [];
 const INITIAL_WEIGHTS = { Homework: 25, Quiz: 25, Exam: 30, Project: 20 };
 
 /* ─── Helpers ────────────────────────────────────────────── */

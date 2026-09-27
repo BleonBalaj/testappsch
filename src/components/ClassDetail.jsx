@@ -9,12 +9,6 @@ import { useSchoolData } from '../context/SchoolDataContext';
 import { Avatar } from './Avatar';
 import './ClassDetail.css';
 
-const MOCK_MATERIALS = [
-  { id: 'm1', name: 'Course Syllabus & Grading Rubric.pdf', size: '1.4 MB', date: 'Term Start' },
-  { id: 'm2', name: 'Unit 4 Problem Set & Lab Guide.pdf', size: '2.8 MB', date: '3 days ago' },
-  { id: 'm3', name: 'Midterm Exam Review Packet.docx', size: '4.1 MB', date: 'Yesterday' }
-];
-
 const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreateLessonPlan, lessonLanguage = 'en' }) => {
   const { studentsList } = useSchoolData();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'materials'
@@ -26,13 +20,16 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
 
   if (!classInfo) return null;
 
-  // Real enrolled students or fallback
-  const enrolledStudents = studentsList.length > 0 ? studentsList.slice(0, 10) : [
-    { id: 1, name: 'Luna Star', grade: '10A' },
-    { id: 2, name: 'Oliver Twist', grade: '9B' },
-    { id: 3, name: 'Sophie Miller', grade: '11C' },
-    { id: 4, name: 'Felix Cat', grade: '12A' }
-  ];
+  // Real enrolled students or filtered by class
+  const classMaterials = classInfo.materials || [];
+  const enrolledStudents = studentsList.filter(s => {
+    if (!classInfo.classLabel && !classInfo.subject) return true;
+    return (
+      (classInfo.classLabel && (s.grade === classInfo.classLabel || s.class === classInfo.classLabel)) ||
+      (classInfo.name && s.classes?.includes(classInfo.name))
+    );
+  });
+  const displayStudents = enrolledStudents.length > 0 ? enrolledStudents : (!classInfo.classLabel ? studentsList : []);
 
   const handleStatusChange = (studentId, status) => {
     setAttendanceRecords(prev => ({ ...prev, [studentId]: status }));
@@ -41,7 +38,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
 
   const markAllPresent = () => {
     const all = {};
-    enrolledStudents.forEach(s => {
+    displayStudents.forEach(s => {
       all[s.id] = 'P';
     });
     setAttendanceRecords(all);
@@ -139,16 +136,22 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                   <section className="class-detail-section">
                     <div className="section-header">
                       <h3>Enrolled Students</h3>
-                      <span className="count">{enrolledStudents.length} Students Active</span>
+                      <span className="count">{displayStudents.length} Students Active</span>
                     </div>
                     <div className="student-compact-list">
-                      {enrolledStudents.slice(0, 5).map((student) => (
-                        <div key={student.id} className="student-compact-item" title={student.name}>
-                          <Avatar alt={student.name} />
-                        </div>
-                      ))}
-                      {enrolledStudents.length > 5 && (
-                        <div className="more-students">+{enrolledStudents.length - 5} more</div>
+                      {displayStudents.length === 0 ? (
+                        <span style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>No students enrolled in this class</span>
+                      ) : (
+                        <>
+                          {displayStudents.slice(0, 5).map((student) => (
+                            <div key={student.id} className="student-compact-item" title={student.name}>
+                              <Avatar alt={student.name} />
+                            </div>
+                          ))}
+                          {displayStudents.length > 5 && (
+                            <div className="more-students">+{displayStudents.length - 5} more</div>
+                          )}
+                        </>
                       )}
                     </div>
                   </section>
@@ -158,14 +161,14 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                     <h3>Curriculum Progress</h3>
                     <div className="progress-card">
                       <div className="progress-header">
-                        <span>Unit 4: Advanced Principles</span>
-                        <strong>75% Completed</strong>
+                        <span>{classInfo.currentUnit || classInfo.subject || 'Course Curriculum'}</span>
+                        <strong>{classInfo.progress != null ? `${classInfo.progress}%` : '0%'} Completed</strong>
                       </div>
                       <div className="progress-bar-bg">
                         <motion.div 
                           className="progress-bar-fill"
                           initial={{ width: 0 }}
-                          animate={{ width: '75%' }}
+                          animate={{ width: `${classInfo.progress || 0}%` }}
                           transition={{ delay: 0.2, duration: 0.8 }}
                         />
                       </div>
@@ -185,42 +188,43 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                           <span>Verified Course Enrollment Record</span>
                         </div>
                         <div className="att-rate-badge">
-                          <span>Rate:</span> <strong>97%</strong>
+                          <span>Rate:</span> <strong>{classInfo.attendanceRate != null ? `${classInfo.attendanceRate}%` : '100%'}</strong>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem', marginTop: '1rem' }}>
                         <div className="glass" style={{ padding: '0.75rem', borderRadius: '12px', textAlign: 'center' }}>
                           <span style={{ fontSize: '0.7rem', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', fontWeight: 700 }}>Present</span>
-                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--mood-happy))' }}>28</p>
+                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--mood-happy))' }}>{classInfo.presentCount || 0}</p>
                         </div>
                         <div className="glass" style={{ padding: '0.75rem', borderRadius: '12px', textAlign: 'center' }}>
                           <span style={{ fontSize: '0.7rem', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', fontWeight: 700 }}>Late</span>
-                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--accent))' }}>1</p>
+                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--accent))' }}>{classInfo.lateCount || 0}</p>
                         </div>
                         <div className="glass" style={{ padding: '0.75rem', borderRadius: '12px', textAlign: 'center' }}>
                           <span style={{ fontSize: '0.7rem', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', fontWeight: 700 }}>Unexcused</span>
-                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--mood-happy))' }}>0</p>
+                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--mood-sad))' }}>{classInfo.unexcusedCount || 0}</p>
                         </div>
                       </div>
 
                       <div style={{ marginTop: '1.25rem' }}>
                         <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 0.65rem 0' }}>Recent Class Log</h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                          {[
-                            { date: 'Today (Period 2)', status: 'Present (On-Time)', color: 'var(--mood-happy)' },
-                            { date: 'Yesterday (Period 2)', status: 'Present (On-Time)', color: 'var(--mood-happy)' },
-                            { date: 'Oct 14, 2026', status: 'Excused (Campus Event)', color: 'var(--accent)' },
-                            { date: 'Oct 13, 2026', status: 'Present (On-Time)', color: 'var(--mood-happy)' },
-                          ].map((log, i) => (
-                            <div key={i} className="glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', borderRadius: '10px' }}>
-                              <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{log.date}</span>
-                              <span style={{ fontSize: '0.74rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '6px', background: `hsla(${log.color}, 0.15)`, color: `hsl(${log.color})` }}>
-                                {log.status}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                        {(classInfo.recentLogs && classInfo.recentLogs.length > 0) ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                            {classInfo.recentLogs.map((log, i) => (
+                              <div key={i} className="glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', borderRadius: '10px' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{log.date}</span>
+                                <span style={{ fontSize: '0.74rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '6px', background: `hsla(${log.color || 'var(--mood-happy)'}, 0.15)`, color: `hsl(${log.color || 'var(--mood-happy)'})` }}>
+                                  {log.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ padding: '1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem' }}>
+                            No attendance logs recorded yet.
+                          </div>
+                        )}
                         <p style={{ fontSize: '0.74rem', color: 'hsl(var(--muted-foreground))', marginTop: '0.75rem', textAlign: 'center' }}>
                           Certified by {classInfo.teacher || 'Course Instructor'}.
                         </p>
@@ -246,55 +250,61 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                       </div>
 
                       <div className="attendance-student-list">
-                        {enrolledStudents.map((student) => {
-                          const currentStatus = attendanceRecords[student.id] || 'P';
-                          return (
-                            <div key={student.id} className="attendance-student-row">
-                              <div className="avatar-xs">
-                                <Avatar alt={student.name} />
-                              </div>
-                              <div className="att-name-col">
-                                <strong>{student.name}</strong>
-                                <span>Grade {student.grade || '10'}</span>
-                              </div>
+                        {displayStudents.length === 0 ? (
+                          <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
+                            No students enrolled in this class yet.
+                          </div>
+                        ) : (
+                          displayStudents.map((student) => {
+                            const currentStatus = attendanceRecords[student.id] || 'P';
+                            return (
+                              <div key={student.id} className="attendance-student-row">
+                                <div className="avatar-xs">
+                                  <Avatar alt={student.name} />
+                                </div>
+                                <div className="att-name-col">
+                                  <strong>{student.name}</strong>
+                                  <span>Grade {student.grade || student.class || 'N/A'}</span>
+                                </div>
 
-                              <div className="att-btn-group">
-                                <button 
-                                  type="button"
-                                  className={`att-pill-btn present ${currentStatus === 'P' ? 'active' : ''}`}
-                                  onClick={() => handleStatusChange(student.id, 'P')}
-                                  title="Present"
-                                >
-                                  P
-                                </button>
-                                <button 
-                                  type="button"
-                                  className={`att-pill-btn late ${currentStatus === 'L' ? 'active' : ''}`}
-                                  onClick={() => handleStatusChange(student.id, 'L')}
-                                  title="Late"
-                                >
-                                  L
-                                </button>
-                                <button 
-                                  type="button"
-                                  className={`att-pill-btn absent ${currentStatus === 'A' ? 'active' : ''}`}
-                                  onClick={() => handleStatusChange(student.id, 'A')}
-                                  title="Absent"
-                                >
-                                  A
-                                </button>
-                                <button 
-                                  type="button"
-                                  className={`att-pill-btn excused ${currentStatus === 'E' ? 'active' : ''}`}
-                                  onClick={() => handleStatusChange(student.id, 'E')}
-                                  title="Excused"
-                                >
-                                  E
-                                </button>
+                                <div className="att-btn-group">
+                                  <button 
+                                    type="button" 
+                                    className={`att-pill-btn present ${currentStatus === 'P' ? 'active' : ''}`}
+                                    onClick={() => handleStatusChange(student.id, 'P')}
+                                    title="Present"
+                                  >
+                                    P
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    className={`att-pill-btn late ${currentStatus === 'L' ? 'active' : ''}`}
+                                    onClick={() => handleStatusChange(student.id, 'L')}
+                                    title="Late"
+                                  >
+                                    L
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    className={`att-pill-btn absent ${currentStatus === 'A' ? 'active' : ''}`}
+                                    onClick={() => handleStatusChange(student.id, 'A')}
+                                    title="Absent"
+                                  >
+                                    A
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    className={`att-pill-btn excused ${currentStatus === 'E' ? 'active' : ''}`}
+                                    onClick={() => handleStatusChange(student.id, 'E')}
+                                    title="Excused"
+                                  >
+                                    E
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })
+                        )}
                       </div>
                     </>
                   )}
@@ -305,20 +315,26 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
               {activeTab === 'materials' && (
                 <div className="class-tab-pane">
                   <div className="materials-list">
-                    {MOCK_MATERIALS.map((doc) => (
-                      <div key={doc.id} className="material-card">
-                        <div className="material-icon-box">
-                          <FileText size={20} />
-                        </div>
-                        <div className="material-info">
-                          <strong>{doc.name}</strong>
-                          <span>{doc.size} • Uploaded {doc.date}</span>
-                        </div>
-                        <button type="button" className="icon-btn-secondary" title="Download Material">
-                          <Download size={16} />
-                        </button>
+                    {classMaterials.length === 0 ? (
+                      <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
+                        No course materials uploaded for this class yet.
                       </div>
-                    ))}
+                    ) : (
+                      classMaterials.map((doc) => (
+                        <div key={doc.id} className="material-card">
+                          <div className="material-icon-box">
+                            <FileText size={20} />
+                          </div>
+                          <div className="material-info">
+                            <strong>{doc.name}</strong>
+                            <span>{doc.size} • Uploaded {doc.date}</span>
+                          </div>
+                          <button type="button" className="icon-btn-secondary" title="Download Material">
+                            <Download size={16} />
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -344,7 +360,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                   onClick={() => setActiveTab('materials')}
                 >
                   <FileText size={18} />
-                  View Course Materials ({MOCK_MATERIALS.length})
+                  View Course Materials ({classMaterials.length})
                 </button>
               ) : (
                 activeTab === 'attendance' ? (

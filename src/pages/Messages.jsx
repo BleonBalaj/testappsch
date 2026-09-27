@@ -14,127 +14,9 @@ import { useSchoolData } from '../context/SchoolDataContext';
 import { Avatar } from '../components/Avatar';
 import './Messages.css';
 
-const INITIAL_CHATS = [
-  { 
-    id: 1, 
-    name: 'Luna Star', 
-    role: 'Student (10A)', 
-    roleType: 'student', 
-    lastMessage: 'Thanks for the assignment help! 🌟', 
-    time: '10:42 AM', 
-    unread: 2, 
-    online: true,
-    starred: true,
-    pinnedMessage: 'Assignment 4 due this Friday at 5:00 PM',
-    members: [
-      { id: 101, name: 'Luna Star', role: 'Student', grade: '10A', muted: false }
-    ],
-    sharedFiles: [
-      { id: 'f1', name: 'Calculus_Problem_Set_3.pdf', size: '2.4 MB', date: 'Yesterday', sender: 'Luna Star' }
-    ]
-  },
-  { 
-    id: 2, 
-    name: 'Class 10-A Physics & Lab', 
-    role: 'Course Channel', 
-    roleType: 'group', 
-    lastMessage: 'Prof. Wilson: Don\'t forget safety goggles for tomorrow\'s lab.', 
-    time: '11:05 AM', 
-    unread: 0, 
-    online: true, 
-    isGroup: true,
-    announcementOnly: false,
-    pinnedMessage: 'Midterm lab exam scheduled for Wednesday in Science Center Lab 1',
-    members: [
-      { id: 201, name: 'Dr. Sarah Smith', role: 'Faculty', isModerator: true, muted: false },
-      { id: 202, name: 'Prof. James Wilson', role: 'Lead Instructor', isModerator: true, muted: false },
-      { id: 203, name: 'Luna Star', role: 'Student', grade: '10A', muted: false },
-      { id: 204, name: 'Oliver Twist', role: 'Student', grade: '9B', muted: false },
-      { id: 205, name: 'Sophie Miller', role: 'Student', grade: '11C', muted: false },
-      { id: 206, name: 'Felix Cat', role: 'Student', grade: '12A', muted: false }
-    ],
-    sharedFiles: [
-      { id: 'f2', name: 'Physics_Lab_Safety_Protocol.pdf', size: '1.8 MB', date: '2 days ago', sender: 'Prof. James Wilson' },
-      { id: 'f3', name: 'Oscilloscope_Experiment_Guide.docx', size: '3.1 MB', date: '3 days ago', sender: 'Dr. Sarah Smith' }
-    ],
-    starred: true
-  },
-  { 
-    id: 3, 
-    name: 'Dr. Sarah Smith', 
-    role: 'Head of Mathematics', 
-    roleType: 'staff', 
-    lastMessage: 'The syllabus has been updated for AP Calculus.', 
-    time: 'Yesterday', 
-    unread: 0, 
-    online: false,
-    starred: false,
-    members: [
-      { id: 301, name: 'Dr. Sarah Smith', role: 'Faculty', muted: false }
-    ],
-    sharedFiles: []
-  },
-  { 
-    id: 4, 
-    name: 'Prof. James Wilson', 
-    role: 'Senior Teacher (Physics)', 
-    roleType: 'staff', 
-    lastMessage: 'Lab equipment calibration is complete for Period 2.', 
-    time: 'Yesterday', 
-    unread: 0, 
-    online: true,
-    starred: false,
-    members: [
-      { id: 401, name: 'Prof. James Wilson', role: 'Faculty', muted: false }
-    ],
-    sharedFiles: []
-  },
-  { 
-    id: 5, 
-    name: 'Ms. Emily Brown', 
-    role: 'Academic Counselor', 
-    roleType: 'staff', 
-    lastMessage: 'Meeting scheduled with student council tomorrow at 10.', 
-    time: 'Tuesday', 
-    unread: 0, 
-    online: true,
-    starred: false,
-    members: [
-      { id: 501, name: 'Ms. Emily Brown', role: 'Counselor', muted: false }
-    ],
-    sharedFiles: []
-  },
-  { 
-    id: 6, 
-    name: 'Oliver Twist', 
-    role: 'Student (9B)', 
-    roleType: 'student', 
-    lastMessage: 'Can you check my math homework questions?', 
-    time: 'Tuesday', 
-    unread: 1, 
-    online: true,
-    starred: false,
-    members: [
-      { id: 601, name: 'Oliver Twist', role: 'Student', grade: '9B', muted: false }
-    ],
-    sharedFiles: []
-  }
-];
+const INITIAL_CHATS = [];
 
-const INITIAL_THREAD = {
-  1: [
-    { id: 101, sender: 'them', text: 'Hi! I had a quick question about the calculus problem set.', time: '10:30 AM', status: 'read', reactions: ['👍'] },
-    { id: 102, sender: 'me', text: 'Sure thing Luna! What part of problem #4 do you need help with?', time: '10:35 AM', status: 'read', reactions: [] },
-    { id: 103, sender: 'them', text: 'Are we allowed to use numerical approximation or do we need the exact integration steps?', time: '10:40 AM', status: 'read', reactions: [] },
-    { id: 104, sender: 'me', text: 'Please write out the step-by-step integration steps for full credit 📝', time: '10:41 AM', status: 'read', reactions: ['❤️'] },
-    { id: 105, sender: 'them', text: 'Got it, thank you so much for the assignment help! 🌟', time: '10:42 AM', status: 'read', reactions: ['🎉'] },
-  ],
-  2: [
-    { id: 201, sender: 'them', senderName: 'Oliver Twist', text: 'Did everyone finish the pre-lab questions?', time: '10:50 AM', status: 'read', reactions: ['👍'] },
-    { id: 202, sender: 'them', senderName: 'Dr. Sarah Smith', text: 'Remember to review Section 4.2 before class tomorrow.', time: '11:00 AM', status: 'read', reactions: ['📚'] },
-    { id: 203, sender: 'them', senderName: 'Prof. Wilson', text: 'Don\'t forget safety goggles for tomorrow\'s lab.', time: '11:05 AM', status: 'read', reactions: ['🔬', '🔥'] },
-  ]
-};
+const INITIAL_THREAD = {};
 
 const CANNED_RESPONSES = [
   "Received! I will review this by EOD 📝",
@@ -150,7 +32,7 @@ const Messages = ({ userRole = 'admin' }) => {
   const isAdminOrTeacher = userRole === 'admin' || userRole === 'teacher';
 
   const [chats, setChats] = useState(INITIAL_CHATS);
-  const [activeChat, setActiveChat] = useState(INITIAL_CHATS[0]);
+  const [activeChat, setActiveChat] = useState(null);
   const [threads, setThreads] = useState(INITIAL_THREAD);
   const [messageInput, setMessageInput] = useState('');
   const [chatSearch, setChatSearch] = useState('');
@@ -196,12 +78,13 @@ const Messages = ({ userRole = 'admin' }) => {
   }, [threads, activeChat, isTyping]);
 
   const currentMessages = useMemo(() => {
+    if (!activeChat) return [];
     const raw = threads[activeChat.id] || [
       { id: 999, sender: 'them', text: `Hello! This is the start of your conversation in ${activeChat.name}.`, time: 'Earlier', status: 'read', reactions: [] }
     ];
 
     if (!searchInThread.trim()) return raw;
-    return raw.filter(m => m.text.toLowerCase().includes(searchInThread.toLowerCase()));
+    return raw.filter(m => (m.text || '').toLowerCase().includes(searchInThread.toLowerCase()));
   }, [threads, activeChat, searchInThread]);
 
   // Filtered Chats in Left Sidebar
@@ -270,6 +153,7 @@ const Messages = ({ userRole = 'admin' }) => {
   // Send Message
   const handleSend = (e) => {
     if (e) e.preventDefault();
+    if (!activeChat) return;
     if (!messageInput.trim() && !attachedFile) return;
 
     // Check if active channel is announcement only for non-moderators
@@ -573,7 +457,7 @@ const Messages = ({ userRole = 'admin' }) => {
             filteredChats.map((chat) => (
               <motion.div 
                 key={chat.id}
-                className={`chat-preview glass ${activeChat.id === chat.id ? 'active' : ''}`}
+                className={`chat-preview glass ${activeChat?.id === chat.id ? 'active' : ''}`}
                 onClick={() => {
                   setActiveChat(chat);
                   setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
@@ -613,8 +497,25 @@ const Messages = ({ userRole = 'admin' }) => {
 
       {/* ── Main Chat Window ── */}
       <div className="chat-window glass">
-        {/* Header */}
-        <div className="chat-window-header">
+        {!activeChat ? (
+          <div className="empty-chat-pane glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '400px', gap: '1.25rem', padding: '3rem 2rem', textAlign: 'center' }}>
+            <div className="empty-icon-wrap" style={{ width: '68px', height: '68px', borderRadius: '50%', background: 'hsla(var(--primary), 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--primary))' }}>
+              <MessageSquare size={34} />
+            </div>
+            <div>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.3rem', fontWeight: 700 }}>No Conversation Selected</h3>
+              <p style={{ margin: 0, color: 'hsl(var(--muted-foreground))', maxWidth: '360px', fontSize: '0.92rem', lineHeight: '1.5' }}>
+                Select a conversation from the sidebar or click "New Chat" to connect with staff, teachers, or students.
+              </p>
+            </div>
+            <button type="button" className="btn-primary" onClick={() => setIsNewChatOpen(true)}>
+              <PlusCircle size={16} /> New Conversation
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="chat-window-header">
           <div className="chat-header-user">
             <div className="chat-avatar large">
               {activeChat.isGroup ? (
@@ -885,11 +786,13 @@ const Messages = ({ userRole = 'admin' }) => {
             </button>
           </form>
         </div>
+        </>
+      )}
       </div>
 
       {/* ── Channel Management & Moderation Drawer ── */}
       <AnimatePresence>
-        {isChannelSettingsOpen && (
+        {isChannelSettingsOpen && activeChat && (
           <motion.div 
             className="channel-drawer glass"
             initial={{ width: 0, opacity: 0 }}

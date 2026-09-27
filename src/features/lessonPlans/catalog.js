@@ -68,7 +68,18 @@ export function stageForClass(classInput, { schoolStages = [] } = {}) {
   const parsed = parseClassLabel(classInput);
   if (!parsed) return '';
   const valid = schoolStages.filter((record) => record?.validated === true && record.stage);
-  const override = valid.find((record) => record.classLabel && normalize(record.classLabel) === normalize(parsed.classLabel))
+  const override = valid.find((record) => {
+    const label = record.classLabel || record.class || record.className;
+    return label && normalize(label) === normalize(parsed.classLabel);
+  })
+    ?? valid.find((record) => {
+      const label = record.classLabel || record.class || record.className;
+      if (label) {
+        const recParsed = parseClassLabel(label);
+        if (recParsed && recParsed.grade === parsed.grade) return true;
+      }
+      return false;
+    })
     ?? valid.find((record) => record.grade !== undefined && numberFromGrade(record.grade) === parsed.grade)
     ?? valid.find((record) => Array.isArray(record.grades) && record.grades.some((grade) => numberFromGrade(grade) === parsed.grade));
   if (override) return override.stage;

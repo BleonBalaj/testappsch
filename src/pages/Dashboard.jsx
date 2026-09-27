@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, GraduationCap, Calendar, TrendingUp, Star, 
@@ -11,6 +11,7 @@ import {
 import { useTasks } from '../context/TasksContext';
 import { useMood } from '../context/MoodContext';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/Avatar';
 import './Dashboard.css';
 
@@ -45,7 +46,8 @@ const QUOTES = [
 const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const [note, setNote] = useState('');
   const { moodHistory, addMoodEntry, getTodayMood } = useMood();
-  const { staffList, studentsList } = useSchoolData();
+  const { staffList = [], studentsList = [], classesList = [], eventsList = [] } = useSchoolData();
+  const { currentUser, activeSchool } = useAuth();
   const todayEntry = getTodayMood();
   
   const [vibe, setVibe] = useState(todayEntry?.mood || '');
@@ -57,13 +59,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const isAdmin = userRole === 'admin';
 
   // Student specific tasks & interactive state
-  const [studentTasks, setStudentTasks] = useState([
-    { id: 1, text: 'Complete Calculus Problem Set #4 (Qs 1-12)', category: 'homework', priority: 'high', due: 'Today, 5:00 PM', completed: false },
-    { id: 2, text: 'Read Macbeth Act 3 Scene 2 & annotate key quotes', category: 'literature', priority: 'medium', due: 'Tomorrow', completed: false },
-    { id: 3, text: 'Submit Physics Lab Report: Projectile Motion', category: 'science', priority: 'high', due: 'Friday, Oct 17', completed: false },
-    { id: 4, text: 'World History: Outline Chapter 8 Renaissance essay', category: 'project', priority: 'medium', due: 'Monday, Oct 20', completed: false },
-    { id: 5, text: 'Review Chemistry periodic table trends & oxidation numbers', category: 'study', priority: 'low', due: 'Yesterday', completed: true },
-  ]);
+  const [studentTasks, setStudentTasks] = useState([]);
   const [newStudentTaskText, setNewStudentTaskText] = useState('');
 
   const toggleStudentTask = (id) => {
@@ -92,24 +88,12 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
     setStudentTasks(prev => prev.filter(t => t.id !== id));
   };
 
-  const [savedNotes, setSavedNotes] = useState(
-    isStudent ? [
-      { id: 1, text: 'Physics formula reminder: v = u + at, s = ut + 0.5at²', time: '1 hour ago' },
-      { id: 2, text: 'Hallway locker code: 24 - 18 - 36', time: 'Yesterday' }
-    ] : [
-      { id: 1, text: 'Remind class about the Science fair tomorrow!', time: '10 mins ago' },
-      { id: 2, text: 'Need to grade the math quizzes by Friday.', time: '2 hours ago' }
-    ]
-  );
+  const [savedNotes, setSavedNotes] = useState([]);
   const { tasks, moveTask } = useTasks();
 
   const [currentQuote] = useState(() => QUOTES[0]);
 
-  const [announcements] = useState([
-    { id: 1, tag: 'Academic', title: 'Mid-term evaluation reports submission deadline is this Friday', author: 'Principal Office', date: 'Today, 08:30 AM', priority: 'high' },
-    { id: 2, tag: 'Campus Life', title: 'Annual Robotics & Science Exhibition setup begins in Main Gymnasium', author: 'Science Dept', date: 'Yesterday', priority: 'medium' },
-    { id: 3, tag: 'Sports & Clubs', title: 'Varsity Basketball tryouts & Winter Gala auditions open this Thursday', author: 'Student Athletics', date: '2 days ago', priority: 'low' }
-  ]);
+  const [announcements, setAnnouncements] = useState([]);
 
   const getMoodPrompt = () => {
     const activeMood = pendingMood || vibe;
@@ -159,31 +143,42 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
     setSavedNotes(savedNotes.filter(n => n.id !== id));
   };
 
-  // Academic Calendar Milestones for Students
-  const academicCalendarEvents = [
-    { id: 1, month: 'OCT', day: '15', title: 'Annual Science & Tech Fair', time: '09:00 AM', location: 'Main Gymnasium', tag: 'Academic', color: '--primary' },
-    { id: 2, month: 'OCT', day: '18', title: 'Physics Mid-Term Examination', time: '10:15 AM', location: 'Science Lab 1', tag: 'Exam', color: '--destructive' },
-    { id: 3, month: 'OCT', day: '20', title: 'Term 1 Parent-Teacher Conferences', time: '04:00 PM', location: 'Conference Hall A', tag: 'Academic', color: '--accent' },
-    { id: 4, month: 'OCT', day: '22', title: 'Varsity Basketball & Club Tryouts', time: '03:30 PM', location: 'Sports Campus', tag: 'Campus Life', color: '--chart-2' },
-    { id: 5, month: 'NOV', day: '02', title: 'World History Term Project Due', time: '11:59 PM', location: 'Online Portal', tag: 'Deadline', color: '--chart-4' },
-    { id: 6, month: 'NOV', day: '10', title: 'Winter Gala Orchestra & Choir Auditions', time: '02:00 PM', location: 'Auditorium', tag: 'Arts', color: '--chart-1' },
-    { id: 7, month: 'NOV', day: '18', title: 'Calculus Honors Diagnostic Assessment', time: '08:30 AM', location: 'Room 302', tag: 'Exam', color: '--destructive' },
-    { id: 8, month: 'NOV', day: '25', title: 'Thanksgiving & Fall Break Begins', time: 'All Day', location: 'Campus-wide', tag: 'Recess', color: '--mood-happy' },
-  ];
+  // Academic Calendar Milestones dynamically derived from school events
+  const academicCalendarEvents = useMemo(() => {
+    return eventsList.map((e, idx) => ({
+      id: e.id || idx,
+      month: new Date(e.date || Date.now()).toLocaleString('default', { month: 'short' }).toUpperCase(),
+      day: String(new Date(e.date || Date.now()).getDate()),
+      title: e.title,
+      time: e.time || '10:00 AM',
+      location: e.location || 'Campus',
+      tag: e.type || 'Academic',
+      color: e.color || '--primary'
+    }));
+  }, [eventsList]);
 
-  const teacherClasses = [
-    { id: 1, name: 'Advanced Mathematics', time: '09:00 - 10:30', room: '302', students: 24, status: 'Completed' },
-    { id: 2, name: 'Physics Mechanics', time: '11:00 - 12:30', room: 'Lab B', students: 18, status: 'Next' },
-    { id: 3, name: 'Applied Calculus', time: '14:00 - 15:30', room: '304', students: 22, status: 'Upcoming' },
-  ];
+  const teacherClasses = useMemo(() => {
+    return classesList.filter(c => c.taughtByMe).map(c => ({
+      id: c.id,
+      name: c.name,
+      time: c.schedule || 'Scheduled',
+      room: c.room || 'Room 301',
+      students: c.students || 0,
+      status: 'Upcoming'
+    }));
+  }, [classesList]);
 
-  // Aria's 4 Enrolled Classes Today
-  const studentScheduleToday = [
-    { id: 1, period: 'Period 1', time: '08:30 - 10:00 AM', name: 'Advanced Mathematics', teacher: 'Dr. Sarah Smith', room: 'Room 302', status: 'completed' },
-    { id: 2, period: 'Period 2', time: '10:15 - 11:45 AM', name: 'Physics Mechanics', teacher: 'Prof. James Wilson', room: 'Science Lab 1', status: 'in-progress' },
-    { id: 3, period: 'Period 3', time: '12:30 - 02:00 PM', name: 'English Literature', teacher: 'Ms. Emily Brown', room: 'Room 105', status: 'upcoming' },
-    { id: 4, period: 'Period 4', time: '02:15 - 03:45 PM', name: 'World History', teacher: 'Mr. David Clark', room: 'Room 201', status: 'upcoming' },
-  ];
+  const studentScheduleToday = useMemo(() => {
+    return classesList.filter(c => c.enrolled).map((c, idx) => ({
+      id: c.id || idx,
+      period: c.period || `Period ${idx + 1}`,
+      time: c.schedule || 'Scheduled',
+      name: c.name,
+      teacher: c.teacher || 'Instructor',
+      room: c.room || 'Main Hall',
+      status: 'upcoming'
+    }));
+  }, [classesList]);
 
   const completedStudentTasksCount = studentTasks.filter(t => t.completed).length;
   const pendingStudentTasksCount = studentTasks.filter(t => !t.completed).length;
@@ -211,14 +206,14 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       <header className="dashboard-hero">
         <motion.div className="hero-welcome" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
           <h1 className="gradient-text">
-            {isStudent ? 'Welcome back, Aria! 🎓✨' : isAdmin ? 'Welcome back, Noesis! ✨' : 'Welcome back, Noesis! 📚'}
+            {`Welcome back${currentUser?.name ? `, ${currentUser.name}` : ''}! ${isStudent ? '🎓✨' : '✨'}`}
           </h1>
           <p>
             {isStudent 
-              ? 'Grade 10 Honors • Class 10A • Next up: Physics Mechanics at 10:15 AM (Lab 1)' 
+              ? `${activeSchool?.name || 'School'} Student Portal • ${studentScheduleToday.length} ${studentScheduleToday.length === 1 ? 'class' : 'classes'} enrolled` 
               : isAdmin 
-              ? "Here's what's happening across Noesis Horizon today."
-              : "You have 3 classes scheduled for today."}
+              ? `Here's what's happening across ${activeSchool?.name || 'the school'} today.`
+              : `You have ${teacherClasses.length} assigned ${teacherClasses.length === 1 ? 'class' : 'classes'} in curriculum.`}
           </p>
         </motion.div>
         
@@ -299,24 +294,24 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       <section className="stats-grid">
         {isStudent ? (
           <>
-            <StatCard icon={Star} label="Current GPA" value="3.92" color="--primary" delay={0.1} subtext="Top 5% • Honor Roll" />
-            <StatCard icon={BookOpen} label="Classes Today" value="4 Scheduled" color="--accent" delay={0.2} subtext="Next: Physics 10:15" />
+            <StatCard icon={Star} label="Academic Standing" value="Good Standing" color="--primary" delay={0.1} subtext="Active Enrollment" />
+            <StatCard icon={BookOpen} label="Enrolled Classes" value={`${studentScheduleToday.length} Courses`} color="--accent" delay={0.2} subtext={studentScheduleToday[0] ? `Next: ${studentScheduleToday[0].name}` : 'No classes today'} />
             <StatCard icon={CheckCircle2} label="Personal Tasks" value={`${pendingStudentTasksCount} Pending`} color="--chart-1" delay={0.3} subtext={`${completedStudentTasksCount} Completed`} />
-            <StatCard icon={Target} label="House Standing" value="480 Pts" color="--chart-2" delay={0.4} subtext="Raven House • Rank #2" />
+            <StatCard icon={Target} label="Academic Events" value={`${eventsList.length} Scheduled`} color="--chart-2" delay={0.4} subtext="Campus Calendar" />
           </>
         ) : isAdmin ? (
           <>
-            <StatCard icon={GraduationCap} label="Students Enrolled" value={studentsList.length || 6} color="--primary" delay={0.1} subtext="+4 this term" />
-            <StatCard icon={Users} label="Staff & Faculty" value={staffList.length || 6} color="--accent" delay={0.2} subtext="Full capacity" />
-            <StatCard icon={Star} label="Avg School GPA" value="3.82" color="--chart-1" delay={0.3} subtext="+0.14 YoY" />
-            <StatCard icon={Coffee} label="Active Classes" value="48" color="--chart-2" delay={0.4} subtext="All rooms active" />
+            <StatCard icon={GraduationCap} label="Students Enrolled" value={studentsList.length} color="--primary" delay={0.1} subtext="Active Students" />
+            <StatCard icon={Users} label="Staff & Faculty" value={staffList.length} color="--accent" delay={0.2} subtext="Faculty Roster" />
+            <StatCard icon={Star} label="Campus Events" value={eventsList.length} color="--chart-1" delay={0.3} subtext="Scheduled" />
+            <StatCard icon={Coffee} label="Active Classes" value={classesList.length} color="--chart-2" delay={0.4} subtext="Curriculum Catalog" />
           </>
         ) : (
           <>
-            <StatCard icon={BookOpen} label="My Classes" value="4" color="--primary" delay={0.1} subtext="Grade 10 & 11" />
-            <StatCard icon={AlertCircle} label="Pending Grades" value="12" color="--mood-sad" delay={0.2} subtext="Due this week" />
-            <StatCard icon={Presentation} label="Today's Lessons" value="3" color="--accent" delay={0.3} subtext="Next at 11:00 AM" />
-            <StatCard icon={CheckCircle2} label="Class Attendance" value="98%" color="--mood-happy" delay={0.4} subtext="High engagement" />
+            <StatCard icon={BookOpen} label="My Classes" value={teacherClasses.length} color="--primary" delay={0.1} subtext="Taught by you" />
+            <StatCard icon={Users} label="Total Students" value={studentsList.length} color="--accent" delay={0.2} subtext="Enrolled roster" />
+            <StatCard icon={Presentation} label="Curriculum Courses" value={classesList.length} color="--chart-1" delay={0.3} subtext="Full department" />
+            <StatCard icon={CheckCircle2} label="Upcoming Events" value={eventsList.length} color="--mood-happy" delay={0.4} subtext="School calendar" />
           </>
         )}
       </section>
@@ -332,15 +327,21 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             <span className="bulletin-badge glass">📢 Live Broadcasts</span>
           </div>
           <div className="bulletin-list">
-            {announcements.map(a => (
-              <div key={a.id} className="bulletin-item glass bouncy">
-                <span className={`bulletin-tag-pill ${a.priority}`}>{a.tag}</span>
-                <p className="bulletin-text">{a.title}</p>
-                <div className="bulletin-meta">
-                  <span>{a.author}</span> • <span>{a.date}</span>
-                </div>
+            {announcements.length === 0 ? (
+              <div style={{ padding: '1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
+                No active campus notices or broadcasts at this time.
               </div>
-            ))}
+            ) : (
+              announcements.map(a => (
+                <div key={a.id} className="bulletin-item glass bouncy">
+                  <span className={`bulletin-tag-pill ${a.priority}`}>{a.tag}</span>
+                  <p className="bulletin-text">{a.title}</p>
+                  <div className="bulletin-meta">
+                    <span>{a.author}</span> • <span>{a.date}</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -446,20 +447,9 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
               <button className="text-btn" onClick={() => onNavigate('students')}>View All</button>
             </div>
             <div className="activity-list">
-              {(isAdmin ? [1, 2, 3] : [1, 2]).map((i) => (
-                <div key={i} className="activity-item">
-                  <div className="avatar-small">
-                    <Avatar alt={isAdmin ? 'Emma Wilson' : 'Oliver Twist'} />
-                  </div>
-                  <div className="activity-details">
-                    <p>
-                      <strong>{isAdmin ? 'Emma Wilson' : 'Oliver Twist'}</strong> {isAdmin ? 'submitted Calculus Problem Set #3' : 'turned in "Physics Lab Report #4"'}
-                    </p>
-                    <span>{i} hour{i > 1 ? 's' : ''} ago</span>
-                  </div>
-                  {!isAdmin && <button className="grade-btn glass bouncy" onClick={() => onNavigate('classes')}>Grade</button>}
-                </div>
-              ))}
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
+                No recent activity or submissions to display.
+              </div>
             </div>
           </motion.div>
         )}
@@ -477,38 +467,42 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
               <div>
                 <h3>Today's Enrolled Classes</h3>
                 <span style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
-                  4 Periods Scheduled • Semester 1
+                  {studentScheduleToday.length} {studentScheduleToday.length === 1 ? 'Period' : 'Periods'} Scheduled
                 </span>
               </div>
               <button className="text-btn" onClick={() => onNavigate('schedule')}>Full Timetable</button>
             </div>
             <div className="student-classes-list">
-              {studentScheduleToday.map((cls) => (
-                <div 
-                  key={cls.id} 
-                  className="student-class-card bouncy"
-                  onClick={() => onNavigate('classes')}
-                  title="Click to view class syllabus"
-                >
-                  <div className="student-class-time-block">
-                    <span className="student-class-period">{cls.period}</span>
-                    <span className="student-class-time">{cls.time.split(' - ')[0]}</span>
-                  </div>
-                  <div className="student-class-main">
-                    <h4 className="student-class-title">{cls.name}</h4>
-                    <div className="student-class-sub">
-                      <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{cls.room}</span>
-                      <span>•</span>
-                      <span>{cls.teacher}</span>
+              {studentScheduleToday.length === 0 ? (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
+                  No classes enrolled for today. Browse the curriculum in Classes to enroll.
+                </div>
+              ) : (
+                studentScheduleToday.map((cls) => (
+                  <div 
+                    key={cls.id} 
+                    className="student-class-card bouncy"
+                    onClick={() => onNavigate('classes')}
+                    title="Click to view class syllabus"
+                  >
+                    <div className="student-class-time-block">
+                      <span className="student-class-period">{cls.period}</span>
+                      <span className="student-class-time">{(cls.time || '').split(' - ')[0]}</span>
+                    </div>
+                    <div className="student-class-main">
+                      <h4 className="student-class-title">{cls.name}</h4>
+                      <div className="student-class-sub">
+                        <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{cls.room}</span>
+                        <span>•</span>
+                        <span>{cls.teacher}</span>
+                      </div>
+                    </div>
+                    <div className="student-class-badge upcoming">
+                      Upcoming
                     </div>
                   </div>
-                  <div className={`student-class-badge ${cls.status}`}>
-                    {cls.status === 'completed' && 'Completed ✓'}
-                    {cls.status === 'in-progress' && 'Next Class ⚡'}
-                    {cls.status === 'upcoming' && 'Upcoming'}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </motion.div>
         ) : !isAdmin ? (
@@ -527,16 +521,22 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
               </div>
             </div>
             <div className="classes-today-list">
-              {teacherClasses.map(cls => (
-                <div key={cls.id} className={`class-row glass bouncy ${cls.status.toLowerCase()}`}>
-                  <div className="class-time">{cls.time}</div>
-                  <div className="class-info">
-                    <h4>{cls.name}</h4>
-                    <span>Room {cls.room} • {cls.students} Students</span>
-                  </div>
-                  <div className="class-status-badge">{cls.status}</div>
+              {teacherClasses.length === 0 ? (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
+                  No classes assigned to you today.
                 </div>
-              ))}
+              ) : (
+                teacherClasses.map(cls => (
+                  <div key={cls.id} className={`class-row glass bouncy ${(cls.status || '').toLowerCase()}`}>
+                    <div className="class-time">{cls.time}</div>
+                    <div className="class-info">
+                      <h4>{cls.name}</h4>
+                      <span>Room {cls.room} • {cls.students} Students</span>
+                    </div>
+                    <div className="class-status-badge">{cls.status}</div>
+                  </div>
+                ))
+              )}
             </div>
           </motion.div>
         ) : (
@@ -617,25 +617,31 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             </button>
           </div>
           <div className="notes-list">
-            <AnimatePresence>
-              {savedNotes.map((n) => (
-                <motion.div 
-                  key={n.id} 
-                  className="note-item bouncy"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                >
-                  <div className="note-content">
-                    <p>{n.text}</p>
-                    <span>{n.time}</span>
-                  </div>
-                  <button className="delete-btn" onClick={() => deleteNote(n.id)} title="Delete Note">
-                    <Trash2 size={16} />
-                  </button>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {savedNotes.length === 0 ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem' }}>
+                No notes saved yet. Type above to add one.
+              </div>
+            ) : (
+              <AnimatePresence>
+                {savedNotes.map((n) => (
+                  <motion.div 
+                    key={n.id} 
+                    className="note-item bouncy"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <div className="note-content">
+                      <p>{n.text}</p>
+                      <span>{n.time}</span>
+                    </div>
+                    <button className="delete-btn" onClick={() => deleteNote(n.id)} title="Delete Note">
+                      <Trash2 size={16} />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            )}
           </div>
         </motion.div>
 
@@ -656,36 +662,42 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             <button className="text-btn" onClick={() => onNavigate('events')}>See All</button>
           </div>
           <div className="events-list">
-            {academicCalendarEvents.map((event) => (
-              <div 
-                key={event.id} 
-                className="academic-calendar-event bouncy" 
-                onClick={() => onNavigate('events')}
-                title="Click to view details in Events Center"
-              >
-                <div className="academic-event-date-badge">
-                  <span className="academic-event-month">{event.month}</span>
-                  <span className="academic-event-day">{event.day}</span>
-                </div>
-                <div className="academic-event-body">
-                  <h4>{event.title}</h4>
-                  <div className="academic-event-meta">
-                    <span><Clock size={13} style={{ display: 'inline', marginRight: 3 }} />{event.time}</span>
-                    <span>•</span>
-                    <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{event.location}</span>
-                  </div>
-                </div>
-                <span 
-                  className="academic-tag-pill"
-                  style={{ 
-                    backgroundColor: `hsla(var(${event.color}), 0.15)`,
-                    color: `hsl(var(${event.color}))`
-                  }}
-                >
-                  {event.tag}
-                </span>
+            {academicCalendarEvents.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
+                No upcoming events scheduled on the calendar.
               </div>
-            ))}
+            ) : (
+              academicCalendarEvents.map((event) => (
+                <div 
+                  key={event.id} 
+                  className="academic-calendar-event bouncy" 
+                  onClick={() => onNavigate('events')}
+                  title="Click to view details in Events Center"
+                >
+                  <div className="academic-event-date-badge">
+                    <span className="academic-event-month">{event.month}</span>
+                    <span className="academic-event-day">{event.day}</span>
+                  </div>
+                  <div className="academic-event-body">
+                    <h4>{event.title}</h4>
+                    <div className="academic-event-meta">
+                      <span><Clock size={13} style={{ display: 'inline', marginRight: 3 }} />{event.time}</span>
+                      <span>•</span>
+                      <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{event.location}</span>
+                    </div>
+                  </div>
+                  <span 
+                    className="academic-tag-pill"
+                    style={{ 
+                      backgroundColor: `hsla(var(${event.color}), 0.15)`,
+                      color: `hsl(var(${event.color}))`
+                    }}
+                  >
+                    {event.tag}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </motion.div>
       </div>

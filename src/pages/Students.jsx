@@ -106,7 +106,7 @@ const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchiv
   );
 };
 
-const Students = ({ onStudentSelect, userRole = 'admin' }) => {
+const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   const { studentsList, addStudent, deleteStudent, toggleArchiveStudent } = useSchoolData();
   const isAdmin = userRole === 'admin';
 
@@ -115,6 +115,7 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
   const [selectedGrade, setSelectedGrade] = useState('all');
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState(null);
+  const [isSubmittingStudent, setIsSubmittingStudent] = useState(false);
 
   // Form State
   const [studentForm, setStudentForm] = useState({
@@ -122,6 +123,7 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
     name: '',
     grade: '10A',
     email: '',
+    password: '',
     phone: '',
     guardian: '',
     gpa: '3.85',
@@ -171,9 +173,14 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
     });
   }, [studentsList, searchTerm, selectedGrade, statusFilter]);
 
-  const handleAddStudentSubmit = (e) => {
+  const handleAddStudentSubmit = async (e) => {
     e.preventDefault();
     if (!studentForm.name || !studentForm.email) return;
+
+    if (!studentForm.password || studentForm.password.length < 6) {
+      if (addNotification) addNotification('error', 'Initial password must be at least 6 characters long.');
+      return;
+    }
 
     const classesArray = studentForm.assignedClassInput
       ? [studentForm.assignedClassInput]
@@ -181,35 +188,57 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
 
     const customId = studentForm.studentId.trim() || `STU-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    addStudent({
-      ...studentForm,
-      studentId: customId,
-      status: 'active',
-      assignedClasses: classesArray,
-      points: Number(studentForm.points) || 500,
-      gpa: Number(studentForm.gpa) || 3.8,
-      attendance: Number(studentForm.attendance) || 100
-    });
+    setIsSubmittingStudent(true);
+    try {
+      await addStudent({
+        ...studentForm,
+        studentId: customId,
+        status: 'active',
+        assignedClasses: classesArray,
+        points: Number(studentForm.points) || 500,
+        gpa: Number(studentForm.gpa) || 3.8,
+        attendance: Number(studentForm.attendance) || 100
+      });
 
-    setIsAddStudentOpen(false);
-    setStudentForm({
-      studentId: '',
-      name: '',
-      grade: '10A',
-      email: '',
-      phone: '',
-      guardian: '',
-      gpa: '3.85',
-      points: 1000,
-      attendance: 98,
-      assignedClassInput: 'Advanced Math (MATH-301)'
-    });
+      if (addNotification) {
+        addNotification('success', `Student ${studentForm.name} registered as a Firebase user! ✨`);
+      }
+
+      setIsAddStudentOpen(false);
+      setStudentForm({
+        studentId: '',
+        name: '',
+        grade: '10A',
+        email: '',
+        password: '',
+        phone: '',
+        guardian: '',
+        gpa: '3.85',
+        points: 1000,
+        attendance: 98,
+        assignedClassInput: 'Advanced Math (MATH-301)'
+      });
+    } catch (err) {
+      console.error('Failed to enroll student:', err);
+      if (addNotification) {
+        addNotification('error', err.message || 'Failed to register student in Firebase.');
+      }
+    } finally {
+      setIsSubmittingStudent(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (studentToDelete && isAdmin) {
-      deleteStudent(studentToDelete.id);
+      const target = studentToDelete;
       setStudentToDelete(null);
+      try {
+        await deleteStudent(target.id);
+        if (addNotification) addNotification('success', `${target.name || 'Student'} removed from school. Their access has been revoked.`);
+      } catch (err) {
+        console.error('Failed to remove student:', err);
+        if (addNotification) addNotification('error', err.message || 'Failed to remove student.');
+      }
     }
   };
 
@@ -384,11 +413,11 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
 
               <div className="delete-modal-body">
                 <p>
-                  Are you sure you want to permanently delete <strong>{studentToDelete.name}</strong> (Grade {studentToDelete.grade}) from the school records?
+                  Are you sure you want to permanently remove <strong>{studentToDelete.name}</strong> (Grade {studentToDelete.grade}) from this school?
                 </p>
                 <div className="delete-warning-callout">
                   <ShieldAlert size={16} />
-                  <span>All academic grade history, attendance tracking, and badge milestones will be permanently erased.</span>
+                  <span>Their school login access will be revoked immediately. If they have no other school memberships, they will see a "not part of any school" screen on next login. Academic history will also be removed.</span>
                 </div>
               </div>
 
@@ -473,7 +502,7 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Student Email</label>
+                    <label>Student Email *</label>
                     <input 
                       type="email" 
                       required 
@@ -484,6 +513,20 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
                   </div>
 
                   <div className="input-group">
+                    <label>Initial Login Password *</label>
+                    <input 
+                      type="password" 
+                      required 
+                      minLength={6}
+                      placeholder="Min. 6 characters for first login"
+                      value={studentForm.password || ''}
+                      onChange={e => setStudentForm({ ...studentForm, password: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
                     <label>Phone / Contact</label>
                     <input 
                       type="tel" 
@@ -492,16 +535,16 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
                       onChange={e => setStudentForm({ ...studentForm, phone: e.target.value })}
                     />
                   </div>
-                </div>
 
-                <div className="input-group">
-                  <label>Guardian / Parent Contact</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. David Lin (Father - +1 555-900-12)"
-                    value={studentForm.guardian}
-                    onChange={e => setStudentForm({ ...studentForm, guardian: e.target.value })}
-                  />
+                  <div className="input-group">
+                    <label>Guardian / Parent Contact</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. David Lin (Father - +1 555-900-12)"
+                      value={studentForm.guardian}
+                      onChange={e => setStudentForm({ ...studentForm, guardian: e.target.value })}
+                    />
+                  </div>
                 </div>
 
                 <div className="form-grid-2">
@@ -535,11 +578,11 @@ const Students = ({ onStudentSelect, userRole = 'admin' }) => {
                 </div>
 
                 <div className="modal-footer-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setIsAddStudentOpen(false)}>
+                  <button type="button" className="btn-secondary" onClick={() => setIsAddStudentOpen(false)} disabled={isSubmittingStudent}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Enroll Student
+                  <button type="submit" className="btn-primary" disabled={isSubmittingStudent}>
+                    {isSubmittingStudent ? 'Creating User in Firebase...' : 'Enroll Student'}
                   </button>
                 </div>
               </form>

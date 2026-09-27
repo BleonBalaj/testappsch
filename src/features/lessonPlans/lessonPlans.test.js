@@ -149,3 +149,21 @@ test('invalid stored JSON reports a warning and cannot be overwritten', () => {
   assert.throws(() => repo.savePreferences({ defaultClass: 'VI/2' }), /Cannot safely write/);
   assert.equal(storage.getItem(repo.storageKeys.personal), '{broken');
 });
+
+test('lesson plan preferences are isolated strictly per-user, per-school', () => {
+  const storage = memoryStorage();
+  const repoSchoolA = createLessonPlanRepository('arta', { storage, schoolId: 'school-a' });
+  const repoSchoolB = createLessonPlanRepository('arta', { storage, schoolId: 'school-b' });
+
+  repoSchoolA.savePreferences({ defaultClass: 'VI/2', duration: '5 min', defaultSubject: 'Matematikë' });
+  repoSchoolB.savePreferences({ defaultClass: 'IX/1', duration: '15 min', defaultSubject: 'Fizikë' });
+
+  assert.equal(repoSchoolA.getPreferences().duration, '5 min');
+  assert.equal(repoSchoolA.getPreferences().defaultClass, 'VI/2');
+  assert.equal(repoSchoolA.getPreferences().defaultSubject, 'Matematikë');
+
+  assert.equal(repoSchoolB.getPreferences().duration, '15 min');
+  assert.equal(repoSchoolB.getPreferences().defaultClass, 'IX/1');
+  assert.equal(repoSchoolB.getPreferences().defaultSubject, 'Fizikë');
+});
+

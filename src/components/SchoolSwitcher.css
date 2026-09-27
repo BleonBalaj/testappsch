@@ -1,0 +1,362 @@
+/* Top School Switcher Styling - Strict AGENTS.md Compliance */
+
+.school-switcher-container {
+  position: relative;
+  display: inline-block;
+}
+
+.school-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.85rem;
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  color: hsl(var(--foreground));
+  max-width: 260px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+}
+
+.school-switcher-btn:hover {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.school-switcher-btn.active {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 2px hsla(var(--primary), 0.25);
+}
+
+[data-theme='light'] .school-switcher-btn {
+  background: #ffffff !important;
+  border: 1px solid hsla(270, 20%, 85%, 1) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.school-switcher-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: hsla(var(--primary), 0.15);
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.school-switcher-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow: hidden;
+  text-align: left;
+}
+
+.school-switcher-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  line-height: 1.2;
+}
+
+.school-switcher-role-row {
+  margin-top: 1px;
+}
+
+.school-switcher-chevron {
+  color: hsl(var(--muted-foreground));
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 0.2rem;
+}
+
+.school-switcher-chevron.open {
+  transform: rotate(180deg);
+}
+
+.pending-badge-count {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  margin-left: 0.1rem;
+}
+
+/* Role Badges */
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.08rem 0.45rem;
+  border-radius: 6px;
+  line-height: 1.3;
+}
+
+.role-admin {
+  background: hsla(335, 70%, 65%, 0.18);
+  color: hsl(335, 70%, 75%);
+  border: 1px solid hsla(335, 70%, 65%, 0.35);
+}
+
+.role-teacher {
+  background: hsla(150, 60%, 50%, 0.16);
+  color: hsl(150, 60%, 65%);
+  border: 1px solid hsla(150, 60%, 50%, 0.35);
+}
+
+.role-counselor {
+  background: hsla(270, 65%, 60%, 0.18);
+  color: hsl(270, 65%, 75%);
+  border: 1px solid hsla(270, 65%, 60%, 0.35);
+}
+
+.role-dept {
+  background: hsla(215, 85%, 60%, 0.18);
+  color: hsl(215, 85%, 75%);
+  border: 1px solid hsla(215, 85%, 60%, 0.35);
+}
+
+.role-support {
+  background: hsla(38, 92%, 50%, 0.18);
+  color: hsl(38, 92%, 65%);
+  border: 1px solid hsla(38, 92%, 50%, 0.35);
+}
+
+.role-student {
+  background: hsla(270, 30%, 35%, 0.25);
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+/* Dropdown Menu - Solid Opaque Surface */
+.school-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 310px;
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 18px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+  z-index: 1050;
+  overflow: hidden;
+  padding: 0.75rem 0;
+}
+
+[data-theme='light'] .school-switcher-dropdown {
+  background: #ffffff !important;
+  border: 1px solid hsla(270, 20%, 85%, 1) !important;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
+}
+
+.dropdown-section-title {
+  padding: 0.35rem 1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(var(--muted-foreground));
+}
+
+.school-list-scroller {
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0.5rem;
+}
+
+.school-empty-state {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.school-item-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: hsl(var(--foreground));
+  text-align: left;
+  margin-bottom: 2px;
+}
+
+.school-item-btn:hover {
+  background: hsla(var(--primary), 0.08);
+  border-color: hsla(var(--primary), 0.25);
+}
+
+.school-item-btn.selected {
+  background: hsla(var(--primary), 0.14);
+  border-color: hsl(var(--primary));
+}
+
+.school-item-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  overflow: hidden;
+}
+
+.school-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: hsla(var(--primary), 0.12);
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.school-item-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.school-item-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 175px;
+}
+
+.school-item-role {
+  margin-top: 2px;
+}
+
+.school-item-check {
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+}
+
+/* Pending Invitations Section */
+.invitations-section {
+  border-top: 1px solid hsl(var(--border));
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.invitation-items-list {
+  padding: 0 0.5rem;
+}
+
+.invitation-card-item {
+  padding: 0.65rem 0.75rem;
+  background: hsla(var(--primary), 0.06);
+  border: 1px solid hsla(var(--primary), 0.25);
+  border-radius: 12px;
+  margin-bottom: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.invitation-school-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.invitation-role-tag {
+  font-size: 0.76rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.invitation-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-inv-accept {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-inv-decline {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  cursor: pointer;
+}
+
+.btn-inv-decline:hover {
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive));
+}
+
+/* Dropdown Footer */
+.dropdown-footer {
+  border-top: 1px solid hsl(var(--border));
+  padding: 0.5rem 0.75rem 0;
+  margin-top: 0.5rem;
+}
+
+.btn-create-school {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem;
+  border-radius: 12px;
+  background: hsla(var(--primary), 0.1);
+  border: 1px dashed hsla(var(--primary), 0.5);
+  color: hsl(var(--primary));
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-create-school:hover {
+  background: hsla(var(--primary), 0.2);
+  border-style: solid;
+}

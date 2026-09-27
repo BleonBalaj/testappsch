@@ -26,6 +26,15 @@ export default defineConfig([
       'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Za-z_]', argsIgnorePattern: '^_' }],
       'react-refresh/only-export-components': 'warn',
       'react-hooks/purity': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+    },
+  },
+  {
+    files: ['server/**/*.{js,mjs}'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
     },
   },
 ])

@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive, ArrowDown, ArrowLeft, ArrowUp, BookOpen, CalendarDays, Check,
   ChevronDown, Clock3, Copy, Download, FilePlus2, FileText, FolderArchive,
-  LayoutTemplate, List, ListOrdered, Maximize2, Plus, Printer,
-  RotateCcw, Save, Search, Settings2, Sparkles, Trash2, X,
+  LayoutTemplate, List, ListOrdered, Plus, Printer,
+  RotateCcw, Save, Search, Settings2, Sparkles, Trash2, X, Upload
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
 import {
   SUBJECTS, changePlanClass, changePlanSubject, createLessonPlanRepository,
   createPlan, dateInTimeZone, duplicatePlan, getDateRange, getSubjectArea, listSubjects, stageForClass,
@@ -145,14 +146,15 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const t = (key, values) => translate(language, key, values);
   const ct = (value) => translateCatalogValue(language, value);
   const { staffList } = useSchoolData();
-  const teacherId = currentUser.email || (userRole === 'admin' ? 'noesis-demo-admin@school.local' : 'demo-teacher@lumischool.edu');
-  const repository = useMemo(() => createLessonPlanRepository(teacherId), [teacherId]);
+  const { activeSchoolId, activeSchool } = useAuth();
+  const teacherId = currentUser?.email || currentUser?.uid || 'user@noesishorizon.edu';
+  const repository = useMemo(() => createLessonPlanRepository(teacherId, { schoolId: activeSchoolId || 'default' }), [teacherId, activeSchoolId]);
   const [view, setView] = useState(initialView);
   const [plans, setPlans] = useState(() => repository.listPlans());
   const [preferences, setPreferences] = useState(() => {
     const saved = repository.getPreferences();
     const staff = staffList.find((person) => person.email?.toLowerCase() === teacherId.toLowerCase());
-    return { ...saved, teacherName: saved.teacherName || currentUser.name || staff?.name || 'Noesis', schoolName: saved.schoolName || 'Noesis Horizon' };
+    return { ...saved, teacherName: saved.teacherName || currentUser.name || staff?.name || 'Educator', schoolName: saved.schoolName || activeSchool?.name || 'Noesis Horizon' };
   });
   const [settingsDraft, setSettingsDraft] = useState(() => preferences);
   const [templates, setTemplates] = useState(() => repository.listTemplates());
@@ -170,7 +172,6 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [saveState, setSaveState] = useState('saved');
   const [message, setMessage] = useState('');
   const [mobilePane, setMobilePane] = useState('editor');
-  const [fullScreen, setFullScreen] = useState(false);
   const [expanded, setExpanded] = useState({ basics: true, general: true, specific: true, methodology: true, assessment: true, homework: true, reflection: true });
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('all');
@@ -275,7 +276,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     return () => window.clearTimeout(timer);
   }, [scheduledLesson, preferences, schoolSubjects, repository, teacherId, currentUser.name, language, refresh, onScheduledLessonConsumed]);
   const openPlan = (plan, pane = 'editor') => { activePlanRef.current = plan; setActivePlan(plan); setSaveState('saved'); setMobilePane(pane); setView('editor'); };
-  const leaveEditor = () => { if (!saveNow()) return; setFullScreen(false); setView('plans'); setActivePlan(null); activePlanRef.current = null; };
+  const leaveEditor = () => { if (!saveNow()) return; setView('plans'); setActivePlan(null); activePlanRef.current = null; };
   const changeSubject = (subject) => updatePlan((current) => changePlanSubject(current, subject, { schoolSubjects }));
   const changeClass = (classLabel) => updatePlan((current) => changePlanClass(current, classLabel, { schoolSubjects, schoolStages: repository.listStageMappings() }));
   const updateArray = (key, values) => updatePlan({ [key]: values });
@@ -329,14 +330,14 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const storageStatus = repository.getStorageStatus();
   const storageProblem = !storageStatus.personal.ok || !storageStatus.school.ok;
 
-  return <LessonLanguageContext.Provider value={language}><div lang={language === 'sq' ? 'sq' : 'en'} className={`lesson-page ${fullScreen ? 'lesson-fullscreen' : ''}`}>
+  return <LessonLanguageContext.Provider value={language}><div lang={language === 'sq' ? 'sq' : 'en'} className="lesson-page">
     {storageProblem && <div className="lesson-storage-warning" role="alert">{t('validation.saveFailed')}</div>}
     {message && <div className="lesson-toast" role="status"><Check size={16} />{message}</div>}
     {view !== 'editor' && <>
       <header className="lesson-page-header">
         <div><div className="lesson-title-row"><h1 className="gradient-text">{t('page.title')}</h1><span className="lesson-count-pill">{t('page.activeCount', { count: stats.total })}</span></div>
           <p>{t('page.subtitle')}</p></div>
-        <div className="lesson-header-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><label className="lesson-pdf-name-toggle"><input type="checkbox" checked={showSchoolName} onChange={(event) => changeShowSchoolName(event.target.checked)} />{t('page.includeSchoolNamePdf')}</label><button type="button" className="btn-secondary" onClick={() => setView('settings')}><Settings2 size={17} /> {t('page.settings')}</button>
+        <div className="lesson-header-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={() => setView('settings')}><Settings2 size={17} /> {t('page.settings')}</button>
           <button type="button" className="btn-primary" onClick={() => startPlan()}><Plus size={18} /> {t('page.createPlan')}</button></div>
       </header>
       <nav className="lesson-tabs" aria-label={t('page.sectionsAria')}>
@@ -362,9 +363,35 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           {dateFilter === 'custom' && <><input aria-label={t('filter.fromDateAria')} type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /><input aria-label={t('filter.toDateAria')} type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></>}
         </div>
         {filtered.length ? <div className="lesson-plan-list">{filtered.map((plan) => <article className="lesson-plan-row" key={plan.id}>
-          <div className="lesson-plan-icon"><BookOpen size={22} /></div>
-          <div className="lesson-plan-main"><div className="lesson-plan-title"><h3>{plan.lessonUnit || t('plans.untitledUnit')}</h3><span className={`lesson-status lesson-status-${plan.status}`}>{t(`status.${plan.status}`)}</span></div>
-            <p>{[ct(plan.subject), plan.classLabel, plan.topic].filter(Boolean).join(' · ') || t('plans.completeDetails')}</p>
+          <div 
+            className="lesson-plan-icon" 
+            onClick={() => openPlan(plan)} 
+            role="button" 
+            tabIndex={0} 
+            title={t('plans.edit')}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlan(plan); } }}
+          >
+            <BookOpen size={22} />
+          </div>
+          <div className="lesson-plan-main">
+            <div className="lesson-plan-title">
+              <h3 
+                onClick={() => openPlan(plan)} 
+                role="button" 
+                tabIndex={0} 
+                title={t('plans.edit')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlan(plan); } }}
+              >
+                {plan.lessonUnit || t('plans.untitledUnit')}
+              </h3>
+              <span className={`lesson-status lesson-status-${plan.status}`}>{t(`status.${plan.status}`)}</span>
+            </div>
+            <p 
+              onClick={() => openPlan(plan)} 
+              title={t('plans.edit')}
+            >
+              {[ct(plan.subject), plan.classLabel, plan.topic].filter(Boolean).join(' · ') || t('plans.completeDetails')}
+            </p>
             <small>{dateLabel(plan.date, language)} · {t('plans.modified', { date: plan.updatedAt ? language === 'sq' ? dateInTimeZone(plan.updatedAt, SCHOOL_TIME_ZONE).split('-').reverse().slice(0, 2).join('.') : new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(plan.updatedAt)) : t('date.todayLower') })}</small>
           </div>
           <div className="lesson-plan-actions">
@@ -392,6 +419,46 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           <Field label={t('settings.assignedClasses')} hint={t('settings.assignedClassesHint')}><input value={(settingsDraft.assignedClasses || []).join(', ')} onChange={(event) => setSettingsDraft({ ...settingsDraft, assignedClasses: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} placeholder="VI/2, VII/1" /></Field>
           <Field label={t('settings.teacherName')}><input value={settingsDraft.teacherName || ''} onChange={(event) => setSettingsDraft({ ...settingsDraft, teacherName: event.target.value })} placeholder={t('settings.teacherNamePlaceholder')} /></Field>
           <Field label={t('settings.school')}><input value={settingsDraft.schoolName || ''} onChange={(event) => setSettingsDraft({ ...settingsDraft, schoolName: event.target.value })} placeholder={t('settings.schoolPlaceholder')} /></Field>
+          <Field label={language === 'sq' ? 'Logoja e shkollës (në PDF)' : 'School Logo (for PDF)'}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {settingsDraft.schoolLogo ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'hsla(var(--background), 0.5)', padding: '0.6rem 0.85rem', borderRadius: '14px', border: '1px solid hsla(var(--border), 0.6)' }}>
+                  <img src={settingsDraft.schoolLogo} alt="School Logo" style={{ maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }} />
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                    onClick={() => {
+                      setSettingsDraft({ ...settingsDraft, schoolLogo: '' });
+                      const el = document.getElementById('lesson-school-logo-input');
+                      if (el) el.value = '';
+                    }}
+                  >
+                    {language === 'sq' ? 'Hiq Logon' : 'Remove Logo'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    id="lesson-school-logo-input"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      const reader = new FileReader();
+                      reader.onload = (evt) => setSettingsDraft({ ...settingsDraft, schoolLogo: evt.target.result });
+                      reader.readAsDataURL(f);
+                    }}
+                  />
+                  <label htmlFor="lesson-school-logo-input" className="btn-secondary glass" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.5rem 1rem', borderRadius: '12px' }}>
+                    <Upload size={15} /> {language === 'sq' ? 'Ngarko Logo të Shkollës' : 'Upload School Logo'}
+                  </label>
+                </div>
+              )}
+            </div>
+          </Field>
           <Field label={t('settings.academicYear')}><input value={settingsDraft.academicYear || ''} onChange={(event) => setSettingsDraft({ ...settingsDraft, academicYear: event.target.value })} placeholder={t('settings.exampleAcademicYear')} /></Field>
           <Field label={t('settings.duration')}><input type="number" min="1" max="240" value={settingsDraft.duration || ''} onChange={(event) => setSettingsDraft({ ...settingsDraft, duration: event.target.value })} placeholder="45" /></Field>
           <label className="lesson-check-row"><input type="checkbox" checked={Boolean(settingsDraft.rememberLastUsed)} onChange={(event) => setSettingsDraft({ ...settingsDraft, rememberLastUsed: event.target.checked })} /> {t('settings.rememberLastUsed')}</label>
@@ -423,7 +490,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     {view === 'editor' && activePlan && <>
       <div className="lesson-editor-toolbar glass">
         <div className="lesson-editor-toolbar-left"><button type="button" className="lesson-icon-button" onClick={leaveEditor} aria-label={t('editor.backAria')}><ArrowLeft size={20} /></button><div><h1>{activePlan.lessonUnit || t('editor.newPlanTitle')}</h1><span className={`lesson-save-state lesson-save-${saveState}`}>{t(`save.${saveState}`)}</span></div></div>
-        <div className="lesson-editor-toolbar-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={saveNow}><Save size={16} /> {t('editor.save')}</button><button type="button" className="btn-secondary" onClick={() => { if (!saveNow()) return; setMobilePane('preview'); document.getElementById('lesson-preview')?.scrollIntoView({ block: 'nearest' }); }}><FileText size={16} /> {t('editor.preview')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)}><Printer size={16} /> {t('editor.print')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)} title={t('editor.pdfTitle')}><Download size={16} /> {t('editor.pdf')}</button><button type="button" className="lesson-icon-button" onClick={() => setFullScreen(!fullScreen)} aria-label={t(fullScreen ? 'editor.exitExpandAria' : 'editor.expandAria')}><Maximize2 size={18} /></button></div>
+        <div className="lesson-editor-toolbar-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={saveNow}><Save size={16} /> {t('editor.save')}</button><button type="button" className="btn-secondary" onClick={() => { if (!saveNow()) return; setMobilePane('preview'); document.getElementById('lesson-preview')?.scrollIntoView({ block: 'nearest' }); }}><FileText size={16} /> {t('editor.preview')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)}><Printer size={16} /> {t('editor.print')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)} title={t('editor.pdfTitle')}><Download size={16} /> {t('editor.pdf')}</button></div>
       </div>
       <div className="lesson-editor-subbar"><div><span className={`lesson-status lesson-status-${activePlan.status}`}>{t(`status.${activePlan.status}`)}</span><span>{dateLabel(activePlan.date, language)} · {activePlan.classLabel || t('editor.noClass')}</span></div><div>
         <button type="button" onClick={() => makeTemplate(activePlan)}><LayoutTemplate size={15} /> {t('editor.saveAsTemplate')}</button>
@@ -464,12 +531,12 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           <Section id="lesson-homework" title={t('editor.homeworkTitle')} open={expanded.homework} onToggle={() => toggleSection('homework')}><RichEditor label={t('editor.homework')} value={activePlan.homework} onChange={(value) => updatePlan({ homework: value })} placeholder={t('editor.homeworkPlaceholder')} /></Section>
           <Section id="lesson-reflection" title={t('editor.reflectionTitle')} subtitle={t('editor.reflectionSubtitle')} open={expanded.reflection} onToggle={() => toggleSection('reflection')}><RichEditor label={t('editor.reflection')} value={activePlan.reflection} onChange={(value) => updatePlan({ reflection: value })} placeholder={t('editor.reflectionPlaceholder')} /></Section>
         </div>
-        <div className={`lesson-preview-panel glass ${mobilePane === 'editor' ? 'lesson-mobile-hidden' : ''}`} id="lesson-preview"><div className="lesson-preview-heading"><div><FileText size={18} /><strong>{t('editor.documentPreview')}</strong></div><div className="lesson-preview-controls"><label>{t('editor.pdfLanguage')} <select aria-label={t('editor.pdfLanguage')} value={documentLanguage} onChange={(event) => changeDocumentLanguage(event.target.value)}><option value="sq">Shqip</option><option value="en">English</option></select></label><label className="lesson-pdf-name-toggle"><input type="checkbox" checked={showSchoolName} onChange={(event) => changeShowSchoolName(event.target.checked)} />{t('page.includeSchoolNamePdf')}</label><span>{t('editor.a4Portrait')}</span></div></div><div className="lesson-paper-wrap"><LessonPlanDocument plan={activePlan} language={documentLanguage} showSchoolName={showSchoolName} /></div></div>
+        <div className={`lesson-preview-panel glass ${mobilePane === 'editor' ? 'lesson-mobile-hidden' : ''}`} id="lesson-preview"><div className="lesson-preview-heading"><div><FileText size={18} /><strong>{t('editor.documentPreview')}</strong></div><div className="lesson-preview-controls"><label>{t('editor.pdfLanguage')} <select aria-label={t('editor.pdfLanguage')} value={documentLanguage} onChange={(event) => changeDocumentLanguage(event.target.value)}><option value="sq">Shqip</option><option value="en">English</option></select></label><span>{t('editor.a4Portrait')}</span></div></div><div className="lesson-paper-wrap"><LessonPlanDocument plan={{ ...(activePlan || {}), schoolLogo: settingsDraft?.schoolLogo !== undefined ? settingsDraft.schoolLogo : (activePlan?.schoolLogo || preferences?.schoolLogo) }} language={documentLanguage} showSchoolName={showSchoolName} /></div></div>
       </div>
     </>}
     {templateSource && <div className="lesson-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTemplateSource(null); }}><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-template-dialog-title"><h2 id="lesson-template-dialog-title">{t('templates.dialogTitle')}</h2><p>{t('templates.dialogDescription')}</p><label className="lesson-field"><span className="lesson-field-heading">{t('templates.namePrompt')}</span><input autoFocus value={templateName} onChange={(event) => setTemplateName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveTemplate(); if (event.key === 'Escape') setTemplateSource(null); }} /></label><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setTemplateSource(null)}>{t('common.cancel')}</button><button type="button" className="btn-primary" onClick={saveTemplate} disabled={!templateName.trim()}>{t('editor.saveAsTemplate')}</button></div></div></div>}
     {pendingTopic && <div className="lesson-modal-overlay" role="presentation"><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-topic-dialog-title"><h2 id="lesson-topic-dialog-title">{t('confirm.outcomeTitle')}</h2><p>{t('confirm.replaceTopicOutcome')}</p><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setPendingTopic(null)}>{t('confirm.keepOutcome')}</button><button type="button" className="btn-primary" onClick={() => { updatePlan({ topic: pendingTopic.title, topicLearningOutcome: pendingTopic.outcome }); setPendingTopic(null); }}>{t('confirm.useSavedOutcome')}</button></div></div></div>}
-    <div className="lesson-print-only"><LessonPlanDocument plan={printTarget?.plan || activePlan} language={documentLanguage} showSchoolName={showSchoolName} /></div>
+    <div className="lesson-print-only"><LessonPlanDocument plan={{ ...(printTarget?.plan || activePlan || {}), schoolLogo: printTarget?.plan?.schoolLogo || (settingsDraft?.schoolLogo !== undefined ? settingsDraft.schoolLogo : (activePlan?.schoolLogo || preferences?.schoolLogo)) }} language={documentLanguage} showSchoolName={showSchoolName} /></div>
   </div></LessonLanguageContext.Provider>;
 }
 

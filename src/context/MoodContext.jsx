@@ -1,27 +1,51 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { collection, doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { useAuth } from './AuthContext';
 
 const MoodContext = createContext();
 
 export const MoodProvider = ({ children }) => {
-  const [moodHistory, setMoodHistory] = useState(() => {
-    const saved = localStorage.getItem('lumi-mood-history');
-    return saved ? JSON.parse(saved) : [
-      { id: 1, date: '2026-05-01', mood: 'happy', note: 'Great day at school!' },
-      { id: 2, date: '2026-05-02', mood: 'neutral', note: 'A bit tired today.' },
-    ];
-  });
+  const { currentUser } = useAuth();
+  const [moodHistory, setMoodHistory] = useState([]);
 
   useEffect(() => {
-    localStorage.setItem('lumi-mood-history', JSON.stringify(moodHistory));
-  }, [moodHistory]);
+    if (!currentUser?.uid) return;
 
-  const addMoodEntry = (mood, note) => {
+    const moodsCol = collection(db, 'users', currentUser.uid, 'moods');
+    const unsubscribe = onSnapshot(moodsCol, (snapshot) => {
+      const moods = [];
+      snapshot.forEach(docSnap => {
+        moods.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setMoodHistory(moods);
+    }, (err) => {
+      console.warn('Notice listening to moods:', err.message);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
+
+  const addMoodEntry = async (mood, note) => {
     const today = new Date().toISOString().split('T')[0];
-    // Replace today's entry if it exists, or add new
+    const newEntry = { id: today, date: today, mood, note };
+
     setMoodHistory(prev => {
       const filtered = prev.filter(item => item.date !== today);
-      return [{ id: Date.now(), date: today, mood, note }, ...filtered];
+      return [newEntry, ...filtered];
     });
+
+    if (currentUser?.uid) {
+      try {
+        const moodDocRef = doc(db, 'users', currentUser.uid, 'moods', today);
+        await setDoc(moodDocRef, {
+          ...newEntry,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Error saving mood to Firestore:', err.message);
+      }
+    }
   };
 
   const getTodayMood = () => {

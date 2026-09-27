@@ -29,13 +29,16 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate,
         (t.department && t.department.toLowerCase().includes(lowerQuery)) ||
         (t.roleName && t.roleName.toLowerCase().includes(lowerQuery))
       ).slice(0, 3),
-      classes: classes.filter(c => 
-        c.name.toLowerCase().includes(lowerQuery) || 
-        (c.code && c.code.toLowerCase().includes(lowerQuery)) ||
-        (c.teacher && c.teacher.toLowerCase().includes(lowerQuery))
-      ).slice(0, 3),
+      classes: classes.filter(c => {
+        const cName = c.name || c.subject || '';
+        return (
+          cName.toLowerCase().includes(lowerQuery) || 
+          (c.code && c.code.toLowerCase().includes(lowerQuery)) ||
+          (c.teacher && c.teacher.toLowerCase().includes(lowerQuery))
+        );
+      }).slice(0, 3),
       events: events.filter(e => 
-        e.title.toLowerCase().includes(lowerQuery) || 
+        (e.title && e.title.toLowerCase().includes(lowerQuery)) || 
         (e.location && e.location.toLowerCase().includes(lowerQuery))
       ).slice(0, 3)
     };
@@ -117,7 +120,7 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate,
                       </div>
                       <div className="result-info">
                         <span className="name">{student.name}</span>
-                        <span className="meta">Grade {student.grade} • GPA {student.gpa || '3.8'}</span>
+                        <span className="meta">Grade {student.grade || student.class || 'N/A'}{student.gpa ? ` • GPA ${student.gpa}` : ''}</span>
                       </div>
                       <ArrowRight size={14} className="arrow" />
                     </div>
@@ -134,8 +137,8 @@ const SearchOverlay = ({ isOpen, onClose, classes = [], events = [], onNavigate,
                         <GraduationCap size={20} />
                       </div>
                       <div className="result-info">
-                        <span className="name">{cls.name}</span>
-                        <span className="meta">{cls.code || 'Class'} • {cls.teacher}</span>
+                        <span className="name">{cls.name || cls.subject}</span>
+                        <span className="meta">{cls.code || cls.classLabel || cls.room || 'Class'} • {cls.teacher || 'Instructor'}</span>
                       </div>
                       <ArrowRight size={14} className="arrow" />
                     </div>

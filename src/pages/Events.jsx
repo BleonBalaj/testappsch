@@ -4,15 +4,10 @@ import {
   Calendar as CalendarIcon, MapPin, Clock, Users, Plus, Star, 
   X, Check, Download, Sparkles, Filter 
 } from 'lucide-react';
+import { useSchoolData } from '../context/SchoolDataContext';
 import './Events.css';
 
-const INITIAL_EVENTS = [
-  { id: 1, title: 'Annual Science & Tech Fair', date: '2026-10-15', time: '09:00 AM - 03:00 PM', location: 'Main Gymnasium', type: 'Academic', color: '--primary', attendees: 120, starred: true },
-  { id: 2, title: 'Staff Development & Alignment Day', date: '2026-10-18', time: '08:00 AM - 04:00 PM', location: 'Conference Room B', type: 'Staff', color: '--accent', attendees: 45, starred: false },
-  { id: 3, title: 'Parent-Teacher Conferences', date: '2026-10-20', time: '16:00 PM - 20:00 PM', location: 'Virtual / Classrooms', type: 'Meeting', color: '--chart-2', attendees: 300, starred: true },
-  { id: 4, title: 'Varsity Basketball Tryouts', date: '2026-10-22', time: '15:30 PM - 18:00 PM', location: 'Sports Campus', type: 'Sports', color: '--chart-4', attendees: 60, starred: false },
-  { id: 5, title: 'Winter Gala Rehearsal & Orchestra', date: '2026-11-05', time: '14:00 PM - 16:00 PM', location: 'Auditorium', type: 'Arts', color: '--chart-1', attendees: 85, starred: false },
-];
+const INITIAL_EVENTS = [];
 
 const EventCard = ({ event, onToggleStar }) => (
   <motion.div 
@@ -21,17 +16,17 @@ const EventCard = ({ event, onToggleStar }) => (
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, scale: 0.9 }}
     layout
-    style={{ borderLeft: `6px solid hsl(var(${event.color}))` }}
+    style={{ borderLeft: `6px solid hsl(var(${event.color || '--primary'}))` }}
   >
-    <div className="event-date-box" style={{ background: `hsla(var(${event.color}), 0.15)`, color: `hsl(var(${event.color}))` }}>
-      <span className="event-month">{new Date(event.date).toLocaleString('default', { month: 'short' })}</span>
-      <span className="event-day">{new Date(event.date).getDate()}</span>
+    <div className="event-date-box" style={{ background: `hsla(var(${event.color || '--primary'}), 0.15)`, color: `hsl(var(${event.color || '--primary'}))` }}>
+      <span className="event-month">{new Date(event.date || Date.now()).toLocaleString('default', { month: 'short' })}</span>
+      <span className="event-day">{new Date(event.date || Date.now()).getDate()}</span>
     </div>
     
     <div className="event-main-info">
       <div className="event-header">
         <h3>{event.title}</h3>
-        <span className="event-type-badge" style={{ background: `hsla(var(${event.color}), 0.2)`, color: `hsl(var(${event.color}))` }}>
+        <span className="event-type-badge" style={{ background: `hsla(var(${event.color || '--primary'}), 0.2)`, color: `hsl(var(${event.color || '--primary'}))` }}>
           {event.type}
         </span>
       </div>
@@ -47,7 +42,7 @@ const EventCard = ({ event, onToggleStar }) => (
         </div>
         <div className="meta-info">
           <Users size={16} />
-          <span>{event.attendees} Registered</span>
+          <span>{event.attendees || 0} Registered</span>
         </div>
       </div>
     </div>
@@ -66,19 +61,19 @@ const EventCard = ({ event, onToggleStar }) => (
 );
 
 const Events = ({ userRole = 'student' }) => {
-  const [eventsList, setEventsList] = useState(INITIAL_EVENTS);
+  const { eventsList = [], addEvent, updateEvent } = useSchoolData();
   const [filter, setFilter] = useState('All');
   const [isNewEventOpen, setIsNewEventOpen] = useState(false);
 
   // New Event Form State
   const [eventForm, setEventForm] = useState({
     title: '',
-    date: '2026-10-25',
+    date: new Date().toISOString().split('T')[0],
     time: '10:00 AM - 12:00 PM',
     location: 'Main Auditorium',
     type: 'Academic',
     color: '--primary',
-    attendees: 50
+    attendees: 0
   });
   
   const types = userRole === 'student' 
@@ -92,30 +87,34 @@ const Events = ({ userRole = 'student' }) => {
     : eventsList.filter(e => e.type === filter);
 
   const toggleStar = (id) => {
-    setEventsList(prev => prev.map(e => e.id === id ? { ...e, starred: !e.starred } : e));
+    const ev = eventsList.find(e => e.id === id);
+    if (ev && updateEvent) {
+      updateEvent(id, { starred: !ev.starred });
+    }
   };
 
-  const handleAddEventSubmit = (e) => {
+  const handleAddEventSubmit = async (e) => {
     e.preventDefault();
     if (!eventForm.title) return;
 
     const newEvent = {
       ...eventForm,
-      id: Date.now(),
-      attendees: Number(eventForm.attendees) || 25,
+      attendees: Number(eventForm.attendees) || 0,
       starred: false
     };
 
-    setEventsList(prev => [newEvent, ...prev]);
+    if (addEvent) {
+      await addEvent(newEvent);
+    }
     setIsNewEventOpen(false);
     setEventForm({
       title: '',
-      date: '2026-10-25',
+      date: new Date().toISOString().split('T')[0],
       time: '10:00 AM - 12:00 PM',
       location: 'Main Auditorium',
       type: 'Academic',
       color: '--primary',
-      attendees: 50
+      attendees: 0
     });
   };
 

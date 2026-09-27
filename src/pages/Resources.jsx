@@ -22,17 +22,8 @@ import {
 } from 'lucide-react';
 import './Resources.css';
 
-const INITIAL_RESOURCES = [
-  { id: 1, title: 'Calculus Cheat Sheet', category: 'Mathematics', type: 'PDF', size: '2.4 MB', date: 'Oct 12, 2026', author: 'Dr. Sarah Smith', stars: 4.8, isBookmarked: true },
-  { id: 2, title: 'Intro to Quantum Physics', category: 'Science', type: 'Video', size: '15:20', date: 'Oct 15, 2026', author: 'Prof. James Wilson', stars: 4.9, isBookmarked: false },
-  { id: 3, title: 'Macbeth Study Guide', category: 'Literature', type: 'Doc', size: '1.1 MB', date: 'Sep 28, 2026', author: 'Ms. Emily Brown', stars: 4.5, isBookmarked: false },
-  { id: 4, title: 'World War II Timeline', category: 'History', type: 'PDF', size: '5.8 MB', date: 'Nov 02, 2026', author: 'Mr. David Clark', stars: 4.7, isBookmarked: true },
-  { id: 5, title: 'Periodic Table Interactive', category: 'Science', type: 'Link', size: 'Web App', date: 'Oct 20, 2026', author: 'Dr. Arthur Pendelton', stars: 4.6, isBookmarked: false },
-  { id: 6, title: 'Brush Techniques 101', category: 'Arts', type: 'Video', size: '12:45', date: 'Nov 05, 2026', author: 'Ms. Clara Oswald', stars: 4.3, isBookmarked: false },
-  { id: 7, title: 'Algebraic Expressions PDF', category: 'Mathematics', type: 'PDF', size: '3.1 MB', date: 'Oct 10, 2026', author: 'Dr. Sarah Smith', stars: 4.4, isBookmarked: false },
-  { id: 8, title: 'DNA Structure 3D Simulation', category: 'Science', type: 'Link', size: 'Web App', date: 'Oct 25, 2026', author: 'Dr. Arthur Pendelton', stars: 5.0, isBookmarked: true },
-  { id: 9, title: 'Python Algorithms & Data Structures', category: 'Computer Science', type: 'Doc', size: '3.4 MB', date: 'Nov 01, 2026', author: 'Prof. Alan Turing', stars: 4.9, isBookmarked: false },
-];
+const INITIAL_RESOURCES = [];
+
 
 const RESOURCE_CLASS_GROUPS = [
   {

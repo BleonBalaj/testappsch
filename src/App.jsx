@@ -21,12 +21,18 @@ import SearchOverlay from './components/SearchOverlay';
 import NotificationContainer from './components/Notification';
 import QuickAction from './components/QuickAction';
 import Login from './pages/Login';
+import SchoolSwitcher from './components/SchoolSwitcher';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { MoodProvider } from './context/MoodContext';
-import { SchoolDataProvider } from './context/SchoolDataContext';
-import { Calendar } from 'lucide-react';
+import { SchoolDataProvider, useSchoolData } from './context/SchoolDataContext';
+import { TasksProvider } from './context/TasksContext';
+import { Calendar, Sparkles, School, Plus, LogOut } from 'lucide-react';
 import './App.css';
 
-function App() {
+function AppContent() {
+  const { currentUser, currentRole, activeSchoolId, activeSchool, authLoading, schoolLinks, createNewSchool, logoutUser } = useAuth();
+  const { classesList = [], eventsList = [] } = useSchoolData();
+
   const getInitialPath = () => {
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
@@ -43,41 +49,41 @@ function App() {
   const [pendingScheduledLesson, setPendingScheduledLesson] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [userRole, setUserRole] = useState(() => localStorage.getItem('lumi-role') || 'student'); // 'student', 'teacher', or 'admin'
   const [lessonLanguage, setLessonLanguage] = useState(() => localStorage.getItem('lumi-lesson-language') === 'sq' ? 'sq' : 'en');
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('lumi-current-user') || 'null');
-      return saved && typeof saved === 'object'
-        ? { name: saved.name || '', email: saved.email || '' }
-        : { name: '', email: '' };
-    } catch {
-      return { name: '', email: '' };
-    }
-  });
+  
   const mainContentRef = useRef(null);
 
-  const handleLogin = (user) => {
-    if (user?.role) handleSetUserRole(user.role);
-    const loginUser = { name: user?.name || '', email: user?.email || '' };
-    setCurrentUser(loginUser);
-    localStorage.setItem('lumi-current-user', JSON.stringify(loginUser));
-    handleNavigate('dashboard');
-  };
+  // The active role strictly tracks currentRole attached to active school membership
+  const userRole = currentRole || 'student';
+
+  // Route protection based on role
+  useEffect(() => {
+    if (userRole === 'student' && ['staff', 'teachers', 'students', 'student-overview', 'resources', 'lesson-plans', 'lesson-plans-settings'].includes(currentPath)) {
+      setPendingScheduledLesson(null);
+      setCurrentPath('dashboard');
+    }
+  }, [userRole, currentPath]);
 
   const handleNavigate = (path) => {
     if (path !== 'lesson-plans') setPendingScheduledLesson(null);
     setCurrentPath(path);
     if (typeof window !== 'undefined') {
       if (path === 'login') {
-        setCurrentUser({ name: '', email: '' });
-        localStorage.removeItem('lumi-current-user');
         window.history.pushState({}, '', '/login');
       } else if (window.location.pathname.replace(/^\/+|\/+$/g, '') === 'login') {
         window.history.pushState({}, '', '/');
       }
     }
   };
+
+  // Handle redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !currentUser && currentPath !== 'login') {
+      handleNavigate('login');
+    } else if (!authLoading && currentUser && currentPath === 'login') {
+      handleNavigate('dashboard');
+    }
+  }, [currentUser, authLoading, currentPath]);
 
   useEffect(() => {
     const handleUrlChange = () => {
@@ -96,17 +102,6 @@ function App() {
     };
   }, [currentPath]);
 
-  const handleSetUserRole = (newRole) => {
-    setUserRole(newRole);
-    localStorage.setItem('lumi-role', newRole);
-    if (newRole === 'student' && ['staff', 'teachers', 'students', 'student-overview', 'resources', 'lesson-plans', 'lesson-plans-settings'].includes(currentPath)) {
-      setPendingScheduledLesson(null);
-      setCurrentPath('dashboard');
-    } else if (newRole !== 'student' && currentPath === 'transcript') {
-      setCurrentPath('dashboard');
-    }
-  };
-
   const [studentReturnPath, setStudentReturnPath] = useState('students');
 
   useEffect(() => {
@@ -118,14 +113,13 @@ function App() {
     }
   }, []);
 
-  // Reset scroll position on every page navigation
+  // Reset scroll position on every page navigation (AGENTS.md)
   useEffect(() => {
     if (mainContentRef.current) {
       mainContentRef.current.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [currentPath]);
-
 
   const addNotification = (type, message) => {
     const id = Date.now();
@@ -136,23 +130,108 @@ function App() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // Mock data for search fallback
-  const classes = [
-    { id: 1, name: 'Advanced Mathematics', code: 'MATH-301', grade: '10A', teacher: 'Dr. Sarah Smith', students: 24 },
-    { id: 2, name: 'World History', code: 'HIST-202', grade: '9B', teacher: 'Mr. David Clark', students: 18 },
-    { id: 3, name: 'Digital Arts', code: 'ART-110', grade: '11C', teacher: 'Ms. Emily Brown', students: 15 },
-    { id: 4, name: 'Physics 101', code: 'PHYS-401', grade: '12A', teacher: 'Prof. James Wilson', students: 20 },
-  ];
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'hsl(var(--background))',
+        color: 'hsl(var(--foreground))',
+        gap: '1rem'
+      }}>
+        <Sparkles size={36} className="animate-spin" style={{ color: 'hsl(var(--primary))' }} />
+        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Connecting to Noesis Horizon Cloud...</span>
+      </div>
+    );
+  }
 
-  const events = [
-    { id: 1, title: 'Annual Science Fair', date: '2026-10-15', location: 'Gymnasium' },
-    { id: 2, title: 'Parent-Teacher Meeting', date: '2026-10-20', location: 'Hall A' },
-    { id: 3, title: 'Basketball Finals', date: '2026-10-22', location: 'Sports Campus' },
-    { id: 4, title: 'Winter Gala', date: '2026-12-05', location: 'Auditorium' },
-  ];
+  // No-school screen: user is logged in but not part of any school (e.g. removed by admin)
+  if (currentUser && currentPath !== 'login' && schoolLinks !== undefined && schoolLinks.length === 0 && !authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'hsl(var(--background))',
+        color: 'hsl(var(--foreground))',
+        gap: '1.5rem',
+        padding: '2rem',
+        textAlign: 'center'
+      }}>
+        <StarryBackground />
+        <div style={{
+          background: 'hsl(var(--card))',
+          border: '1px solid hsla(var(--border), 0.75)',
+          borderRadius: '1.5rem',
+          padding: '2.5rem 2rem',
+          maxWidth: '440px',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '1.25rem',
+          boxShadow: '0 25px 60px rgba(0,0,0,0.35)',
+          position: 'relative',
+          zIndex: 10
+        }}>
+          <div style={{
+            width: 64, height: 64,
+            borderRadius: '1rem',
+            background: 'hsla(var(--primary), 0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <School size={32} style={{ color: 'hsl(var(--primary))' }} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+              You're not part of any school
+            </h2>
+            <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.9rem', lineHeight: 1.6 }}>
+              Your account ({currentUser.email}) is not currently connected to any school organization.
+              This can happen if you were removed from a school by an administrator.
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
+            <button
+              className="btn-primary"
+              style={{ width: '100%', justifyContent: 'center', gap: '0.5rem', display: 'flex', alignItems: 'center' }}
+              onClick={async () => {
+                const name = prompt('Enter a name for your new school organization:');
+                if (!name?.trim()) return;
+                try {
+                  await createNewSchool(name.trim());
+                } catch (e) {
+                  alert('Failed to create school: ' + e.message);
+                }
+              }}
+            >
+              <Plus size={18} />
+              Create a New School
+            </button>
+            <button
+              className="btn-secondary glass"
+              style={{ width: '100%', justifyContent: 'center', gap: '0.5rem', display: 'flex', alignItems: 'center' }}
+              onClick={async () => {
+                if (logoutUser) await logoutUser();
+                handleNavigate('login');
+              }}
+            >
+              <LogOut size={16} />
+              Sign Out
+            </button>
+          </div>
+        </div>
+        <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
+      </div>
+    );
+  }
 
   const renderPage = () => {
-    // Role-based UI access. This local preview is not server-side authorization.
     if (userRole === 'student') {
       if (['staff', 'teachers', 'students', 'student-overview', 'resources', 'lesson-plans', 'lesson-plans-settings'].includes(currentPath)) {
         return <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
@@ -171,11 +250,12 @@ function App() {
               setCurrentPath('student-overview'); 
             }}
             userRole={userRole}
+            addNotification={addNotification}
           />
         );
       case 'staff':
       case 'teachers':
-        return <Staff userRole={userRole} onNavigate={setCurrentPath} />;
+        return <Staff userRole={userRole} onNavigate={setCurrentPath} addNotification={addNotification} />;
       case 'classes':
         return <Classes 
           userRole={userRole}
@@ -206,7 +286,18 @@ function App() {
         return <Tasks userRole={userRole} />;
       case 'lesson-plans':
       case 'lesson-plans-settings':
-        return <LessonPlans key={currentPath} initialView={currentPath === 'lesson-plans-settings' ? 'settings' : 'plans'} userRole={userRole} currentUser={{ ...currentUser, role: userRole }} language={lessonLanguage} onLanguageChange={(next) => { setLessonLanguage(next); localStorage.setItem('lumi-lesson-language', next); }} scheduledLesson={currentPath === 'lesson-plans' ? pendingScheduledLesson : null} onScheduledLessonConsumed={() => setPendingScheduledLesson(null)} />;
+        return (
+          <LessonPlans 
+            key={`${currentPath}-${activeSchoolId}`} 
+            initialView={currentPath === 'lesson-plans-settings' ? 'settings' : 'plans'} 
+            userRole={userRole} 
+            currentUser={{ name: currentUser?.displayName, email: currentUser?.email, role: userRole }} 
+            language={lessonLanguage} 
+            onLanguageChange={(next) => { setLessonLanguage(next); localStorage.setItem('lumi-lesson-language', next); }} 
+            scheduledLesson={currentPath === 'lesson-plans' ? pendingScheduledLesson : null} 
+            onScheduledLessonConsumed={() => setPendingScheduledLesson(null)} 
+          />
+        );
       case 'transcript':
         return userRole === 'student' ? <Transcript userRole={userRole} /> : <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
       case 'leaderboard':
@@ -234,7 +325,6 @@ function App() {
             addNotification={addNotification} 
             userRole={userRole} 
             lessonLanguage={lessonLanguage}
-            setUserRole={handleSetUserRole} 
             onNavigate={handleNavigate}
             onLogout={() => handleNavigate('login')}
           />
@@ -246,7 +336,7 @@ function App() {
       case 'login':
         return (
           <Login 
-            onLogin={handleLogin}
+            onLogin={() => handleNavigate('dashboard')}
             onNavigate={handleNavigate}
             addNotification={addNotification}
           />
@@ -258,78 +348,95 @@ function App() {
 
   if (currentPath === 'login') {
     return (
-      <SchoolDataProvider>
-        <MoodProvider>
-          <Login 
-            onLogin={handleLogin}
-            onNavigate={handleNavigate}
-            addNotification={addNotification}
-          />
-          <NotificationContainer 
-            notifications={notifications} 
-            removeNotification={removeNotification} 
-          />
-        </MoodProvider>
-      </SchoolDataProvider>
+      <div className="login-root-container">
+        <Login 
+          onLogin={() => handleNavigate('dashboard')}
+          onNavigate={handleNavigate}
+          addNotification={addNotification}
+        />
+        <NotificationContainer 
+          notifications={notifications} 
+          removeNotification={removeNotification} 
+        />
+      </div>
     );
   }
 
   return (
-    <SchoolDataProvider>
-      <MoodProvider>
-        <div className="app-container">
-          <StarryBackground />
-          <Sidebar currentPath={currentPath} onNavigate={handleNavigate} userRole={userRole} lessonLanguage={lessonLanguage} />
-          <main className="main-content" ref={mainContentRef}>
-            {currentPath !== 'messages' && (
-              <header className="main-header">
-                <div className="header-search glass" onClick={() => setIsSearchOpen(true)}>
-                  <input 
-                    type="text" 
-                    placeholder={userRole === 'student' ? 'Search your classes, assignments, campus events...' : 'Search for students, staff, classes, events...'} 
-                    readOnly 
-                  />
-                </div>
-                <div className="header-actions">
-                  <button className="notification-btn bouncy" onClick={() => addNotification('info', userRole === 'student' ? 'No urgent homework alerts today ✨' : 'No new alerts at this time ✨')} title="Notifications">🔔</button>
-                  <div className="date-display">
-                    <Calendar size={15} className="date-icon" />
-                    <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
-                  </div>
-                </div>
-              </header>
-            )}
-            <div className={`page-container ${currentPath === 'messages' ? 'full-messages-view' : ''}`}>
-              {renderPage()}
+    <div className="app-container">
+      <StarryBackground />
+      <Sidebar 
+        currentPath={currentPath} 
+        onNavigate={handleNavigate} 
+        userRole={userRole} 
+        lessonLanguage={lessonLanguage} 
+      />
+      <main className="main-content" ref={mainContentRef}>
+        {currentPath !== 'messages' && (
+          <header className="main-header">
+            <div className="header-search glass" onClick={() => setIsSearchOpen(true)}>
+              <input 
+                type="text" 
+                placeholder={userRole === 'student' ? 'Search your classes, assignments, campus events...' : 'Search for students, staff, classes, events...'} 
+                readOnly 
+              />
             </div>
-          </main>
-
-
-          <SearchOverlay 
-            isOpen={isSearchOpen} 
-            onClose={() => setIsSearchOpen(false)} 
-            classes={classes}
-            events={events}
-            onNavigate={handleNavigate}
-            userRole={userRole}
-          />
-
-          <NotificationContainer 
-            notifications={notifications} 
-            removeNotification={removeNotification} 
-          />
-
-          <QuickAction 
-            addNotification={addNotification} 
-            onNavigate={handleNavigate} 
-            userRole={userRole} 
-            currentPath={currentPath}
-          />
-
+            <div className="header-actions">
+              <SchoolSwitcher addNotification={addNotification} />
+              <button 
+                type="button" 
+                className="notification-btn bouncy" 
+                onClick={() => addNotification('info', userRole === 'student' ? 'No urgent homework alerts today ✨' : 'No new alerts at this time ✨')} 
+                title="Notifications"
+              >
+                🔔
+              </button>
+              <div className="date-display">
+                <Calendar size={15} className="date-icon" />
+                <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+              </div>
+            </div>
+          </header>
+        )}
+        <div className={`page-container ${currentPath === 'messages' ? 'full-messages-view' : ''}`}>
+          {renderPage()}
         </div>
-      </MoodProvider>
-    </SchoolDataProvider>
+      </main>
+
+      <SearchOverlay 
+        isOpen={isSearchOpen} 
+        onClose={() => setIsSearchOpen(false)} 
+        classes={classesList}
+        events={eventsList}
+        onNavigate={handleNavigate}
+        userRole={userRole}
+      />
+
+      <NotificationContainer 
+        notifications={notifications} 
+        removeNotification={removeNotification} 
+      />
+
+      <QuickAction 
+        addNotification={addNotification} 
+        onNavigate={handleNavigate} 
+        userRole={userRole} 
+        currentPath={currentPath}
+      />
+    </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <SchoolDataProvider>
+        <TasksProvider>
+          <MoodProvider>
+            <AppContent />
+          </MoodProvider>
+        </TasksProvider>
+      </SchoolDataProvider>
+    </AuthProvider>
+  );
+}

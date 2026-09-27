@@ -1,4 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { 
+  collection, 
+  doc, 
+  onSnapshot, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  writeBatch,
+  getDocs,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { useAuth } from './AuthContext';
+import { provisionNewUser } from '../services/userProvisioningService';
 
 const INITIAL_ROLES = [
   { id: 'admin', name: 'Administrator', category: 'Administration', color: '335 70% 65%', icon: 'Shield', description: 'Full access to school systems, staff management & policies' },
@@ -8,298 +22,429 @@ const INITIAL_ROLES = [
   { id: 'support', name: 'Staff / Specialist', category: 'Support', color: '38 92% 50%', icon: 'Briefcase', description: 'Operational support, lab management, and student services' }
 ];
 
-const INITIAL_STAFF = [
-  {
-    id: 1,
-    staffId: 'STF-101',
-    name: 'Dr. Sarah Smith',
-    roleId: 'dept_head',
-    roleName: 'Head of Department',
-    department: 'Mathematics',
-    subject: 'Advanced Mathematics',
-    classes: 5,
-    experience: '12 years',
-    rating: 4.9,
-    email: 'sarah.smith@lumischool.edu',
-    phone: '+1 (555) 234-001',
-    status: 'active',
-    room: 'Room 302 (Math Wing)',
-    bio: 'Doctorate in Applied Mathematics from MIT. Passionate about calculus, competition math, and data modeling.',
-    joinDate: '2016-08-15'
+export const DEFAULT_ROLE_PERMISSIONS = {
+  student: {
+    dashboard: true,
+    schedule: true,
+    classes: true,
+    transcript: true,
+    tasks: true,
+    messages: true,
+    leaderboard: true,
+    events: true,
+    resources: false,
+    'mood-insights': true,
+    students: false,
+    staff: false,
+    'lesson-plans': false,
   },
-  {
-    id: 2,
-    staffId: 'STF-102',
-    name: 'Prof. James Wilson',
-    roleId: 'teacher',
-    roleName: 'Senior Teacher',
-    department: 'Science',
-    subject: 'Physics Mechanics',
-    classes: 4,
-    experience: '15 years',
-    rating: 4.8,
-    email: 'james.wilson@lumischool.edu',
-    phone: '+1 (555) 234-002',
-    status: 'active',
-    room: 'Lab B (Science Center)',
-    bio: 'Former research fellow in Quantum Optics. Believes in hands-on inquiry and experimental physics demonstrations.',
-    joinDate: '2014-09-01'
-  },
-  {
-    id: 3,
-    staffId: 'STF-103',
-    name: 'Ms. Emily Brown',
-    roleId: 'counselor',
-    roleName: 'Academic Counselor',
-    department: 'Student Affairs',
-    subject: 'Counseling & Guidance',
-    classes: 6,
-    experience: '8 years',
-    rating: 4.9,
-    email: 'emily.brown@lumischool.edu',
-    phone: '+1 (555) 234-003',
-    status: 'active',
-    room: 'Guidance Suite 104',
-    bio: 'Specialist in adolescent psychology and college prep advising. Leads peer mentorship initiatives.',
-    joinDate: '2019-01-10'
-  },
-  {
-    id: 4,
-    staffId: 'STF-104',
-    name: 'Mr. David Clark',
-    roleId: 'teacher',
-    roleName: 'Teacher',
-    department: 'Humanities',
-    subject: 'World History & Civics',
-    classes: 3,
-    experience: '10 years',
-    rating: 4.6,
-    email: 'david.clark@lumischool.edu',
-    phone: '+1 (555) 234-004',
-    status: 'active',
-    room: 'Room 205 (Arts Wing)',
-    bio: 'Historian and debate coach. Dedicated to interactive historical simulations and civic engagement.',
-    joinDate: '2018-08-20'
-  },
-  {
-    id: 5,
-    staffId: 'STF-105',
-    name: 'Elena Rostova',
-    roleId: 'admin',
-    roleName: 'Dean of Academics',
-    department: 'Administration',
-    subject: 'Academic Operations',
-    classes: 0,
-    experience: '18 years',
-    rating: 5.0,
-    email: 'elena.rostova@lumischool.edu',
-    phone: '+1 (555) 234-005',
-    status: 'active',
-    room: 'Admin Suite A1',
-    bio: 'Oversees school-wide academic standards, accreditation, and teacher professional development.',
-    joinDate: '2012-05-14'
-  },
-  {
-    id: 6,
-    staffId: 'STF-106',
-    name: 'Marcus Vance',
-    roleId: 'support',
-    roleName: 'IT & Media Director',
-    department: 'Technology',
-    subject: 'Digital Learning Systems',
-    classes: 2,
-    experience: '7 years',
-    rating: 4.7,
-    email: 'marcus.vance@lumischool.edu',
-    phone: '+1 (555) 234-006',
-    status: 'active',
-    room: 'Tech Hub 102',
-    bio: 'Manages Noesis Horizon cloud infrastructure, student device portals, and digital robotics lab.',
-    joinDate: '2021-03-01'
+  teacher: {
+    dashboard: true,
+    schedule: true,
+    classes: true,
+    'lesson-plans': true,
+    tasks: true,
+    messages: true,
+    students: true,
+    staff: true,
+    leaderboard: true,
+    events: true,
+    resources: true,
+    'mood-insights': true,
+    transcript: false,
   }
-];
-
-const INITIAL_STUDENTS = [
-  { id: 1, studentId: 'STU-1001', name: 'Luna Star', grade: '10A', email: 'luna.star@student.edu', phone: '+1 (555) 345-001', points: 1250, guardian: 'Elena Star (Mother - +1 555-888-01)', gpa: 3.9, attendance: 98, status: 'active', assignedClasses: ['Advanced Math (MATH-301)', 'Physics 101 (PHYS-401)', 'Digital Arts (ART-110)'] },
-  { id: 2, studentId: 'STU-1002', name: 'Oliver Twist', grade: '9B', email: 'oliver.twist@student.edu', phone: '+1 (555) 345-002', points: 980, guardian: 'Arthur Twist (Father - +1 555-888-02)', gpa: 3.7, attendance: 100, status: 'active', assignedClasses: ['Advanced Math (MATH-301)', 'World History (HIST-202)'] },
-  { id: 3, studentId: 'STU-1003', name: 'Sophie Miller', grade: '11C', email: 'sophie.miller@student.edu', phone: '+1 (555) 345-003', points: 1100, guardian: 'Claire Miller (Mother - +1 555-888-03)', gpa: 3.85, attendance: 94, status: 'active', assignedClasses: ['Physics 101 (PHYS-401)', 'World History (HIST-202)'] },
-  { id: 4, studentId: 'STU-1004', name: 'Felix Cat', grade: '12A', email: 'felix.cat@student.edu', phone: '+1 (555) 345-004', points: 850, guardian: 'Thomas Cat (Father - +1 555-888-04)', gpa: 3.5, attendance: 92, status: 'archived', assignedClasses: [] },
-  { id: 5, studentId: 'STU-1005', name: 'Bella Blue', grade: '10B', email: 'bella.blue@student.edu', phone: '+1 (555) 345-005', points: 1420, guardian: 'Sarah Blue (Mother - +1 555-888-05)', gpa: 4.0, attendance: 99, status: 'active', assignedClasses: ['Advanced Math (MATH-301)', 'Digital Arts (ART-110)'] },
-  { id: 6, studentId: 'STU-1006', name: 'Leo Lion', grade: '11A', email: 'leo.lion@student.edu', phone: '+1 (555) 345-006', points: 1050, guardian: 'Mark Lion (Father - +1 555-888-06)', gpa: 3.65, attendance: 95, status: 'active', assignedClasses: [] },
-];
+};
 
 const SchoolDataContext = createContext(null);
 
 export const SchoolDataProvider = ({ children }) => {
-  // Staff State
-  const [staffList, setStaffList] = useState(() => {
-    try {
-      const saved = localStorage.getItem('lumi-staff-list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.map(st => {
-          const defaultMatch = INITIAL_STAFF.find(init => init.id === st.id);
-          return {
-            ...st,
-            staffId: st.staffId || (defaultMatch ? defaultMatch.staffId : `STF-${100 + Number(st.id || 1)}`)
-          };
+  const { activeSchoolId, activeSchool, currentUser } = useAuth();
+
+  const [staffList, setStaffList] = useState([]);
+  const [rolesList, setRolesList] = useState(INITIAL_ROLES);
+  const [studentsList, setStudentsList] = useState([]);
+  const [classesList, setClassesList] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
+  const [rolePermissions, setRolePermissions] = useState(DEFAULT_ROLE_PERMISSIONS);
+  const [loading, setLoading] = useState(true);
+
+  const isSeedingRolesRef = useRef(false);
+
+  // Realtime listeners partitioned strictly by activeSchoolId
+  useEffect(() => {
+    if (!activeSchoolId) {
+      setStaffList([]);
+      setStudentsList([]);
+      setClassesList([]);
+      setEventsList([]);
+      setRolesList(INITIAL_ROLES);
+      setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    const handleSnapshotError = (colName) => (err) => {
+      console.warn(`Snapshot listener notice for ${colName}:`, err.message);
+      setLoading(false);
+    };
+
+    // 1. Roles Listener
+    const rolesCol = collection(db, 'schools', activeSchoolId, 'roles');
+    const unsubRoles = onSnapshot(rolesCol, async (snapshot) => {
+      if (snapshot.empty && !isSeedingRolesRef.current) {
+        // Seed default roles schema if completely missing
+        isSeedingRolesRef.current = true;
+        try {
+          const batch = writeBatch(db);
+          for (const r of INITIAL_ROLES) {
+            batch.set(doc(rolesCol, r.id), { ...r, createdAt: serverTimestamp() });
+          }
+          await batch.commit();
+        } catch (e) {
+          console.warn('Could not seed school roles:', e.message);
+        } finally {
+          isSeedingRolesRef.current = false;
+        }
+      } else {
+        const roles = [];
+        snapshot.forEach(docSnap => {
+          roles.push({ id: docSnap.id, ...docSnap.data() });
         });
+        setRolesList(roles.length ? roles : INITIAL_ROLES);
       }
-      return INITIAL_STAFF;
-    } catch {
-      return INITIAL_STAFF;
-    }
-  });
+    }, handleSnapshotError('roles'));
 
-  // Roles State
-  const [rolesList, setRolesList] = useState(() => {
-    try {
-      const saved = localStorage.getItem('lumi-roles-list');
-      return saved ? JSON.parse(saved) : INITIAL_ROLES;
-    } catch {
-      return INITIAL_ROLES;
-    }
-  });
+    // 2. Staff Listener (Live production data from Firestore, empty initially)
+    const staffCol = collection(db, 'schools', activeSchoolId, 'staff');
+    const unsubStaff = onSnapshot(staffCol, async (snapshot) => {
+      const staff = [];
+      snapshot.forEach(docSnap => {
+        staff.push({ id: docSnap.id, ...docSnap.data() });
+      });
 
-  // Students State
-  const [studentsList, setStudentsList] = useState(() => {
-    try {
-      const saved = localStorage.getItem('lumi-students-list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.map(s => {
-          const defaultMatch = INITIAL_STUDENTS.find(init => init.id === s.id);
-          const assignedClasses = (s.assignedClasses && s.assignedClasses.length > 0)
-            ? s.assignedClasses
-            : (defaultMatch ? defaultMatch.assignedClasses : []);
-          return {
-            ...s,
-            studentId: s.studentId || (defaultMatch ? defaultMatch.studentId : `STU-${1000 + Number(s.id || 1)}`),
-            status: s.status || (defaultMatch ? defaultMatch.status : 'active'),
-            assignedClasses
+      // Self-heal: if the school creator (admin) has no staff doc yet, write one now
+      const schoolSnap = await import('firebase/firestore').then(({ getDoc }) =>
+        getDoc(doc(db, 'schools', activeSchoolId))
+      ).catch(() => null);
+      if (schoolSnap?.exists()) {
+        const schoolData = schoolSnap.data();
+        const creatorUid = schoolData?.creatorUid;
+        if (creatorUid && !staff.some(s => String(s.id) === String(creatorUid))) {
+          const adminName = schoolData.creatorName || (currentUser?.uid === creatorUid ? (currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Administrator') : 'Administrator');
+          const adminEmail = schoolData.creatorEmail || (currentUser?.uid === creatorUid ? currentUser?.email : '');
+          const adminStaffDoc = {
+            id: creatorUid,
+            staffId: 'STF-001',
+            name: adminName,
+            email: adminEmail,
+            phone: '',
+            roleId: 'admin',
+            roleName: 'Administrator',
+            department: 'Administration',
+            subject: 'School Management',
+            classes: 0,
+            experience: '',
+            room: '',
+            bio: '',
+            rating: '5.0',
+            status: 'active',
+            joinDate: new Date().toISOString().split('T')[0],
+            createdAt: serverTimestamp()
           };
-        });
+          try {
+            await setDoc(doc(db, 'schools', activeSchoolId, 'staff', creatorUid), adminStaffDoc);
+            // The snapshot listener will re-fire and include this doc — return early
+            return;
+          } catch (e) {
+            console.warn('Could not auto-create admin staff doc:', e.message);
+            // Fall through and show what we have
+            staff.push({ ...adminStaffDoc, createdAt: null });
+          }
+        }
       }
-      return INITIAL_STUDENTS;
-    } catch {
-      return INITIAL_STUDENTS;
-    }
-  });
 
-  // Persist to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('lumi-staff-list', JSON.stringify(staffList));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [staffList]);
+      setStaffList(staff);
+    }, handleSnapshotError('staff'));
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('lumi-roles-list', JSON.stringify(rolesList));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [rolesList]);
+    // 3. Students Listener (Live production data from Firestore, empty initially)
+    const studentsCol = collection(db, 'schools', activeSchoolId, 'students');
+    const unsubStudents = onSnapshot(studentsCol, (snapshot) => {
+      const students = [];
+      snapshot.forEach(docSnap => {
+        students.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setStudentsList(students);
+      setLoading(false);
+    }, handleSnapshotError('students'));
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('lumi-students-list', JSON.stringify(studentsList));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [studentsList]);
+    // 4. Classes Listener (Live production data from Firestore, empty initially)
+    const classesCol = collection(db, 'schools', activeSchoolId, 'classes');
+    const unsubClasses = onSnapshot(classesCol, (snapshot) => {
+      const cls = [];
+      snapshot.forEach(docSnap => {
+        cls.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setClassesList(cls);
+    }, handleSnapshotError('classes'));
+
+    // 5. Events Listener (Live production data from Firestore, empty initially)
+    const eventsCol = collection(db, 'schools', activeSchoolId, 'events');
+    const unsubEvents = onSnapshot(eventsCol, (snapshot) => {
+      const evs = [];
+      snapshot.forEach(docSnap => {
+        evs.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setEventsList(evs);
+    }, handleSnapshotError('events'));
+
+    // 6. School Document Listener (rolePermissions)
+    const schoolDocRef = doc(db, 'schools', activeSchoolId);
+    const unsubSchool = onSnapshot(schoolDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.rolePermissions) {
+          setRolePermissions({
+            student: { ...DEFAULT_ROLE_PERMISSIONS.student, ...(data.rolePermissions.student || {}) },
+            teacher: { ...DEFAULT_ROLE_PERMISSIONS.teacher, ...(data.rolePermissions.teacher || {}) },
+          });
+        }
+      }
+    }, handleSnapshotError('school'));
+
+    return () => {
+      unsubRoles();
+      unsubStaff();
+      unsubStudents();
+      unsubClasses();
+      unsubEvents();
+      unsubSchool();
+    };
+  }, [activeSchoolId]);
 
   // Staff Handlers
-  const addStaff = useCallback((newStaff) => {
-    setStaffList(prev => [
-      {
-        ...newStaff,
-        id: Date.now(),
-        staffId: newStaff.staffId || `STF-${Math.floor(100 + Math.random() * 900)}`,
-        rating: newStaff.rating || 5.0,
-        status: newStaff.status || 'active',
-        joinDate: newStaff.joinDate || new Date().toISOString().split('T')[0]
-      },
-      ...prev
-    ]);
-  }, []);
+  const addStaff = useCallback(async (newStaff) => {
+    if (!activeSchoolId) return;
 
-  const updateStaff = useCallback((id, updates) => {
-    setStaffList(prev => prev.map(member => member.id === id ? { ...member, ...updates } : member));
-  }, []);
+    // If an email and password are provided, create as full Firebase user
+    if (newStaff.email && newStaff.password) {
+      return await provisionNewUser({
+        email: newStaff.email,
+        password: newStaff.password,
+        name: newStaff.name,
+        role: newStaff.roleId || 'teacher',
+        schoolId: activeSchoolId,
+        schoolName: activeSchool?.name || '',
+        extraData: newStaff
+      });
+    }
 
-  const deleteStaff = useCallback((id) => {
-    setStaffList(prev => prev.filter(member => member.id !== id));
-  }, []);
+    // Fallback: direct doc creation if no password provided
+    const staffId = newStaff.id || `stf_${Date.now()}`;
+    const staffDocRef = doc(db, 'schools', activeSchoolId, 'staff', String(staffId));
+    const payload = {
+      ...newStaff,
+      id: staffId,
+      staffId: newStaff.staffId || `STF-${Math.floor(100 + Math.random() * 900)}`,
+      rating: newStaff.rating || 5.0,
+      status: newStaff.status || 'active',
+      joinDate: newStaff.joinDate || new Date().toISOString().split('T')[0],
+      createdAt: serverTimestamp()
+    };
+    await setDoc(staffDocRef, payload);
+  }, [activeSchoolId, activeSchool?.name]);
+
+  const updateStaff = useCallback(async (id, updates) => {
+    if (!activeSchoolId) return;
+    const staffDocRef = doc(db, 'schools', activeSchoolId, 'staff', String(id));
+    await updateDoc(staffDocRef, { ...updates, updatedAt: serverTimestamp() });
+  }, [activeSchoolId]);
+
+  const deleteStaff = useCallback(async (id) => {
+    if (!activeSchoolId) return;
+    const uid = String(id);
+    const batch = writeBatch(db);
+    // Remove staff record
+    batch.delete(doc(db, 'schools', activeSchoolId, 'staff', uid));
+    // Remove school membership (so the user can no longer authenticate as a member)
+    batch.delete(doc(db, 'schools', activeSchoolId, 'members', uid));
+    await batch.commit();
+    // Remove the user's school link (best-effort, non-critical)
+    try {
+      await deleteDoc(doc(db, 'users', uid, 'schoolLinks', activeSchoolId));
+    } catch (e) {
+      console.warn('Could not remove schoolLink for', uid, e.message);
+    }
+  }, [activeSchoolId]);
 
   // Custom Roles Handlers
-  const addCustomRole = useCallback((roleData) => {
+  const addCustomRole = useCallback(async (roleData) => {
+    if (!activeSchoolId) return;
+    const roleId = roleData.id || `custom_${Date.now()}`;
+    const roleDocRef = doc(db, 'schools', activeSchoolId, 'roles', roleId);
     const newRole = {
       ...roleData,
-      id: roleData.id || `custom_${Date.now()}`,
-      isCustom: true
+      id: roleId,
+      isCustom: true,
+      createdAt: serverTimestamp()
     };
-    setRolesList(prev => [...prev, newRole]);
+    await setDoc(roleDocRef, newRole);
     return newRole;
-  }, []);
+  }, [activeSchoolId]);
 
-  const deleteCustomRole = useCallback((roleId) => {
-    setRolesList(prev => prev.filter(r => r.id !== roleId));
-    // Reassign any staff who had this role to standard teacher/support
-    setStaffList(prev => prev.map(staff => {
-      if (staff.roleId === roleId) {
-        return {
-          ...staff,
-          roleId: 'support',
-          roleName: 'Staff / Specialist'
-        };
-      }
-      return staff;
-    }));
-  }, []);
+  const deleteCustomRole = useCallback(async (roleId) => {
+    if (!activeSchoolId) return;
+    const roleDocRef = doc(db, 'schools', activeSchoolId, 'roles', roleId);
+    await deleteDoc(roleDocRef);
+  }, [activeSchoolId]);
 
   // Student Handlers
-  const addStudent = useCallback((newStudent) => {
-    setStudentsList(prev => [
-      {
-        ...newStudent,
-        id: Date.now(),
-        studentId: newStudent.studentId || `STU-${Math.floor(1000 + Math.random() * 9000)}`,
-        status: newStudent.status || 'active',
-        assignedClasses: newStudent.assignedClasses || [],
-        points: newStudent.points || 500,
-        attendance: newStudent.attendance || 100,
-        gpa: newStudent.gpa || 3.8
-      },
-      ...prev
-    ]);
-  }, []);
+  const addStudent = useCallback(async (newStudent) => {
+    if (!activeSchoolId) return;
 
-  const updateStudent = useCallback((id, updates) => {
-    setStudentsList(prev => prev.map(student => student.id === id ? { ...student, ...updates } : student));
-  }, []);
+    // If an email and password are provided, create as full Firebase user
+    if (newStudent.email && newStudent.password) {
+      return await provisionNewUser({
+        email: newStudent.email,
+        password: newStudent.password,
+        name: newStudent.name,
+        role: 'student',
+        schoolId: activeSchoolId,
+        schoolName: activeSchool?.name || '',
+        extraData: newStudent
+      });
+    }
 
-  const deleteStudent = useCallback((id) => {
-    setStudentsList(prev => prev.filter(student => student.id !== id));
-  }, []);
+    // Fallback: direct doc creation if no password provided
+    const studentId = newStudent.id || `stu_${Date.now()}`;
+    const studentDocRef = doc(db, 'schools', activeSchoolId, 'students', String(studentId));
+    const payload = {
+      ...newStudent,
+      id: studentId,
+      studentId: newStudent.studentId || `STU-${Math.floor(1000 + Math.random() * 9000)}`,
+      status: newStudent.status || 'active',
+      assignedClasses: newStudent.assignedClasses || [],
+      points: newStudent.points || 500,
+      attendance: newStudent.attendance || 100,
+      gpa: newStudent.gpa || 3.8,
+      createdAt: serverTimestamp()
+    };
+    await setDoc(studentDocRef, payload);
+  }, [activeSchoolId, activeSchool?.name]);
 
-  const toggleArchiveStudent = useCallback((id) => {
-    setStudentsList(prev => prev.map(student => {
-      if (student.id === id) {
-        const nextStatus = student.status === 'archived' ? 'active' : 'archived';
-        return { ...student, status: nextStatus };
-      }
-      return student;
-    }));
-  }, []);
+  const updateStudent = useCallback(async (id, updates) => {
+    if (!activeSchoolId) return;
+    const studentDocRef = doc(db, 'schools', activeSchoolId, 'students', String(id));
+    await updateDoc(studentDocRef, { ...updates, updatedAt: serverTimestamp() });
+  }, [activeSchoolId]);
+
+  const deleteStudent = useCallback(async (id) => {
+    if (!activeSchoolId) return;
+    const uid = String(id);
+    const batch = writeBatch(db);
+    // Remove student record
+    batch.delete(doc(db, 'schools', activeSchoolId, 'students', uid));
+    // Remove school membership (so the user can no longer authenticate as a member)
+    batch.delete(doc(db, 'schools', activeSchoolId, 'members', uid));
+    await batch.commit();
+    // Remove the user's school link (best-effort, non-critical)
+    try {
+      await deleteDoc(doc(db, 'users', uid, 'schoolLinks', activeSchoolId));
+    } catch (e) {
+      console.warn('Could not remove schoolLink for', uid, e.message);
+    }
+  }, [activeSchoolId]);
+
+  const toggleArchiveStudent = useCallback(async (id) => {
+    if (!activeSchoolId) return;
+    const student = studentsList.find(s => String(s.id) === String(id));
+    const nextStatus = student?.status === 'archived' ? 'active' : 'archived';
+    const studentDocRef = doc(db, 'schools', activeSchoolId, 'students', String(id));
+    await updateDoc(studentDocRef, { status: nextStatus, updatedAt: serverTimestamp() });
+  }, [activeSchoolId, studentsList]);
+
+  // Class Handlers
+  const addClass = useCallback(async (newClass) => {
+    if (!activeSchoolId) return;
+    const classId = newClass.id || `cls_${Date.now()}`;
+    const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classId));
+    const payload = {
+      ...newClass,
+      id: classId,
+      students: newClass.students || 0,
+      progress: newClass.progress || 0,
+      enrolled: Boolean(newClass.enrolled),
+      createdAt: serverTimestamp(),
+    };
+    await setDoc(classDocRef, payload);
+    return payload;
+  }, [activeSchoolId]);
+
+  const updateClass = useCallback(async (id, updates) => {
+    if (!activeSchoolId) return;
+    const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(id));
+    await updateDoc(classDocRef, { ...updates, updatedAt: serverTimestamp() });
+  }, [activeSchoolId]);
+
+  const deleteClass = useCallback(async (id) => {
+    if (!activeSchoolId) return;
+    const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(id));
+    await deleteDoc(classDocRef);
+  }, [activeSchoolId]);
+
+  // Event Handlers
+  const addEvent = useCallback(async (newEvent) => {
+    if (!activeSchoolId) return;
+    const eventId = newEvent.id || `ev_${Date.now()}`;
+    const eventDocRef = doc(db, 'schools', activeSchoolId, 'events', String(eventId));
+    const payload = {
+      ...newEvent,
+      id: eventId,
+      attendees: newEvent.attendees || 0,
+      starred: Boolean(newEvent.starred),
+      createdAt: serverTimestamp(),
+    };
+    await setDoc(eventDocRef, payload);
+    return payload;
+  }, [activeSchoolId]);
+
+  const updateEvent = useCallback(async (id, updates) => {
+    if (!activeSchoolId) return;
+    const eventDocRef = doc(db, 'schools', activeSchoolId, 'events', String(id));
+    await updateDoc(eventDocRef, { ...updates, updatedAt: serverTimestamp() });
+  }, [activeSchoolId]);
+
+  const deleteEvent = useCallback(async (id) => {
+    if (!activeSchoolId) return;
+    const eventDocRef = doc(db, 'schools', activeSchoolId, 'events', String(id));
+    await deleteDoc(eventDocRef);
+  }, [activeSchoolId]);
+
+  // Role Permissions Handler (Admin only)
+  const updateRolePermissions = useCallback(async (role, permissions) => {
+    if (!activeSchoolId) return;
+    const schoolDocRef = doc(db, 'schools', activeSchoolId);
+    const updated = {
+      ...rolePermissions,
+      [role]: { ...(rolePermissions[role] || {}), ...permissions }
+    };
+    setRolePermissions(updated);
+    await updateDoc(schoolDocRef, {
+      rolePermissions: updated,
+      updatedAt: serverTimestamp()
+    });
+  }, [activeSchoolId, rolePermissions]);
 
   return (
     <SchoolDataContext.Provider value={{
       staffList,
       rolesList,
       studentsList,
+      classesList,
+      eventsList,
+      rolePermissions,
+      loading,
       addStaff,
       updateStaff,
       deleteStaff,
@@ -308,7 +453,14 @@ export const SchoolDataProvider = ({ children }) => {
       addStudent,
       updateStudent,
       deleteStudent,
-      toggleArchiveStudent
+      toggleArchiveStudent,
+      addClass,
+      updateClass,
+      deleteClass,
+      addEvent,
+      updateEvent,
+      deleteEvent,
+      updateRolePermissions
     }}>
       {children}
     </SchoolDataContext.Provider>
@@ -322,6 +474,10 @@ export const useSchoolData = () => {
       staffList: [],
       rolesList: [],
       studentsList: [],
+      classesList: [],
+      eventsList: [],
+      rolePermissions: DEFAULT_ROLE_PERMISSIONS,
+      loading: false,
       addStaff: () => {},
       updateStaff: () => {},
       deleteStaff: () => {},
@@ -330,7 +486,14 @@ export const useSchoolData = () => {
       addStudent: () => {},
       updateStudent: () => {},
       deleteStudent: () => {},
-      toggleArchiveStudent: () => {}
+      toggleArchiveStudent: () => {},
+      addClass: () => {},
+      updateClass: () => {},
+      deleteClass: () => {},
+      addEvent: () => {},
+      updateEvent: () => {},
+      deleteEvent: () => {},
+      updateRolePermissions: () => {}
     };
   }
   return ctx;

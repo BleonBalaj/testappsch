@@ -22,7 +22,7 @@ export const Avatar = ({
   src, 
   name,
   alt, 
-  size, 
+  size = 32, 
   iconSize,
   className = "", 
   style = {},
@@ -30,6 +30,7 @@ export const Avatar = ({
 }) => {
   const [imgError, setImgError] = useState(false);
   const displayName = alt || name || "User Avatar";
+  const numSize = typeof size === 'number' ? `${size}px` : (size || '32px');
 
   // Automatically filter out automated AI/cartoon emoji generators (DiceBear avataaars, etc.)
   const isCustomRealImage = src && 
@@ -39,7 +40,14 @@ export const Avatar = ({
     !imgError;
 
   const containerStyle = {
-    ...(size ? { width: size, height: size, minWidth: size, minHeight: size } : {}),
+    width: numSize,
+    height: numSize,
+    minWidth: numSize,
+    minHeight: numSize,
+    maxWidth: numSize,
+    maxHeight: numSize,
+    borderRadius: '50%',
+    flexShrink: 0,
     ...style
   };
 

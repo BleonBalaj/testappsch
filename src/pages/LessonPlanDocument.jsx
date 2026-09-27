@@ -46,6 +46,16 @@ export default function LessonPlanDocument({ plan, language = 'sq', showSchoolNa
 
   return <article className="lesson-document" lang={language} aria-label={t('aria')}>
     <header className="lesson-document-header">
+      {(plan.schoolLogo || plan.logo) && (
+        <div className="lesson-document-logo-wrap" style={{ textAlign: 'center', marginBottom: '0.4rem' }}>
+          <img 
+            src={plan.schoolLogo || plan.logo} 
+            alt="School Logo" 
+            className="lesson-document-logo" 
+            style={{ maxHeight: '55px', maxWidth: '140px', objectFit: 'contain' }} 
+          />
+        </div>
+      )}
       {showSchoolName && <p className="lesson-document-school">{present(plan.schoolName)}</p>}
       <h2>{t('title')}</h2>
       <div className="lesson-document-meta">

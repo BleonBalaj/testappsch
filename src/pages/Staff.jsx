@@ -8,6 +8,7 @@ import {
   UserSquare2
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/Avatar';
 import './Staff.css';
 
@@ -128,8 +129,9 @@ const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectPro
   );
 };
 
-const Staff = ({ userRole = 'admin', onNavigate }) => {
+const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
   const { staffList, rolesList, addStaff, updateStaff, deleteStaff, addCustomRole, deleteCustomRole } = useSchoolData();
+  const { activeSchoolId, getIdTokenSafe } = useAuth();
   const isAdmin = userRole === 'admin';
 
   // Filters & Search
@@ -142,12 +144,15 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
   const [isRoleManagerOpen, setIsRoleManagerOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState(null); // confirm-delete state
 
   // New Staff Form State
   const [newStaffForm, setNewStaffForm] = useState({
     staffId: '',
     name: '',
     email: '',
+    password: '',
     phone: '',
     roleId: 'teacher',
     department: 'Mathematics',
@@ -202,36 +207,56 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
     });
   }, [staffList, searchTerm, selectedRoleFilter, selectedDeptFilter]);
 
-  // Handle Add Staff Submit
-  const handleAddStaffSubmit = (e) => {
+  // Handle Add Staff Submit with Firebase Auth user provisioning
+  const handleAddStaffSubmit = async (e) => {
     e.preventDefault();
     if (!newStaffForm.name || !newStaffForm.email) return;
+
+    if (!newStaffForm.password || newStaffForm.password.length < 6) {
+      if (addNotification) addNotification('error', 'Initial password must be at least 6 characters long.');
+      return;
+    }
 
     const matchedRole = rolesList.find(r => r.id === newStaffForm.roleId);
     const customStaffId = newStaffForm.staffId.trim() || `STF-${Math.floor(100 + Math.random() * 900)}`;
 
-    addStaff({
-      ...newStaffForm,
-      staffId: customStaffId,
-      roleName: matchedRole?.name || 'Staff Member',
-      classes: Number(newStaffForm.classes) || 0
-    });
+    setIsSubmittingStaff(true);
+    try {
+      await addStaff({
+        ...newStaffForm,
+        staffId: customStaffId,
+        roleName: matchedRole?.name || 'Staff Member',
+        classes: Number(newStaffForm.classes) || 0
+      });
 
-    setIsAddStaffOpen(false);
-    setNewStaffForm({
-      staffId: '',
-      name: '',
-      email: '',
-      phone: '',
-      roleId: 'teacher',
-      department: 'Mathematics',
-      subject: '',
-      classes: 3,
-      experience: '5 years',
-      room: '',
-      bio: '',
-      avatarSeed: ''
-    });
+      if (addNotification) {
+        addNotification('success', `Staff member ${newStaffForm.name} registered as a Firebase user! ✨`);
+      }
+
+      setIsAddStaffOpen(false);
+      setNewStaffForm({
+        staffId: '',
+        name: '',
+        email: '',
+        password: '',
+        phone: '',
+        roleId: 'teacher',
+        department: 'Mathematics',
+        subject: '',
+        classes: 3,
+        experience: '5 years',
+        room: '',
+        bio: '',
+        avatarSeed: ''
+      });
+    } catch (err) {
+      console.error('Failed to add staff:', err);
+      if (addNotification) {
+        addNotification('error', err.message || 'Failed to register staff in Firebase.');
+      }
+    } finally {
+      setIsSubmittingStaff(false);
+    }
   };
 
   // Handle Edit / Role Reassignment Submit
@@ -415,7 +440,7 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
                   roleInfo={roleInfo}
                   isAdmin={isAdmin}
                   onEditRole={(member) => setEditingStaff({ ...member })}
-                  onDelete={(id) => deleteStaff(id)}
+                  onDelete={(id) => setStaffToDelete(staffList.find(s => String(s.id) === String(id)) || { id })}
                   onSelectProfile={(member) => setSelectedProfile(member)}
                   onMessage={() => onNavigate && onNavigate('messages')}
                 />
@@ -482,6 +507,35 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
                   </div>
 
                   <div className="input-group">
+                    <label>Initial Login Password *</label>
+                    <input 
+                      type="password" 
+                      required 
+                      minLength={6}
+                      placeholder="Min. 6 characters for first login"
+                      value={newStaffForm.password || ''}
+                      onChange={e => setNewStaffForm({ ...newStaffForm, password: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label>Assigned Role</label>
+                    <select 
+                      value={newStaffForm.roleId}
+                      onChange={e => setNewStaffForm({ ...newStaffForm, roleId: e.target.value })}
+                      className="custom-form-select"
+                    >
+                      {rolesList.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="input-group">
                     <label>Phone Number</label>
                     <input 
                       type="tel" 
@@ -490,21 +544,6 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
                       onChange={e => setNewStaffForm({ ...newStaffForm, phone: e.target.value })}
                     />
                   </div>
-                </div>
-
-                <div className="input-group">
-                  <label>Assigned Role</label>
-                  <select 
-                    value={newStaffForm.roleId}
-                    onChange={e => setNewStaffForm({ ...newStaffForm, roleId: e.target.value })}
-                    className="custom-form-select"
-                  >
-                    {rolesList.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.name} ({r.category})
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 <div className="form-grid-2">
@@ -562,11 +601,11 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
                 </div>
 
                 <div className="modal-footer-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setIsAddStaffOpen(false)}>
+                  <button type="button" className="btn-secondary" onClick={() => setIsAddStaffOpen(false)} disabled={isSubmittingStaff}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Register Staff Member
+                  <button type="submit" className="btn-primary" disabled={isSubmittingStaff}>
+                    {isSubmittingStaff ? 'Creating User in Firebase...' : 'Register Staff Member'}
                   </button>
                 </div>
               </form>
@@ -925,6 +964,75 @@ const Staff = ({ userRole = 'admin', onNavigate }) => {
                   >
                     <Mail size={16} />
                     Send Direct Message
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: Confirm Delete Staff Member ── */}
+      <AnimatePresence>
+        {staffToDelete && (
+          <div className="modal-overlay" onClick={() => setStaffToDelete(null)}>
+            <motion.div
+              className="modal-content"
+              style={{ maxWidth: '420px' }}
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h3>Remove Staff Member?</h3>
+                <p className="modal-subtitle">This action cannot be undone.</p>
+                <button type="button" className="icon-btn-close" onClick={() => setStaffToDelete(null)} aria-label="Close">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="modal-form" style={{ gap: '1rem' }}>
+                <div style={{
+                  background: 'hsla(0, 75%, 65%, 0.1)',
+                  border: '1px solid hsla(0, 75%, 65%, 0.3)',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  color: 'hsl(var(--foreground))',
+                  fontSize: '0.9rem',
+                  lineHeight: 1.55
+                }}>
+                  <strong style={{ display: 'block', marginBottom: '0.4rem' }}>
+                    {staffToDelete.name || 'This staff member'}
+                  </strong>
+                  will be permanently removed from this school. Their login access will be revoked immediately. If they have no other school memberships they will see a "not part of any school" screen on next login.
+                </div>
+                <div className="modal-footer-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setStaffToDelete(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ background: 'hsl(0, 75%, 60%)', borderColor: 'hsl(0, 75%, 55%)' }}
+                    onClick={async () => {
+                      const target = staffToDelete;
+                      setStaffToDelete(null);
+                      try {
+                        await deleteStaff(target.id);
+                        if (addNotification) addNotification('success', `${target.name || 'Staff member'} removed from school.`);
+                      } catch (err) {
+                        console.error('Failed to remove staff:', err);
+                        if (addNotification) addNotification('error', err.message || 'Failed to remove staff member.');
+                      }
+                    }}
+                  >
+                    <Trash2 size={15} />
+                    Yes, Remove
                   </button>
                 </div>
               </div>

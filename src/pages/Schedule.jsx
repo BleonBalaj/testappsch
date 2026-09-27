@@ -66,38 +66,13 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
 );
 
 const INITIAL_SCHEDULE = {
-  'Monday': [
-    { id: 1, time: '08:30 - 10:00', subject: 'Mathematics', curriculumSubject: 'Matematikë', classLabel: 'VII/1', period: '1', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--primary', enrolled: true },
-    { id: 2, time: '10:15 - 11:45', subject: 'Physics Mechanics', curriculumSubject: 'Fizikë', classLabel: 'VIII/1', period: '2', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
-    { id: 3, time: '12:30 - 14:00', subject: 'English Literature', curriculumSubject: 'Gjuhë angleze', classLabel: 'VII/2', period: '3', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
-    { id: 4, time: '14:15 - 15:45', subject: 'World History', curriculumSubject: 'Histori', classLabel: 'IX/1', period: '4', subjectCategory: 'Humanities', room: 'Room 201', teacher: 'Mr. David Clark', color: '--chart-1', enrolled: true },
-  ],
-  'Tuesday': [
-    { id: 5, time: '08:30 - 10:00', subject: 'Chemistry Lab', curriculumSubject: 'Kimi', classLabel: 'VIII/1', period: '1', subjectCategory: 'Science', room: 'Lab 2', teacher: 'Noesis', color: '--chart-3', enrolled: false },
-    { id: 15, time: '10:15 - 11:45', subject: 'World History Seminar', curriculumSubject: 'Histori', classLabel: 'IX/1', period: '2', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
-    { id: 6, time: '10:15 - 11:45', subject: 'Biology & Genetics', curriculumSubject: 'Biologji', classLabel: 'VIII/2', period: '2', subjectCategory: 'Science', room: 'Lab 3', teacher: 'Prof. James Wilson', color: '--chart-5', enrolled: false },
-    { id: 7, time: '13:00 - 14:30', subject: 'Debate & Public Speaking', curriculumSubject: 'Gjuhë angleze', classLabel: 'VIII/3', period: '3', subjectCategory: 'Humanities', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--primary', enrolled: false },
-    { id: 16, time: '13:00 - 14:30', subject: 'Advanced Math Problem Session', curriculumSubject: 'Matematikë', classLabel: 'VII/1', period: '3', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--primary', enrolled: true },
-  ],
-  'Wednesday': [
-    { id: 8, time: '09:00 - 10:30', subject: 'Computer Science & AI', curriculumSubject: 'Teknologji me TIK', classLabel: 'IX/2', period: '1', subjectCategory: 'Technology', room: 'Lab 4', teacher: 'Mr. Alex Vance', color: '--chart-4', enrolled: false },
-    { id: 17, time: '09:00 - 10:30', subject: 'Advanced Mathematics', curriculumSubject: 'Matematikë', classLabel: 'VII/1', period: '1', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--primary', enrolled: true },
-    { id: 'e1', time: '11:00 - 15:00', subject: 'Science Fair Rehearsal', room: 'Auditorium', attendees: 45, color: '--primary', isEvent: true, enrolled: true },
-    { id: 9, time: '15:15 - 16:30', subject: 'Calculus Seminar', curriculumSubject: 'Matematikë', classLabel: 'IX/1', period: '4', subjectCategory: 'Math', room: 'Room 302', teacher: 'Noesis', color: '--accent', enrolled: false },
-  ],
-  'Thursday': [
-    { id: 10, time: '10:00 - 11:30', subject: 'Digital Art & Animation', curriculumSubject: 'Edukatë figurative', classLabel: 'VIII/1', period: '1', subjectCategory: 'Arts', room: 'Studio 3', teacher: 'Ms. Clara Oswald', color: '--chart-1', enrolled: false },
-    { id: 18, time: '10:00 - 11:30', subject: 'World History', curriculumSubject: 'Histori', classLabel: 'IX/1', period: '1', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Mr. David Clark', color: '--chart-2', enrolled: true },
-    { id: 11, time: '12:30 - 14:00', subject: 'Physics Mechanics', curriculumSubject: 'Fizikë', classLabel: 'VIII/1', period: '2', subjectCategory: 'Science', room: 'Lab 1', teacher: 'Prof. James Wilson', color: '--chart-2', enrolled: true },
-    { id: 12, time: '14:30 - 16:00', subject: 'Civics & Government', curriculumSubject: 'Edukatë qytetare', classLabel: 'VIII/2', period: '3', subjectCategory: 'Humanities', room: 'Room 205', teacher: 'Mr. David Clark', color: '--chart-3', enrolled: false },
-  ],
-  'Friday': [
-    { id: 13, time: '08:30 - 10:00', subject: 'Physical Education & Athletics', curriculumSubject: 'Edukatë fizike, sportet dhe shëndeti', classLabel: 'VII/1', period: '1', subjectCategory: 'Athletics', room: 'Main Gymnasium', teacher: 'Coach Mike Tyson', color: '--mood-happy', enrolled: true },
-    { id: 19, time: '10:15 - 11:45', subject: 'English Literature Analysis', curriculumSubject: 'Gjuhë angleze', classLabel: 'VII/2', period: '2', subjectCategory: 'Humanities', room: 'Room 105', teacher: 'Ms. Emily Brown', color: '--accent', enrolled: true },
-    { id: 'e2', time: '13:00 - 16:00', subject: 'Annual Science Fair', room: 'Main Gym', attendees: 120, color: '--accent', isEvent: true, enrolled: true },
-    { id: 14, time: '16:15 - 17:00', subject: 'Student Council Assembly', room: 'Auditorium', teacher: 'Ms. Emily Brown', color: '--chart-2', isEvent: true, enrolled: true },
-  ]
+  'Monday': [],
+  'Tuesday': [],
+  'Wednesday': [],
+  'Thursday': [],
+  'Friday': []
 };
+
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 

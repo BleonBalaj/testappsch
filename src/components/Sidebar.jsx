@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar } from './Avatar';
+import { useAuth } from '../context/AuthContext';
+import { useSchoolData, DEFAULT_ROLE_PERMISSIONS } from '../context/SchoolDataContext';
 import './Sidebar.css';
 
 const SidebarItem = ({ icon: IconComponent, label, active, onClick, collapsed }) => {
@@ -52,6 +54,7 @@ const SidebarItem = ({ icon: IconComponent, label, active, onClick, collapsed })
 };
 
 const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage = 'en' }) => {
+  const { currentUser, currentRole, activeSchool, logoutUser } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
   const menuItems = [
@@ -79,16 +82,28 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
     return currentPath === id;
   };
 
+  const { rolePermissions } = useSchoolData();
   const isAdmin = userRole === 'admin';
   const isStudent = userRole === 'student';
 
   const visibleMenuItems = menuItems.filter(item => {
-    if (item.studentOnly && !isStudent) return false;
-    if (item.teacherAndAdminOnly && isStudent) return false;
-    if (isStudent) {
-      return item.id !== 'students' && item.id !== 'staff' && item.id !== 'resources';
+    // Settings is always accessible to manage profile
+    if (item.id === 'settings') return true;
+    
+    // Admins always see all management and school areas
+    if (isAdmin) {
+      if (item.studentOnly) return false;
+      return true;
     }
-    return true;
+
+    if (isStudent) {
+      const allowed = rolePermissions?.student?.[item.id] ?? DEFAULT_ROLE_PERMISSIONS.student[item.id];
+      return Boolean(allowed);
+    }
+
+    // Teacher
+    const allowed = rolePermissions?.teacher?.[item.id] ?? DEFAULT_ROLE_PERMISSIONS.teacher[item.id];
+    return Boolean(allowed);
   });
 
   return (
@@ -135,24 +150,30 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
       <div className="sidebar-footer">
         <div className="user-profile">
           <div className="avatar">
-            <Avatar alt={isStudent ? 'Aria Montgomery' : 'Noesis'} />
+            <Avatar 
+              src={currentUser?.photoURL} 
+              alt={currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'User')} 
+            />
           </div>
           {!collapsed && (
             <div className="user-info">
               <p className="user-name">
-                {isStudent ? 'Aria Montgomery' : 'Noesis'}
+                {currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'User')}
               </p>
               <p className="user-role">
-                {isStudent ? 'Grade 10 • Student' : isAdmin ? 'Super Admin' : 'Senior Teacher'}
+                {isStudent ? 'Student' : currentRole === 'teacher' ? 'Teacher' : 'Administrator'}
               </p>
             </div>
           )}
           <button 
             type="button" 
             className="sidebar-logout-btn bouncy" 
-            onClick={() => onNavigate && onNavigate('login')} 
-            title="Go to Login / Sign In"
-            aria-label="Login Page"
+            onClick={async () => {
+              if (logoutUser) await logoutUser();
+              if (onNavigate) onNavigate('login');
+            }} 
+            title="Sign Out / Switch Account"
+            aria-label="Logout"
           >
             <LogOut size={16} />
           </button>
