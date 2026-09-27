@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, GraduationCap, Calendar, TrendingUp, Star, 
@@ -12,7 +12,10 @@ import { useTasks } from '../context/TasksContext';
 import { useMood } from '../context/MoodContext';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
+import { db } from '../services/firebase';
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import './Dashboard.css';
 
 const StatCard = ({ icon: IconComponent, label, value, color, delay, subtext }) => (
@@ -43,17 +46,34 @@ const QUOTES = [
   { text: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" }
 ];
 
+const QUOTES_SQ = [
+  { text: "E bukura e të mësuarit është se askush nuk mund të ta marrë atë.", author: "B.B. King" },
+  { text: "Suksesi është shuma e përpjekjeve të vogla, të përsëritura ditë pas dite.", author: "Robert Collier" },
+  { text: "Arsimi është arma më e fuqishme që mund të përdorni për të ndryshuar botën.", author: "Nelson Mandela" },
+  { text: "Beso se mundesh dhe je tashmë në gjysmë të rrugës.", author: "Theodore Roosevelt" }
+];
+
 const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const [note, setNote] = useState('');
   const { moodHistory, addMoodEntry, getTodayMood } = useMood();
   const { staffList = [], studentsList = [], classesList = [], eventsList = [] } = useSchoolData();
   const { currentUser, activeSchool } = useAuth();
+  const { language, isAlbanian, t } = useLanguage();
   const todayEntry = getTodayMood();
   
   const [vibe, setVibe] = useState(todayEntry?.mood || '');
   const [isMoodModalOpen, setIsMoodModalOpen] = useState(false);
-  const [moodNote, setMoodNote] = useState('');
+  const [moodNote, setMoodNote] = useState(todayEntry?.note || '');
   const [pendingMood, setPendingMood] = useState(null);
+
+  useEffect(() => {
+    if (todayEntry?.mood) {
+      setVibe(todayEntry.mood);
+    }
+    if (todayEntry?.note !== undefined) {
+      setMoodNote(todayEntry.note);
+    }
+  }, [todayEntry?.mood, todayEntry?.note]);
 
   const isStudent = userRole === 'student';
   const isAdmin = userRole === 'admin';
@@ -61,64 +81,130 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   // Student specific tasks & interactive state
   const [studentTasks, setStudentTasks] = useState([]);
   const [newStudentTaskText, setNewStudentTaskText] = useState('');
-
-  const toggleStudentTask = (id) => {
-    setStudentTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-  };
-
-  const handleAddStudentTask = (e) => {
-    if (e) e.preventDefault();
-    if (newStudentTaskText.trim()) {
-      setStudentTasks(prev => [
-        {
-          id: Date.now(),
-          text: newStudentTaskText.trim(),
-          category: 'homework',
-          priority: 'medium',
-          due: 'Upcoming',
-          completed: false
-        },
-        ...prev
-      ]);
-      setNewStudentTaskText('');
-    }
-  };
-
-  const deleteStudentTask = (id) => {
-    setStudentTasks(prev => prev.filter(t => t.id !== id));
-  };
-
   const [savedNotes, setSavedNotes] = useState([]);
   const { tasks, moveTask } = useTasks();
 
-  const [currentQuote] = useState(() => QUOTES[0]);
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+
+    const tasksCol = collection(db, 'users', currentUser.uid, 'studentTasks');
+    const unsubTasks = onSnapshot(tasksCol, (snapshot) => {
+      const items = [];
+      snapshot.forEach(docSnap => {
+        items.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      items.sort((a, b) => (b.createdAt?.toMillis?.() || b.rawTimestamp || 0) - (a.createdAt?.toMillis?.() || a.rawTimestamp || 0));
+      setStudentTasks(items);
+    }, (err) => {
+      console.warn('Notice listening to studentTasks:', err.message);
+    });
+
+    const notesCol = collection(db, 'users', currentUser.uid, 'dashboardNotes');
+    const unsubNotes = onSnapshot(notesCol, (snapshot) => {
+      const notes = [];
+      snapshot.forEach(docSnap => {
+        notes.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      notes.sort((a, b) => (b.createdAt?.toMillis?.() || b.rawTimestamp || 0) - (a.createdAt?.toMillis?.() || a.rawTimestamp || 0));
+      setSavedNotes(notes);
+    }, (err) => {
+      console.warn('Notice listening to dashboardNotes:', err.message);
+    });
+
+    return () => {
+      unsubTasks();
+      unsubNotes();
+    };
+  }, [currentUser?.uid]);
+
+  const toggleStudentTask = async (id) => {
+    const task = studentTasks.find(t => t.id === id);
+    if (!task) return;
+    const nextCompleted = !task.completed;
+    if (currentUser?.uid) {
+      try {
+        await updateDoc(doc(db, 'users', currentUser.uid, 'studentTasks', String(id)), {
+          completed: nextCompleted
+        });
+      } catch (err) {
+        console.warn('Error updating student task:', err.message);
+      }
+    } else {
+      setStudentTasks(prev => prev.map(t => t.id === id ? { ...t, completed: nextCompleted } : t));
+    }
+  };
+
+  const handleAddStudentTask = async (e) => {
+    if (e) e.preventDefault();
+    if (!newStudentTaskText.trim()) return;
+
+    const taskId = `stask_${Date.now()}`;
+    const newTask = {
+      id: taskId,
+      text: newStudentTaskText.trim(),
+      category: 'homework',
+      priority: 'medium',
+      due: 'Upcoming',
+      completed: false,
+      rawTimestamp: Date.now(),
+      createdAt: serverTimestamp()
+    };
+
+    setNewStudentTaskText('');
+
+    if (currentUser?.uid) {
+      try {
+        await setDoc(doc(db, 'users', currentUser.uid, 'studentTasks', taskId), newTask);
+      } catch (err) {
+        console.warn('Error creating student task in Firestore:', err.message);
+      }
+    } else {
+      setStudentTasks(prev => [newTask, ...prev]);
+    }
+  };
+
+  const deleteStudentTask = async (id) => {
+    if (currentUser?.uid) {
+      try {
+        await deleteDoc(doc(db, 'users', currentUser.uid, 'studentTasks', String(id)));
+      } catch (err) {
+        console.warn('Error deleting student task:', err.message);
+      }
+    } else {
+      setStudentTasks(prev => prev.filter(t => t.id !== id));
+    }
+  };
+
+  const currentQuote = isAlbanian ? QUOTES_SQ[0] : QUOTES[0];
 
   const [announcements, setAnnouncements] = useState([]);
 
   const getMoodPrompt = () => {
     const activeMood = pendingMood || vibe;
     switch(activeMood) {
-      case 'happy': return isStudent ? "What made your classes great today? 🌟" : "What made your school day awesome? ✨";
-      case 'neutral': return isStudent ? "Any study goals or reflections for today? 📝" : "Any small wins or thoughts from today? 📝";
-      case 'sad': return isStudent ? "Studying can get stressful. Need a breath or break? 💜" : "It's okay to have off days. Want to talk about what happened? 💜";
-      default: return "How's your day going?";
+      case 'happy': return t('dashboard.happyPrompt');
+      case 'neutral': return t('dashboard.neutralPrompt');
+      case 'sad': return t('dashboard.sadPrompt');
+      default: return t('dashboard.howsYourDay');
     }
   };
 
   const handleMoodSelect = (selectedMood) => {
     setVibe(selectedMood);
-    if (!todayEntry || !todayEntry.note) {
-      setPendingMood(selectedMood);
-      setIsMoodModalOpen(true);
-    } else {
-      addMoodEntry(selectedMood, todayEntry.note);
+    setPendingMood(selectedMood);
+    // Immediately persist selected mood to Firestore Cloud & local state!
+    const existingNote = todayEntry?.note || '';
+    addMoodEntry(selectedMood, existingNote);
+    if (existingNote) {
+      setMoodNote(existingNote);
     }
+    setIsMoodModalOpen(true);
   };
 
   const submitMoodNote = () => {
-    addMoodEntry(pendingMood || vibe, moodNote);
+    const activeVibe = pendingMood || vibe || 'happy';
+    addMoodEntry(activeVibe, moodNote);
     setIsMoodModalOpen(false);
-    setMoodNote('');
   };
 
   const handleDragStart = (e, id) => {
@@ -132,15 +218,41 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
 
   const handleDragOver = (e) => { e.preventDefault(); };
 
-  const handleAddNote = () => {
-    if (note.trim()) {
-      setSavedNotes([{ id: Date.now(), text: note, time: 'Just now' }, ...savedNotes]);
-      setNote('');
+  const handleAddNote = async () => {
+    if (!note.trim()) return;
+    const noteText = note.trim();
+    setNote('');
+
+    const newId = `note_${Date.now()}`;
+    const newNote = {
+      id: newId,
+      text: noteText,
+      time: 'Just now',
+      rawTimestamp: Date.now(),
+      createdAt: serverTimestamp()
+    };
+
+    if (currentUser?.uid) {
+      try {
+        await setDoc(doc(db, 'users', currentUser.uid, 'dashboardNotes', newId), newNote);
+      } catch (err) {
+        console.warn('Error saving note to Firestore:', err.message);
+      }
+    } else {
+      setSavedNotes(prev => [newNote, ...prev]);
     }
   };
 
-  const deleteNote = (id) => {
-    setSavedNotes(savedNotes.filter(n => n.id !== id));
+  const deleteNote = async (id) => {
+    if (currentUser?.uid) {
+      try {
+        await deleteDoc(doc(db, 'users', currentUser.uid, 'dashboardNotes', String(id)));
+      } catch (err) {
+        console.warn('Error deleting note from Firestore:', err.message);
+      }
+    } else {
+      setSavedNotes(prev => prev.filter(n => n.id !== id));
+    }
   };
 
   // Academic Calendar Milestones dynamically derived from school events
@@ -206,24 +318,30 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       <header className="dashboard-hero">
         <motion.div className="hero-welcome" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
           <h1 className="gradient-text">
-            {`Welcome back${currentUser?.name ? `, ${currentUser.name}` : ''}! ${isStudent ? '🎓✨' : '✨'}`}
+            {`${t('dashboard.welcomeBack')}${currentUser?.displayName || currentUser?.name ? `, ${currentUser.displayName || currentUser.name}` : ''}! ${isStudent ? '🎓✨' : '✨'}`}
           </h1>
           <p>
             {isStudent 
-              ? `${activeSchool?.name || 'School'} Student Portal • ${studentScheduleToday.length} ${studentScheduleToday.length === 1 ? 'class' : 'classes'} enrolled` 
+              ? (isAlbanian 
+                ? `${activeSchool?.name || 'Shkolla'} • Portali i Nxënësit • ${studentScheduleToday.length} ${studentScheduleToday.length === 1 ? 'lëndë' : 'lëndë'} të regjistruara`
+                : `${activeSchool?.name || 'School'} ${t('nav.student')} Portal • ${studentScheduleToday.length} ${studentScheduleToday.length === 1 ? 'class' : 'classes'} enrolled`)
               : isAdmin 
-              ? `Here's what's happening across ${activeSchool?.name || 'the school'} today.`
-              : `You have ${teacherClasses.length} assigned ${teacherClasses.length === 1 ? 'class' : 'classes'} in curriculum.`}
+              ? (isAlbanian 
+                ? `Ja çfarë po ndodh sot në ${activeSchool?.name || 'shkollë'}.`
+                : `Here's what's happening across ${activeSchool?.name || 'the school'} today.`)
+              : (isAlbanian
+                ? `Keni ${teacherClasses.length} ${teacherClasses.length === 1 ? 'lëndë të caktuar' : 'lëndë të caktuara'} në planprogram.`
+                : `You have ${teacherClasses.length} assigned ${teacherClasses.length === 1 ? 'class' : 'classes'} in curriculum.`)}
           </p>
         </motion.div>
         
         <div className="hero-right">
           <motion.div className="mood-widget glass bouncy" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-            <span className="mood-label">{isStudent ? 'Daily Vibe' : "Today's Vibe"}</span>
+            <span className="mood-label">{isStudent ? t('dashboard.dailyVibe') : t('dashboard.todaysVibe')}</span>
             <div className="mood-options">
-              <button className={vibe === 'happy' ? 'active' : ''} onClick={() => handleMoodSelect('happy')} title="Great"><Smile size={20} /></button>
-              <button className={vibe === 'neutral' ? 'active' : ''} onClick={() => handleMoodSelect('neutral')} title="Okay"><Meh size={20} /></button>
-              <button className={vibe === 'sad' ? 'active' : ''} onClick={() => handleMoodSelect('sad')} title="Tough"><Frown size={20} /></button>
+              <button className={vibe === 'happy' ? 'active' : ''} onClick={() => handleMoodSelect('happy')} title={t('dashboard.great')}><Smile size={20} /></button>
+              <button className={vibe === 'neutral' ? 'active' : ''} onClick={() => handleMoodSelect('neutral')} title={t('dashboard.okay')}><Meh size={20} /></button>
+              <button className={vibe === 'sad' ? 'active' : ''} onClick={() => handleMoodSelect('sad')} title={t('dashboard.tough')}><Frown size={20} /></button>
             </div>
           </motion.div>
           <motion.button 
@@ -233,7 +351,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             onClick={() => onNavigate('schedule')}
           >
             <Calendar size={20} />
-            {isStudent ? 'My Class Timetable' : 'View Full Schedule'}
+            {isStudent ? t('dashboard.myClassTimetable') : t('dashboard.viewFullSchedule')}
           </motion.button>
         </div>
       </header>
@@ -249,22 +367,22 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             >
               <div className="modal-header">
                 <h3 style={{ color: 'hsl(var(--primary))' }}>
-                  {isStudent ? "How's your day, Aria? ✍️" : "How's your day, Noesis? ✍️"}
+                  {t('dashboard.howsYourDay')}
                 </h3>
                 <button onClick={() => setIsMoodModalOpen(false)}><X size={20} /></button>
               </div>
               <p>{getMoodPrompt()}</p>
               <textarea 
                 className="glass" 
-                placeholder={isStudent ? "Share what you learned or how you feel..." : "Share your thoughts..."}
+                placeholder={t('dashboard.shareThoughts')}
                 value={moodNote}
                 onChange={(e) => setMoodNote(e.target.value)}
               />
               <div className="modal-actions">
-                <button className="text-btn" onClick={() => setIsMoodModalOpen(false)}>Skip</button>
+                <button className="text-btn" onClick={() => setIsMoodModalOpen(false)}>{t('common.skip')}</button>
                 <button className="btn-primary" onClick={submitMoodNote}>
                   <Send size={18} />
-                  Save Note
+                  {t('dashboard.saveNote')}
                 </button>
               </div>
             </motion.div>
@@ -281,7 +399,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
         >
           <div className="focus-header">
             <Rocket size={20} className="icon-pulse" />
-            <h3>Daily Motivation</h3>
+            <h3>{t('dashboard.dailyMotivation')}</h3>
           </div>
           <div className="quote-content">
             <p className="quote-text">"{currentQuote.text}"</p>
@@ -294,24 +412,24 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       <section className="stats-grid">
         {isStudent ? (
           <>
-            <StatCard icon={Star} label="Academic Standing" value="Good Standing" color="--primary" delay={0.1} subtext="Active Enrollment" />
-            <StatCard icon={BookOpen} label="Enrolled Classes" value={`${studentScheduleToday.length} Courses`} color="--accent" delay={0.2} subtext={studentScheduleToday[0] ? `Next: ${studentScheduleToday[0].name}` : 'No classes today'} />
-            <StatCard icon={CheckCircle2} label="Personal Tasks" value={`${pendingStudentTasksCount} Pending`} color="--chart-1" delay={0.3} subtext={`${completedStudentTasksCount} Completed`} />
-            <StatCard icon={Target} label="Academic Events" value={`${eventsList.length} Scheduled`} color="--chart-2" delay={0.4} subtext="Campus Calendar" />
+            <StatCard icon={Star} label={t('dashboard.academicStanding')} value={t('dashboard.goodStanding')} color="--primary" delay={0.1} subtext={t('dashboard.activeEnrollment')} />
+            <StatCard icon={BookOpen} label={t('dashboard.enrolledClasses')} value={`${studentScheduleToday.length} ${isAlbanian ? 'Kurse' : 'Courses'}`} color="--accent" delay={0.2} subtext={studentScheduleToday[0] ? `${isAlbanian ? 'Radhës:' : 'Next:'} ${studentScheduleToday[0].name}` : (isAlbanian ? 'Sot nuk ka mësim' : 'No classes today')} />
+            <StatCard icon={CheckCircle2} label={t('dashboard.personalTasks')} value={`${pendingStudentTasksCount} ${t('common.pending')}`} color="--chart-1" delay={0.3} subtext={`${completedStudentTasksCount} ${t('common.completed')}`} />
+            <StatCard icon={Target} label={t('dashboard.academicEvents')} value={`${eventsList.length} ${isAlbanian ? 'Të Planifikuara' : 'Scheduled'}`} color="--chart-2" delay={0.4} subtext={t('dashboard.campusCalendar')} />
           </>
         ) : isAdmin ? (
           <>
-            <StatCard icon={GraduationCap} label="Students Enrolled" value={studentsList.length} color="--primary" delay={0.1} subtext="Active Students" />
-            <StatCard icon={Users} label="Staff & Faculty" value={staffList.length} color="--accent" delay={0.2} subtext="Faculty Roster" />
-            <StatCard icon={Star} label="Campus Events" value={eventsList.length} color="--chart-1" delay={0.3} subtext="Scheduled" />
-            <StatCard icon={Coffee} label="Active Classes" value={classesList.length} color="--chart-2" delay={0.4} subtext="Curriculum Catalog" />
+            <StatCard icon={GraduationCap} label={t('dashboard.studentsEnrolled')} value={studentsList.length} color="--primary" delay={0.1} subtext={t('dashboard.activeStudents')} />
+            <StatCard icon={Users} label={t('dashboard.staffFaculty')} value={staffList.length} color="--accent" delay={0.2} subtext={t('dashboard.facultyRoster')} />
+            <StatCard icon={Star} label={t('dashboard.campusEvents')} value={eventsList.length} color="--chart-1" delay={0.3} subtext={isAlbanian ? 'E Planifikuar' : 'Scheduled'} />
+            <StatCard icon={Coffee} label={t('dashboard.activeClasses')} value={classesList.length} color="--chart-2" delay={0.4} subtext={t('dashboard.curriculumCatalog')} />
           </>
         ) : (
           <>
-            <StatCard icon={BookOpen} label="My Classes" value={teacherClasses.length} color="--primary" delay={0.1} subtext="Taught by you" />
-            <StatCard icon={Users} label="Total Students" value={studentsList.length} color="--accent" delay={0.2} subtext="Enrolled roster" />
-            <StatCard icon={Presentation} label="Curriculum Courses" value={classesList.length} color="--chart-1" delay={0.3} subtext="Full department" />
-            <StatCard icon={CheckCircle2} label="Upcoming Events" value={eventsList.length} color="--mood-happy" delay={0.4} subtext="School calendar" />
+            <StatCard icon={BookOpen} label={t('dashboard.myClasses')} value={teacherClasses.length} color="--primary" delay={0.1} subtext={t('dashboard.taughtByYou')} />
+            <StatCard icon={Users} label={t('dashboard.totalStudents')} value={studentsList.length} color="--accent" delay={0.2} subtext={t('dashboard.enrolledRoster')} />
+            <StatCard icon={Presentation} label={t('dashboard.curriculumCourses')} value={classesList.length} color="--chart-1" delay={0.3} subtext={t('dashboard.fullDepartment')} />
+            <StatCard icon={CheckCircle2} label={t('dashboard.upcomingEvents')} value={eventsList.length} color="--mood-happy" delay={0.4} subtext={t('dashboard.schoolCalendar')} />
           </>
         )}
       </section>
@@ -322,14 +440,14 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           <div className="bulletin-header">
             <div className="bulletin-title">
               <Megaphone size={20} className="megaphone-icon" />
-              <h3>Campus Bulletins & Notices</h3>
+              <h3>{t('dashboard.campusBulletins')}</h3>
             </div>
-            <span className="bulletin-badge glass">📢 Live Broadcasts</span>
+            <span className="bulletin-badge glass">📢 {t('dashboard.liveBroadcasts')}</span>
           </div>
           <div className="bulletin-list">
             {announcements.length === 0 ? (
               <div style={{ padding: '1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                No active campus notices or broadcasts at this time.
+                {t('dashboard.noNotices')}
               </div>
             ) : (
               announcements.map(a => (
@@ -358,18 +476,18 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           >
             <div className="card-header">
               <div>
-                <h3>My Personal Tasks & Homework</h3>
+                <h3>{t('dashboard.myTasksHomework')}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
-                  {pendingStudentTasksCount} pending • {completedStudentTasksCount} done
+                  {pendingStudentTasksCount} {t('common.pending')} • {completedStudentTasksCount} {t('common.completed')}
                 </span>
               </div>
-              <button className="text-btn" onClick={() => onNavigate('tasks')}>Full Board</button>
+              <button className="text-btn" onClick={() => onNavigate('tasks')}>{t('dashboard.fullBoard')}</button>
             </div>
 
             {/* Task completion progress bar */}
             <div className="student-progress-container">
               <div className="student-progress-labels">
-                <span>Task Completion</span>
+                <span>{t('dashboard.taskCompletion')}</span>
                 <span>{studentTaskProgressPercent}% ({completedStudentTasksCount}/{studentTasks.length})</span>
               </div>
               <div className="student-progress-track">
@@ -384,7 +502,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             <form className="student-task-input-bar" onSubmit={handleAddStudentTask}>
               <input 
                 type="text" 
-                placeholder="Add a new homework or study goal..." 
+                placeholder={t('dashboard.addHomeworkGoal')} 
                 value={newStudentTaskText}
                 onChange={(e) => setNewStudentTaskText(e.target.value)}
               />
@@ -443,12 +561,12 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             transition={{ delay: 0.5 }}
           >
             <div className="card-header">
-              <h3>{isAdmin ? 'School-wide Activity' : 'Student Submissions'}</h3>
-              <button className="text-btn" onClick={() => onNavigate('students')}>View All</button>
+              <h3>{isAdmin ? t('dashboard.schoolWideActivity') : t('dashboard.studentSubmissions')}</h3>
+              <button className="text-btn" onClick={() => onNavigate('students')}>{t('common.viewAll')}</button>
             </div>
             <div className="activity-list">
               <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                No recent activity or submissions to display.
+                {t('dashboard.noActivity')}
               </div>
             </div>
           </motion.div>
@@ -465,17 +583,17 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           >
             <div className="card-header">
               <div>
-                <h3>Today's Enrolled Classes</h3>
+                <h3>{t('dashboard.todaysEnrolledClasses')}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
                   {studentScheduleToday.length} {studentScheduleToday.length === 1 ? 'Period' : 'Periods'} Scheduled
                 </span>
               </div>
-              <button className="text-btn" onClick={() => onNavigate('schedule')}>Full Timetable</button>
+              <button className="text-btn" onClick={() => onNavigate('schedule')}>{t('dashboard.fullTimetable')}</button>
             </div>
             <div className="student-classes-list">
               {studentScheduleToday.length === 0 ? (
                 <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                  No classes enrolled for today. Browse the curriculum in Classes to enroll.
+                  {t('dashboard.noClassesEnrolled')}
                 </div>
               ) : (
                 studentScheduleToday.map((cls) => (
@@ -498,7 +616,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
                       </div>
                     </div>
                     <div className="student-class-badge upcoming">
-                      Upcoming
+                      {t('common.upcoming')}
                     </div>
                   </div>
                 ))
@@ -514,16 +632,16 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             transition={{ delay: 0.6 }}
           >
             <div className="card-header">
-              <h3>My Classes Today</h3>
+              <h3>{t('dashboard.myClassesToday')}</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button className="text-btn" onClick={() => onNavigate('lesson-plans')}>Lesson planning</button>
-                <button className="text-btn" onClick={() => onNavigate('schedule')}>Full Schedule</button>
+                <button className="text-btn" onClick={() => onNavigate('lesson-plans')}>{t('dashboard.lessonPlanning')}</button>
+                <button className="text-btn" onClick={() => onNavigate('schedule')}>{t('dashboard.fullTimetable')}</button>
               </div>
             </div>
             <div className="classes-today-list">
               {teacherClasses.length === 0 ? (
                 <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                  No classes assigned to you today.
+                  {t('dashboard.noClassesAssigned')}
                 </div>
               ) : (
                 teacherClasses.map(cls => (
@@ -548,8 +666,8 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             transition={{ delay: 0.6 }}
           >
             <div className="card-header">
-              <h3>Admin Tasks Tracker</h3>
-              <button className="text-btn" onClick={() => onNavigate('tasks')}>Manage</button>
+              <h3>{t('dashboard.adminTasksTracker')}</h3>
+              <button className="text-btn" onClick={() => onNavigate('tasks')}>{t('dashboard.manage')}</button>
             </div>
             <div className="kanban-board">
               {['todo', 'inprogress'].map((column) => (
@@ -561,8 +679,8 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
                 >
                   <div className="kanban-column-header">
                     <h4>
-                      {column === 'todo' && 'To Do ⏱️'}
-                      {column === 'inprogress' && 'In Progress 🚀'}
+                      {column === 'todo' && `${t('dashboard.toDo')} ⏱️`}
+                      {column === 'inprogress' && `${t('dashboard.inProgress')} 🚀`}
                     </h4>
                     <span className="task-count">{tasks.filter(t => t.status === column).length}</span>
                   </div>
@@ -601,25 +719,25 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           transition={{ delay: 0.8 }}
         >
           <div className="card-header">
-            <h3>{isStudent ? 'Personal Study Notes' : 'Personal Worknotes'}</h3>
-            <span className="badge">{savedNotes.length} saved</span>
+            <h3>{isStudent ? t('dashboard.personalStudyNotes') : t('dashboard.personalWorknotes')}</h3>
+            <span className="badge">{savedNotes.length} {t('common.saved')}</span>
           </div>
           <div className="notes-input-area">
             <input 
               type="text" 
-              placeholder={isStudent ? "Jot down a study reminder, formula, or question..." : "Jot something down..."} 
+              placeholder={isStudent ? t('dashboard.jotDownPrompt') : t('dashboard.jotSomething')} 
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
             />
-            <button className="icon-btn bouncy" onClick={handleAddNote} title="Save Note">
+            <button className="icon-btn bouncy" onClick={handleAddNote} title={t('dashboard.saveNote')}>
               <Plus size={18} />
             </button>
           </div>
           <div className="notes-list">
             {savedNotes.length === 0 ? (
               <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem' }}>
-                No notes saved yet. Type above to add one.
+                {t('dashboard.noNotesSaved')}
               </div>
             ) : (
               <AnimatePresence>
@@ -654,17 +772,17 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
         >
           <div className="card-header">
             <div>
-              <h3>Academic Calendar & Key Dates</h3>
+              <h3>{t('dashboard.academicCalendarKeyDates')}</h3>
               <span style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
-                Upcoming Exams, Deadlines & Events
+                {t('dashboard.upcomingExams')}
               </span>
             </div>
-            <button className="text-btn" onClick={() => onNavigate('events')}>See All</button>
+            <button className="text-btn" onClick={() => onNavigate('events')}>{t('common.seeAll')}</button>
           </div>
           <div className="events-list">
             {academicCalendarEvents.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                No upcoming events scheduled on the calendar.
+                {t('dashboard.noUpcomingEvents')}
               </div>
             ) : (
               academicCalendarEvents.map((event) => (

@@ -6,6 +6,7 @@ import {
   Clock, AlertCircle, Star, ChevronDown
 } from 'lucide-react';
 import { useTasks } from '../context/TasksContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Tasks.css';
 
 /* ─── Constants ──────────────────────────────────────────── */
@@ -70,7 +71,7 @@ const CustomSelect = ({ value, onChange, options }) => {
 };
 
 /* ─── Add/Edit Modal ─────────────────────────────────────── */
-const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = STUDENT_CATEGORIES }) => {
+const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = STUDENT_CATEGORIES, isAlbanian = false }) => {
   const defaultCategory = userRole === 'student' ? 'Homework' : 'Admin';
   const [form, setForm] = useState(task || {
     content: '', status: 'todo', priority: 'medium',
@@ -79,6 +80,36 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const availableCategories = categories.filter(c => c !== 'All');
+
+  const getCategoryLabel = (c) => {
+    if (!isAlbanian) return c;
+    const catMap = {
+      'Homework': 'Detyrë Shtëpie',
+      'Study': 'Studim',
+      'Project': 'Projekt',
+      'Exams': 'Provime',
+      'Personal': 'Personale',
+      'Reading': 'Lexim',
+      'Grading': 'Vlerësim',
+      'Prep': 'Përgatitje',
+      'Admin': 'Administratë',
+      'Meeting': 'Mbledhje',
+      'Other': 'Tjetër'
+    };
+    return catMap[c] || c;
+  };
+
+  const getPriorityLabel = (p) => {
+    if (!isAlbanian) return PRIORITY_META[p].label;
+    const pMap = { low: 'E Ulët', medium: 'Mesatare', high: 'E Lartë' };
+    return pMap[p] || PRIORITY_META[p].label;
+  };
+
+  const getStatusLabel = (s) => {
+    if (!isAlbanian) return STATUS_META[s].label;
+    const sMap = { todo: 'Për të Bërë', inprogress: 'Në Progres', done: 'E Përfunduar' };
+    return sMap[s] || STATUS_META[s].label;
+  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -90,16 +121,18 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
         onClick={e => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h3>{task ? '✏️ Edit Task' : (userRole === 'student' ? '✨ New Homework / Task' : '✨ New Task')}</h3>
+          <h3>
+            {task ? (isAlbanian ? '✏️ Ndrysho Detyrën' : '✏️ Edit Task') : (userRole === 'student' ? (isAlbanian ? '✨ Detyrë e Re / Shtëpie' : '✨ New Homework / Task') : (isAlbanian ? '✨ Detyrë e Re' : '✨ New Task'))}
+          </h3>
           <button className="icon-btn" onClick={onClose}><X size={20}/></button>
         </div>
 
         <div className="task-form">
           <div className="form-field">
-            <label>{userRole === 'student' ? 'Assignment / Task' : 'Task'}<span className="required">*</span></label>
+            <label>{userRole === 'student' ? (isAlbanian ? 'Detyrë / Ushtrim' : 'Assignment / Task') : (isAlbanian ? 'Detyra' : 'Task')}<span className="required">*</span></label>
             <input
               className="tf-input"
-              placeholder={userRole === 'student' ? "e.g., Read Physics Chapter 4, submit draft..." : "What needs to be done?"}
+              placeholder={userRole === 'student' ? (isAlbanian ? "p.sh., Lexo Kapitullin 4 në Fizikë, dorëzo detyrën..." : "e.g., Read Physics Chapter 4, submit draft...") : (isAlbanian ? "Çfarë duhet të bëhet?" : "What needs to be done?")}
               value={form.content}
               onChange={e => set('content', e.target.value)}
               autoFocus
@@ -107,46 +140,46 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
           </div>
           <div className="form-row">
             <div className="form-field">
-              <label>Status</label>
+              <label>{isAlbanian ? 'Statusi' : 'Status'}</label>
               <CustomSelect 
                 value={form.status} 
                 onChange={v => set('status', v)}
-                options={STATUSES.map(s => ({ value: s, label: `${STATUS_META[s].emoji} ${STATUS_META[s].label}` }))}
+                options={STATUSES.map(s => ({ value: s, label: `${STATUS_META[s].emoji} ${getStatusLabel(s)}` }))}
               />
             </div>
             <div className="form-field">
-              <label>Priority</label>
+              <label>{isAlbanian ? 'Prioriteti' : 'Priority'}</label>
               <CustomSelect 
                 value={form.priority} 
                 onChange={v => set('priority', v)}
-                options={PRIORITIES.map(p => ({ value: p, label: `${PRIORITY_META[p].icon} ${PRIORITY_META[p].label}` }))}
+                options={PRIORITIES.map(p => ({ value: p, label: `${PRIORITY_META[p].icon} ${getPriorityLabel(p)}` }))}
               />
             </div>
           </div>
           <div className="form-row">
             <div className="form-field">
-              <label>Category</label>
+              <label>{isAlbanian ? 'Kategoria' : 'Category'}</label>
               <CustomSelect 
                 value={form.category} 
                 onChange={v => set('category', v)}
-                options={availableCategories.map(c => ({ value: c, label: c }))}
+                options={availableCategories.map(c => ({ value: c, label: getCategoryLabel(c) }))}
               />
             </div>
             <div className="form-field">
-              <label>Due Date</label>
+              <label>{isAlbanian ? 'Afati Përfundimtar' : 'Due Date'}</label>
               <input className="tf-input" type="date" value={form.due} onChange={e => set('due', e.target.value)} />
             </div>
           </div>
           <div className="form-field">
-            <label>Notes</label>
-            <textarea className="tf-input tf-textarea" placeholder={userRole === 'student' ? "Page numbers, rubrics, study partners..." : "Add any notes…"} value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} />
+            <label>{isAlbanian ? 'Shënime' : 'Notes'}</label>
+            <textarea className="tf-input tf-textarea" placeholder={userRole === 'student' ? (isAlbanian ? "Faqet e librit, udhëzimet, shokët e grupit..." : "Page numbers, rubrics, study partners...") : (isAlbanian ? "Shtoni shënime…" : "Add any notes…")} value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} />
           </div>
         </div>
 
         <div className="modal-footer">
-          <button className="btn-secondary glass" onClick={onClose}>Cancel</button>
+          <button className="btn-secondary glass" onClick={onClose}>{isAlbanian ? 'Anulo' : 'Cancel'}</button>
           <button className="btn-primary" disabled={!form.content.trim()} onClick={() => onSave(form)}>
-            <Check size={16}/> {task ? 'Update' : (userRole === 'student' ? 'Save Task' : 'Add Task')}
+            <Check size={16}/> {task ? (isAlbanian ? 'Përditëso' : 'Update') : (userRole === 'student' ? (isAlbanian ? 'Ruaj Detyrën' : 'Save Task') : (isAlbanian ? 'Shto Detyrë' : 'Add Task'))}
           </button>
         </div>
       </motion.div>
@@ -155,10 +188,33 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
 };
 
 /* ─── Single Task Card ───────────────────────────────────── */
-const TaskCard = ({ task, onEdit, onDelete, onMove, compact }) => {
+const TaskCard = ({ task, onEdit, onDelete, onMove, compact, isAlbanian = false }) => {
   const pm = PRIORITY_META[task.priority] || PRIORITY_META.medium;
-  const sm = STATUS_META[task.status]     || STATUS_META.todo;
   const isOverdue = task.due && new Date(task.due) < new Date() && task.status !== 'done';
+
+  const getPriorityLabel = (p) => {
+    if (!isAlbanian) return pm.label;
+    const pMap = { low: 'E Ulët', medium: 'Mesatare', high: 'E Lartë' };
+    return pMap[task.priority] || pm.label;
+  };
+
+  const getCategoryLabel = (c) => {
+    if (!isAlbanian) return c;
+    const catMap = {
+      'Homework': 'Detyrë Shtëpie',
+      'Study': 'Studim',
+      'Project': 'Projekt',
+      'Exams': 'Provime',
+      'Personal': 'Personale',
+      'Reading': 'Lexim',
+      'Grading': 'Vlerësim',
+      'Prep': 'Përgatitje',
+      'Admin': 'Administratë',
+      'Meeting': 'Mbledhje',
+      'Other': 'Tjetër'
+    };
+    return catMap[c] || c;
+  };
 
   return (
     <motion.div
@@ -175,7 +231,7 @@ const TaskCard = ({ task, onEdit, onDelete, onMove, compact }) => {
         <button
           className={`done-circle ${task.status === 'done' ? 'done' : ''}`}
           onClick={() => onMove(task.id, task.status === 'done' ? 'todo' : 'done')}
-          title={task.status === 'done' ? 'Mark undone' : 'Mark done'}
+          title={task.status === 'done' ? (isAlbanian ? 'Shëno si të papërfunduar' : 'Mark undone') : (isAlbanian ? 'Shëno si të përfunduar' : 'Mark done')}
         >
           {task.status === 'done' && <Check size={12}/>}
         </button>
@@ -183,17 +239,17 @@ const TaskCard = ({ task, onEdit, onDelete, onMove, compact }) => {
           {task.content}
         </span>
         <div className="task-actions">
-          <button className="icon-btn-xs" onClick={() => onEdit(task)} title="Edit"><Edit size={13}/></button>
-          <button className="icon-btn-xs destructive" onClick={() => onDelete(task.id)} title="Delete"><Trash2 size={13}/></button>
+          <button className="icon-btn-xs" onClick={() => onEdit(task)} title={isAlbanian ? 'Ndrysho' : 'Edit'}><Edit size={13}/></button>
+          <button className="icon-btn-xs destructive" onClick={() => onDelete(task.id)} title={isAlbanian ? 'Fshij' : 'Delete'}><Trash2 size={13}/></button>
         </div>
       </div>
       {!compact && (
         <div className="task-card-meta">
-          <span className="task-badge" style={{ color: pm.color, background: `${pm.color}20` }}>{pm.icon} {pm.label}</span>
-          {task.category && <span className="task-badge cat-badge">{task.category}</span>}
+          <span className="task-badge" style={{ color: pm.color, background: `${pm.color}20` }}>{pm.icon} {getPriorityLabel(task.priority)}</span>
+          {task.category && <span className="task-badge cat-badge">{getCategoryLabel(task.category)}</span>}
           {task.due && (
             <span className="task-badge" style={{ color: isOverdue ? 'hsl(var(--mood-sad))' : 'hsl(var(--muted-foreground))', background: isOverdue ? 'hsl(var(--mood-sad) / 0.12)' : 'hsl(var(--muted)/0.3)' }}>
-              📅 {new Date(task.due).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              📅 {new Date(task.due).toLocaleDateString(isAlbanian ? 'sq-AL' : 'en-US', { month: 'short', day: 'numeric' })}
               {isOverdue && ' ⚠️'}
             </span>
           )}
@@ -205,9 +261,16 @@ const TaskCard = ({ task, onEdit, onDelete, onMove, compact }) => {
 };
 
 /* ─── Kanban Column ──────────────────────────────────────── */
-const KanbanCol = ({ status, tasks, onEdit, onDelete, onMove }) => {
+const KanbanCol = ({ status, tasks, onEdit, onDelete, onMove, isAlbanian = false }) => {
   const meta = STATUS_META[status];
   const [over, setOver] = useState(false);
+
+  const getStatusLabel = (s) => {
+    if (!isAlbanian) return meta.label;
+    const sMap = { todo: 'Për të Bërë', inprogress: 'Në Progres', done: 'E Përfunduar' };
+    return sMap[s] || meta.label;
+  };
+
   return (
     <div
       className={`kanban-col glass ${over ? 'drag-over' : ''}`}
@@ -221,17 +284,17 @@ const KanbanCol = ({ status, tasks, onEdit, onDelete, onMove }) => {
       style={{ borderTop: `3px solid ${meta.color}` }}
     >
       <div className="kanban-col-header">
-        <span className="kanban-col-label" style={{ color: meta.color }}>{meta.emoji} {meta.label}</span>
+        <span className="kanban-col-label" style={{ color: meta.color }}>{meta.emoji} {getStatusLabel(status)}</span>
         <span className="task-count-badge" style={{ background: `${meta.color}22`, color: meta.color }}>{tasks.length}</span>
       </div>
       <div className="kanban-col-body">
         <AnimatePresence>
           {tasks.map(t => (
-            <TaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} onMove={onMove} compact />
+            <TaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} onMove={onMove} compact isAlbanian={isAlbanian} />
           ))}
         </AnimatePresence>
         {tasks.length === 0 && (
-          <div className="kanban-empty">Drop tasks here…</div>
+          <div className="kanban-empty">{isAlbanian ? 'Lëshoni detyrat këtu…' : 'Drop tasks here…'}</div>
         )}
       </div>
     </div>
@@ -241,6 +304,7 @@ const KanbanCol = ({ status, tasks, onEdit, onDelete, onMove }) => {
 /* ─── Main Tasks Page ────────────────────────────────────── */
 const Tasks = ({ userRole = 'student' }) => {
   const { tasks, addTask, updateTask, deleteTask, moveTask } = useTasks();
+  const { language, t, isAlbanian } = useLanguage();
   const [view, setView]         = useState('list');   // list | kanban
   const [modal, setModal]       = useState(null);     // null | 'new' | task obj
   const [filterCat, setFilterCat]     = useState('All');
@@ -250,6 +314,37 @@ const Tasks = ({ userRole = 'student' }) => {
   const [sortBy, setSortBy]     = useState('due');
 
   const categories = userRole === 'student' ? STUDENT_CATEGORIES : STAFF_CATEGORIES;
+
+  const getCategoryLabel = (c) => {
+    if (!isAlbanian) return c;
+    const catMap = {
+      'All': 'Të Gjitha Kategoritë',
+      'Homework': 'Detyrë Shtëpie',
+      'Study': 'Studim',
+      'Project': 'Projekt',
+      'Exams': 'Provime',
+      'Personal': 'Personale',
+      'Reading': 'Lexim',
+      'Grading': 'Vlerësim',
+      'Prep': 'Përgatitje',
+      'Admin': 'Administratë',
+      'Meeting': 'Mbledhje',
+      'Other': 'Tjetër'
+    };
+    return catMap[c] || c;
+  };
+
+  const getPriorityLabel = (p) => {
+    if (!isAlbanian) return PRIORITY_META[p]?.label || p;
+    const pMap = { low: 'E Ulët', medium: 'Mesatare', high: 'E Lartë' };
+    return pMap[p] || PRIORITY_META[p]?.label || p;
+  };
+
+  const getStatusLabel = (s) => {
+    if (!isAlbanian) return STATUS_META[s]?.label || s;
+    const sMap = { todo: 'Për të Bërë', inprogress: 'Në Progres', done: 'E Përfunduar' };
+    return sMap[s] || STATUS_META[s]?.label || s;
+  };
 
   const handleSave = (form) => {
     if (modal === 'new') addTask(form);
@@ -288,16 +383,12 @@ const Tasks = ({ userRole = 'student' }) => {
       <div className="tasks-header">
         <div>
           <h1 className="gradient-text" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {userRole === 'student' ? 'My Tasks & Homework' : 'Task Manager'} <CheckSquare size={32} style={{ color: 'hsl(var(--primary))' }} />
+            {t('tasks.title')} <CheckSquare size={32} style={{ color: 'hsl(var(--primary))' }} />
           </h1>
-          <p>
-            {userRole === 'student'
-              ? 'Stay on top of coursework assignments, exam prep, reading goals, and study habits.'
-              : 'Stay on top of everything, one task at a time.'}
-          </p>
+          <p>{t('tasks.subtitle')}</p>
         </div>
         <button className="btn-primary" onClick={() => setModal('new')}>
-          <Plus size={18}/> {userRole === 'student' ? 'New Task / Homework' : 'New Task'}
+          <Plus size={18}/> {t('tasks.addTask')}
         </button>
       </div>
 
@@ -305,27 +396,27 @@ const Tasks = ({ userRole = 'student' }) => {
       <div className="tasks-stats">
         <div className="tstat glass">
           <span>📋</span>
-          <div><strong>{totalCount}</strong><small>Total</small></div>
+          <div><strong>{totalCount}</strong><small>{t('common.total')}</small></div>
         </div>
         <div className="tstat glass">
           <span>⚡</span>
-          <div><strong>{tasks.filter(t => t.status === 'inprogress').length}</strong><small>In Progress</small></div>
+          <div><strong>{tasks.filter(t => t.status === 'inprogress').length}</strong><small>{t('tasks.inProgress')}</small></div>
         </div>
         <div className="tstat glass">
           <span>✅</span>
-          <div><strong>{doneCount}</strong><small>Completed</small></div>
+          <div><strong>{doneCount}</strong><small>{t('tasks.completed')}</small></div>
         </div>
         <div className="tstat glass" style={{ borderColor: overdueTasks.length ? 'hsl(var(--mood-sad)/0.4)' : undefined }}>
           <span>⚠️</span>
           <div>
             <strong style={{ color: overdueTasks.length ? 'hsl(var(--mood-sad))' : undefined }}>{overdueTasks.length}</strong>
-            <small>Overdue</small>
+            <small>{isAlbanian ? 'Të Vonuara' : 'Overdue'}</small>
           </div>
         </div>
         {/* Progress bar */}
         <div className="tasks-progress-wrap glass">
           <div className="tasks-progress-label">
-            <span>Completion</span>
+            <span>{isAlbanian ? 'Përfundimi' : 'Completion'}</span>
             <strong>{totalCount ? Math.round((doneCount / totalCount) * 100) : 0}%</strong>
           </div>
           <div className="tasks-progress-bg">
@@ -343,37 +434,37 @@ const Tasks = ({ userRole = 'student' }) => {
       <div className="tasks-toolbar">
         <div className="tasks-search glass">
           <Search size={16}/>
-          <input placeholder="Search tasks…" value={searchQ} onChange={e => setSearchQ(e.target.value)} />
+          <input placeholder={isAlbanian ? 'Kërko detyrat…' : 'Search tasks…'} value={searchQ} onChange={e => setSearchQ(e.target.value)} />
         </div>
         <div className="tasks-filters">
           <CustomSelect 
             value={filterCat} 
             onChange={setFilterCat}
-            options={categories.map(c => ({ value: c, label: c === 'All' ? 'All Categories' : c }))}
+            options={categories.map(c => ({ value: c, label: getCategoryLabel(c) }))}
           />
           <CustomSelect 
             value={filterPri} 
             onChange={setFilterPri}
             options={[
-              { value: 'All', label: 'All Priorities' },
-              ...PRIORITIES.map(p => ({ value: p, label: `${PRIORITY_META[p].icon} ${PRIORITY_META[p].label}` }))
+              { value: 'All', label: isAlbanian ? 'Të Gjitha Prioritetet' : 'All Priorities' },
+              ...PRIORITIES.map(p => ({ value: p, label: `${PRIORITY_META[p].icon} ${getPriorityLabel(p)}` }))
             ]}
           />
           <CustomSelect 
             value={filterStatus} 
             onChange={setFilterStatus}
             options={[
-              { value: 'All', label: 'All Statuses' },
-              ...STATUSES.map(s => ({ value: s, label: `${STATUS_META[s].emoji} ${STATUS_META[s].label}` }))
+              { value: 'All', label: isAlbanian ? 'Të Gjitha Statuset' : 'All Statuses' },
+              ...STATUSES.map(s => ({ value: s, label: `${STATUS_META[s].emoji} ${getStatusLabel(s)}` }))
             ]}
           />
           <CustomSelect 
             value={sortBy} 
             onChange={setSortBy}
             options={[
-              { value: 'due',      label: 'Sort: Due Date' },
-              { value: 'priority', label: 'Sort: Priority' },
-              { value: 'status',   label: 'Sort: Status' },
+              { value: 'due',      label: isAlbanian ? 'Rendit: Sipas Afatit' : 'Sort: Due Date' },
+              { value: 'priority', label: isAlbanian ? 'Rendit: Sipas Prioritetit' : 'Sort: Priority' },
+              { value: 'status',   label: isAlbanian ? 'Rendit: Sipas Statusit' : 'Sort: Status' },
             ]}
           />
         </div>
@@ -388,7 +479,7 @@ const Tasks = ({ userRole = 'student' }) => {
         {overdueTasks.length > 0 && (
           <motion.div className="overdue-banner glass" initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }}>
             <AlertCircle size={18} color="hsl(var(--mood-sad))"/>
-            <span><strong>{overdueTasks.length} overdue task{overdueTasks.length > 1 ? 's' : ''}:</strong> {overdueTasks.map(t => t.content).join(' · ')}</span>
+            <span><strong>{overdueTasks.length} {isAlbanian ? 'detyra të vonuara' : `overdue task${overdueTasks.length > 1 ? 's' : ''}`}:</strong> {overdueTasks.map(t => t.content).join(' · ')}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -405,22 +496,22 @@ const Tasks = ({ userRole = 'student' }) => {
               return (
                 <div key={status} className="task-group">
                   <div className="task-group-header" style={{ color: meta.color }}>
-                    {meta.emoji} {meta.label}
+                    {meta.emoji} {getStatusLabel(status)}
                     <span className="task-count-badge" style={{ background: `${meta.color}20`, color: meta.color }}>{group.length}</span>
                   </div>
                   <AnimatePresence>
                     {group.map(t => (
-                      <TaskCard key={t.id} task={t} onEdit={setModal} onDelete={deleteTask} onMove={moveTask} />
+                      <TaskCard key={t.id} task={t} onEdit={setModal} onDelete={deleteTask} onMove={moveTask} isAlbanian={isAlbanian} />
                     ))}
                   </AnimatePresence>
                   {group.length === 0 && (
-                    <div className="group-empty">No tasks here — great job! 🎉</div>
+                    <div className="group-empty">{isAlbanian ? 'Nuk ka detyra këtu — punë e shkëlqyer! 🎉' : 'No tasks here — great job! 🎉'}</div>
                   )}
                 </div>
               );
             })}
             {sorted.length === 0 && (
-              <div className="empty-state"><Star size={32}/><p>No tasks match your filters.</p></div>
+              <div className="empty-state"><Star size={32}/><p>{isAlbanian ? 'Asnjë detyrë nuk përputhet me filtrat tuaj.' : 'No tasks match your filters.'}</p></div>
             )}
           </motion.div>
         ) : (
@@ -433,6 +524,7 @@ const Tasks = ({ userRole = 'student' }) => {
                 onEdit={setModal}
                 onDelete={deleteTask}
                 onMove={moveTask}
+                isAlbanian={isAlbanian}
               />
             ))}
           </motion.div>
@@ -448,6 +540,7 @@ const Tasks = ({ userRole = 'student' }) => {
             onClose={() => setModal(null)}
             userRole={userRole}
             categories={categories}
+            isAlbanian={isAlbanian}
           />
         )}
       </AnimatePresence>

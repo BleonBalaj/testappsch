@@ -204,7 +204,6 @@ export async function provisionNewUser({
       department: extraData.department || 'General',
       subject: extraData.subject || '',
       classes: Number(extraData.classes) || 0,
-      rating: Number(extraData.rating) || 5.0,
       experience: extraData.experience || '1 year',
       room: extraData.room || '',
       bio: extraData.bio || '',

@@ -11,24 +11,21 @@ import {
   PlusCircle, FileDown, Eye
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import './Messages.css';
 
 const INITIAL_CHATS = [];
-
 const INITIAL_THREAD = {};
-
-const CANNED_RESPONSES = [
-  "Received! I will review this by EOD 📝",
-  "Great question! Let's discuss in class tomorrow ⏰",
-  "Office hours are open today 3:00–4:30 PM 🏢",
-  "Approved! Keep up the fantastic progress 🌟"
-];
-
 const EMOJI_REACTIONS = ['👍', '❤️', '🌟', '🎉', '🔥', '👏', '💡', '✅'];
 
 const Messages = ({ userRole = 'admin' }) => {
   const { staffList, studentsList } = useSchoolData();
+  const { activeSchoolId, currentUser } = useAuth();
+  const { t, isAlbanian } = useLanguage();
   const isAdminOrTeacher = userRole === 'admin' || userRole === 'teacher';
 
   const [chats, setChats] = useState(INITIAL_CHATS);
@@ -77,11 +74,103 @@ const Messages = ({ userRole = 'admin' }) => {
     scrollToBottom();
   }, [threads, activeChat, isTyping]);
 
+  // 1. Listen to real conversations from Firestore and merge with school members
+  useEffect(() => {
+    if (!activeSchoolId) return;
+    const colRef = collection(db, 'schools', activeSchoolId, 'conversations');
+    const unsub = onSnapshot(colRef, (snapshot) => {
+      const convs = [];
+      snapshot.forEach(docSnap => convs.push({ id: docSnap.id, ...docSnap.data() }));
+
+      // Directory contacts
+      const dirContacts = [
+        ...staffList.filter(s => s.id !== currentUser?.uid).map(s => ({
+          id: `dm_${[currentUser?.uid || 'user', s.id].sort().join('_')}`,
+          targetUid: s.id,
+          name: s.name,
+          role: s.roleName || s.department || 'Faculty',
+          roleType: 'staff',
+          lastMessage: 'Direct Message',
+          time: 'Active',
+          unread: 0,
+          online: true,
+          starred: false,
+          isGroup: false,
+          members: [
+            { id: currentUser?.uid, name: currentUser?.displayName || 'You', role: 'Member' },
+            { id: s.id, name: s.name, role: 'Faculty' }
+          ]
+        })),
+        ...studentsList.filter(st => st.id !== currentUser?.uid).map(st => ({
+          id: `dm_${[currentUser?.uid || 'user', st.id].sort().join('_')}`,
+          targetUid: st.id,
+          name: st.name,
+          role: `Student (${st.grade || 'General'})`,
+          roleType: 'student',
+          lastMessage: 'Direct Message',
+          time: 'Active',
+          unread: 0,
+          online: true,
+          starred: false,
+          isGroup: false,
+          members: [
+            { id: currentUser?.uid, name: currentUser?.displayName || 'You', role: 'Member' },
+            { id: st.id, name: st.name, role: 'Student' }
+          ]
+        }))
+      ];
+
+      const mergedMap = new Map();
+      dirContacts.forEach(c => mergedMap.set(c.id, c));
+      convs.forEach(c => {
+        const existing = mergedMap.get(c.id);
+        mergedMap.set(c.id, { ...(existing || {}), ...c });
+      });
+
+      const finalChats = Array.from(mergedMap.values());
+      setChats(finalChats);
+
+      setActiveChat(prev => {
+        if (!prev && finalChats.length > 0) return finalChats[0];
+        if (prev) {
+          const updated = finalChats.find(c => c.id === prev.id);
+          return updated ? { ...prev, ...updated } : prev;
+        }
+        return prev;
+      });
+    }, (err) => console.warn('Conversations sync notice:', err.message));
+
+    return () => unsub();
+  }, [activeSchoolId, staffList, studentsList, currentUser?.uid]);
+
+  // 2. Listen to real messages in activeChat
+  useEffect(() => {
+    if (!activeSchoolId || !activeChat?.id) return;
+    const msgsCol = collection(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id), 'messages');
+    const msgsQuery = query(msgsCol, orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(msgsQuery, (snapshot) => {
+      const msgs = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const isMe = data.senderUid === currentUser?.uid || data.sender === 'me';
+        msgs.push({
+          id: docSnap.id,
+          ...data,
+          sender: isMe ? 'me' : 'them'
+        });
+      });
+      setThreads(prev => ({
+        ...prev,
+        [activeChat.id]: msgs
+      }));
+    }, (err) => console.warn('Messages sync notice:', err.message));
+
+    return () => unsub();
+  }, [activeSchoolId, activeChat?.id, currentUser?.uid]);
+
   const currentMessages = useMemo(() => {
     if (!activeChat) return [];
-    const raw = threads[activeChat.id] || [
-      { id: 999, sender: 'them', text: `Hello! This is the start of your conversation in ${activeChat.name}.`, time: 'Earlier', status: 'read', reactions: [] }
-    ];
+    const raw = threads[activeChat.id] || [];
 
     if (!searchInThread.trim()) return raw;
     return raw.filter(m => (m.text || '').toLowerCase().includes(searchInThread.toLowerCase()));
@@ -151,7 +240,7 @@ const Messages = ({ userRole = 'admin' }) => {
 
 
   // Send Message
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     if (e) e.preventDefault();
     if (!activeChat) return;
     if (!messageInput.trim() && !attachedFile) return;
@@ -164,131 +253,142 @@ const Messages = ({ userRole = 'admin' }) => {
     
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const textContent = messageInput.trim() + (attachedFile ? `\n📎 Attached: ${attachedFile.name}` : '');
+    const msgId = `msg_${Date.now()}`;
 
     const newMsg = {
-      id: Date.now(),
+      id: msgId,
+      senderUid: currentUser?.uid || 'user',
+      senderName: currentUser?.displayName || currentUser?.email || 'User',
       sender: 'me',
       text: textContent,
       time: nowStr,
       status: 'sent',
       reactions: [],
-      attachment: attachedFile ? { name: attachedFile.name, size: '2.5 MB' } : null
+      attachment: attachedFile ? { name: attachedFile.name, size: '2.5 MB' } : null,
+      createdAt: serverTimestamp()
     };
-    
-    setThreads(prev => ({
-      ...prev,
-      [activeChat.id]: [...(prev[activeChat.id] || []), newMsg]
-    }));
-
-    if (attachedFile) {
-      setChats(prev => prev.map(c => c.id === activeChat.id ? {
-        ...c,
-        sharedFiles: [
-          ...(c.sharedFiles || []),
-          { id: `f_${Date.now()}`, name: attachedFile.name, size: '2.5 MB', date: 'Just now', sender: 'You' }
-        ]
-      } : c));
-    }
-
-    setChats(prev => prev.map(c => c.id === activeChat.id ? { ...c, lastMessage: textContent, time: nowStr } : c));
 
     setMessageInput('');
     setAttachedFile(null);
 
-    // Auto-reply simulation for direct chats
-    if (!activeChat.isGroup) {
-      setTimeout(() => {
-        setIsTyping(true);
-        setTimeout(() => {
-          setIsTyping(false);
-          const replyText = `Thanks for your message! I'm reviewing this right now. ✨`;
-          const replyMsg = {
-            id: Date.now() + 1,
-            sender: 'them',
-            text: replyText,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            status: 'read',
-            reactions: []
-          };
-          setThreads(prev => ({
-            ...prev,
-            [activeChat.id]: [...(prev[activeChat.id] || []), replyMsg]
-          }));
-          setChats(prev => prev.map(c => c.id === activeChat.id ? { ...c, lastMessage: replyText, time: replyMsg.time } : c));
-        }, 1600);
-      }, 800);
+    if (activeSchoolId && activeChat?.id) {
+      try {
+        const msgRef = doc(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id), 'messages', msgId);
+        await setDoc(msgRef, newMsg);
+
+        const convRef = doc(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id));
+        await setDoc(convRef, {
+          id: String(activeChat.id),
+          name: activeChat.name,
+          role: activeChat.role || 'Member',
+          roleType: activeChat.roleType || 'direct',
+          isGroup: Boolean(activeChat.isGroup),
+          topic: activeChat.topic || '',
+          lastMessage: textContent,
+          time: nowStr,
+          lastMessageAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Error saving message to Firestore:', err.message);
+      }
     }
   };
 
   // Reactions
-  const handleAddReaction = (messageId, emoji) => {
-    setThreads(prev => ({
-      ...prev,
-      [activeChat.id]: (prev[activeChat.id] || []).map(m => {
-        if (m.id === messageId) {
-          const current = m.reactions || [];
-          const updated = current.includes(emoji)
-            ? current.filter(e => e !== emoji)
-            : [...current, emoji];
-          return { ...m, reactions: updated };
-        }
-        return m;
-      })
-    }));
+  const handleAddReaction = async (messageId, emoji) => {
+    const thread = threads[activeChat?.id] || [];
+    const msg = thread.find(m => m.id === messageId);
+    if (!msg || !activeSchoolId || !activeChat?.id) return;
+    const current = msg.reactions || [];
+    const updated = current.includes(emoji)
+      ? current.filter(e => e !== emoji)
+      : [...current, emoji];
+
     setSelectedEmojiTarget(null);
+    try {
+      const msgRef = doc(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id), 'messages', String(messageId));
+      await updateDoc(msgRef, { reactions: updated });
+    } catch (e) {
+      console.warn('Could not update reaction:', e.message);
+    }
   };
 
   // Moderate / Delete Message
-  const handleDeleteMessage = (messageId) => {
-    setThreads(prev => ({
-      ...prev,
-      [activeChat.id]: (prev[activeChat.id] || []).filter(m => m.id !== messageId)
-    }));
+  const handleDeleteMessage = async (messageId) => {
+    if (!activeSchoolId || !activeChat?.id) return;
+    try {
+      const msgRef = doc(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id), 'messages', String(messageId));
+      await deleteDoc(msgRef);
+    } catch (e) {
+      console.warn('Could not delete message:', e.message);
+    }
   };
 
   // Pin Message as Announcement
-  const handlePinMessage = (text) => {
+  const handlePinMessage = async (text) => {
     const cleanText = text.replace(/📎 Attached: .*/g, '').trim();
-    setChats(prev => prev.map(c => c.id === activeChat.id ? { ...c, pinnedMessage: cleanText } : c));
-    setActiveChat(prev => ({ ...prev, pinnedMessage: cleanText }));
+    if (!activeSchoolId || !activeChat?.id) return;
+    try {
+      const convRef = doc(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id));
+      await updateDoc(convRef, { pinnedMessage: cleanText });
+    } catch (e) {
+      console.warn('Could not pin message:', e.message);
+    }
   };
 
   // Toggle chat bookmark / star
-  const handleToggleChatStar = (chatId) => {
-    setChats(prev => prev.map(c => c.id === chatId ? { ...c, starred: !c.starred } : c));
+  const handleToggleChatStar = async (chatId) => {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat || !activeSchoolId) return;
+    try {
+      const convRef = doc(db, 'schools', activeSchoolId, 'conversations', String(chatId));
+      await updateDoc(convRef, { starred: !chat.starred });
+    } catch (e) {
+      console.warn('Could not toggle star:', e.message);
+    }
   };
 
   // Start Direct Chat
-  const handleStartDirectChat = useCallback((user, type) => {
-    const existing = chats.find(c => c.name === user.name && !c.isGroup);
-    if (existing) {
-      setActiveChat(existing);
-    } else {
-      const generatedId = Date.now();
-      const newChatObj = {
-        id: generatedId,
-        name: user.name,
-        role: type === 'staff' ? (user.roleName || user.department || 'Faculty') : `Student (${user.grade})`,
-        roleType: type,
-        lastMessage: 'Conversation started',
-        time: 'Just now',
-        unread: 0,
-        online: true,
-        starred: false,
-        members: [{ id: user.id || generatedId, name: user.name, role: type, muted: false }],
-        sharedFiles: []
-      };
-      setChats(prev => [newChatObj, ...prev]);
-      setActiveChat(newChatObj);
-    }
+  const handleStartDirectChat = useCallback(async (user, type) => {
+    const dmId = `dm_${[currentUser?.uid || 'user', user.id].sort().join('_')}`;
+    const newChatObj = {
+      id: dmId,
+      targetUid: user.id,
+      name: user.name,
+      role: type === 'staff' ? (user.roleName || user.department || 'Faculty') : `Student (${user.grade || 'General'})`,
+      roleType: type,
+      lastMessage: 'Direct conversation',
+      time: 'Active',
+      unread: 0,
+      online: true,
+      starred: false,
+      isGroup: false,
+      members: [
+        { id: currentUser?.uid, name: currentUser?.displayName || 'You', role: 'Member' },
+        { id: user.id, name: user.name, role: type }
+      ]
+    };
+
+    setActiveChat(newChatObj);
     setIsNewChatOpen(false);
-  }, [chats]);
+
+    if (activeSchoolId) {
+      try {
+        const convRef = doc(db, 'schools', activeSchoolId, 'conversations', dmId);
+        await setDoc(convRef, newChatObj, { merge: true });
+      } catch (e) {
+        console.warn('Could not register conversation in Firestore:', e.message);
+      }
+    }
+  }, [currentUser, activeSchoolId]);
 
   // Create Group Channel
-  const handleCreateGroupSubmit = (e) => {
+  const handleCreateGroupSubmit = async (e) => {
     e.preventDefault();
-    if (!newGroupName.trim()) return;
+    if (!newGroupName.trim() || !activeSchoolId) return;
 
+    const groupId = `grp_${Date.now()}`;
     const groupMembers = selectedGroupMembers.map(u => ({
       id: u.id,
       name: u.name,
@@ -297,7 +397,7 @@ const Messages = ({ userRole = 'admin' }) => {
     }));
 
     const newGroup = {
-      id: Date.now(),
+      id: groupId,
       name: newGroupName.trim(),
       role: 'Group Channel',
       roleType: 'group',
@@ -309,19 +409,26 @@ const Messages = ({ userRole = 'admin' }) => {
       announcementOnly: false,
       pinnedMessage: newGroupTopic.trim() || 'Welcome to the new channel!',
       members: [
-        { id: 999, name: 'You (Host)', role: 'Moderator', isModerator: true, muted: false },
+        { id: currentUser?.uid, name: currentUser?.displayName || 'You (Host)', role: 'Moderator', isModerator: true, muted: false },
         ...groupMembers
       ],
       sharedFiles: [],
-      starred: true
+      starred: true,
+      createdAt: serverTimestamp()
     };
 
-    setChats(prev => [newGroup, ...prev]);
     setActiveChat(newGroup);
     setIsNewChatOpen(false);
     setNewGroupName('');
     setNewGroupTopic('');
     setSelectedGroupMembers([]);
+
+    try {
+      const convRef = doc(db, 'schools', activeSchoolId, 'conversations', groupId);
+      await setDoc(convRef, newGroup);
+    } catch (e) {
+      console.warn('Could not save group to Firestore:', e.message);
+    }
   };
 
   // Moderation: Mute/Unmute Member
@@ -387,17 +494,17 @@ const Messages = ({ userRole = 'admin' }) => {
           <div className="messages-title-row">
             <div className="title-with-badge">
               <h2 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                Messages
+                {t('messages.title', 'Messages')}
                 <MessageSquare size={24} style={{ color: 'hsl(var(--primary))' }} />
               </h2>
               <span className="msg-count-pill glass">
-                {chats.reduce((acc, c) => acc + (c.unread || 0), 0)} Unread
+                {chats.reduce((acc, c) => acc + (c.unread || 0), 0)} {isAlbanian ? 'Të Paparë' : 'Unread'}
               </span>
             </div>
             <button 
               className="new-chat-btn bouncy" 
               onClick={() => setIsNewChatOpen(true)}
-              title="Start New Chat or Channel"
+              title={t('messages.newChat', 'Start New Chat or Channel')}
             >
               <UserPlus size={18} />
             </button>
@@ -408,7 +515,7 @@ const Messages = ({ userRole = 'admin' }) => {
             <Search size={16} className="search-icon" />
             <input 
               type="text" 
-              placeholder="Search conversations, staff, students..." 
+              placeholder={t('messages.searchPlaceholder', 'Search conversations, staff, students...')} 
               value={chatSearch}
               onChange={(e) => setChatSearch(e.target.value)}
             />
@@ -423,25 +530,25 @@ const Messages = ({ userRole = 'admin' }) => {
               className={`msg-tab-pill ${filterTab === 'all' ? 'active' : ''}`}
               onClick={() => setFilterTab('all')}
             >
-              All ({chats.length})
+              {t('common.all', 'All')} ({chats.length})
             </button>
             <button 
               className={`msg-tab-pill ${filterTab === 'direct' ? 'active' : ''}`}
               onClick={() => setFilterTab('direct')}
             >
-              Direct
+              {t('messages.direct', 'Direct')}
             </button>
             <button 
               className={`msg-tab-pill ${filterTab === 'groups' ? 'active' : ''}`}
               onClick={() => setFilterTab('groups')}
             >
-              Channels
+              {t('messages.channels', 'Channels')}
             </button>
             <button 
               className={`msg-tab-pill ${filterTab === 'starred' ? 'active' : ''}`}
               onClick={() => setFilterTab('starred')}
             >
-              ⭐ Starred
+              ⭐ {t('messages.starred', 'Starred')}
             </button>
           </div>
         </div>
@@ -451,7 +558,7 @@ const Messages = ({ userRole = 'admin' }) => {
           {filteredChats.length === 0 ? (
             <div className="empty-chats-box">
               <MessageSquare size={26} className="muted-icon" />
-              <p>No conversations found</p>
+              <p>{isAlbanian ? 'Nuk u gjet asnjë bisedë' : 'No conversations found'}</p>
             </div>
           ) : (
             filteredChats.map((chat) => (
@@ -503,13 +610,13 @@ const Messages = ({ userRole = 'admin' }) => {
               <MessageSquare size={34} />
             </div>
             <div>
-              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.3rem', fontWeight: 700 }}>No Conversation Selected</h3>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.3rem', fontWeight: 700 }}>{t('messages.noConversation', 'No Conversation Selected')}</h3>
               <p style={{ margin: 0, color: 'hsl(var(--muted-foreground))', maxWidth: '360px', fontSize: '0.92rem', lineHeight: '1.5' }}>
-                Select a conversation from the sidebar or click "New Chat" to connect with staff, teachers, or students.
+                {t('messages.noConversationDesc', 'Select a conversation from the sidebar or click "New Chat" to connect with staff, teachers, or students.')}
               </p>
             </div>
             <button type="button" className="btn-primary" onClick={() => setIsNewChatOpen(true)}>
-              <PlusCircle size={16} /> New Conversation
+              <PlusCircle size={16} /> {t('messages.newConversation', 'New Conversation')}
             </button>
           </div>
         ) : (
@@ -622,6 +729,40 @@ const Messages = ({ userRole = 'admin' }) => {
           <div className="conversation-start-badge glass">
             <span>🔒 End-to-end encrypted school communication</span>
           </div>
+
+          {currentMessages.length === 0 && (
+            <div style={{
+              margin: 'auto',
+              textAlign: 'center',
+              padding: '2.5rem 1.5rem',
+              maxWidth: '360px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}>
+              <div style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '16px',
+                background: 'hsla(var(--primary), 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'hsl(var(--primary))'
+              }}>
+                <MessageSquare size={26} />
+              </div>
+              <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--card-foreground))' }}>
+                {isAlbanian ? 'Filloni Bisedën' : 'Start the Conversation'}
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
+                {isAlbanian 
+                  ? `Dërgoni mesazhin e parë për ${activeChat.name}. Biseda ruhet automatikisht në cloud.`
+                  : `Send the first message to ${activeChat.name}. Your conversation is automatically saved in real time.`}
+              </p>
+            </div>
+          )}
 
           <AnimatePresence>
             {currentMessages.map((msg) => (
@@ -762,7 +903,7 @@ const Messages = ({ userRole = 'admin' }) => {
 
             <input 
               type="text" 
-              placeholder={`Message in ${activeChat.name}...`} 
+              placeholder={isAlbanian ? `Mesazh në ${activeChat.name}...` : `Message in ${activeChat.name}...`} 
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
             />
@@ -780,7 +921,7 @@ const Messages = ({ userRole = 'admin' }) => {
               type="submit" 
               className="send-btn bouncy" 
               disabled={!messageInput.trim() && !attachedFile}
-              title="Send Message"
+              title={t('messages.send', 'Send Message')}
             >
               <Send size={16} />
             </button>
@@ -1019,7 +1160,7 @@ const Messages = ({ userRole = 'admin' }) => {
                   onClick={() => setNewChatTab('all')}
                 >
                   <MessageSquare size={16} />
-                  Direct Message
+                  {isAlbanian ? 'Mesazh Direkt' : 'Direct Message'}
                 </button>
                 <button 
                   type="button"
@@ -1027,7 +1168,7 @@ const Messages = ({ userRole = 'admin' }) => {
                   onClick={() => setNewChatTab('create_group')}
                 >
                   <Users size={16} />
-                  New Group Channel
+                  {isAlbanian ? 'Kanal i Ri Grupor' : 'New Group Channel'}
                 </button>
               </div>
 
@@ -1041,21 +1182,21 @@ const Messages = ({ userRole = 'admin' }) => {
                       className={`dir-filter-pill ${newChatTab === 'all' ? 'active' : ''}`}
                       onClick={() => setNewChatTab('all')}
                     >
-                      All Users ({staffList.length + studentsList.length})
+                      {isAlbanian ? 'Të Gjithë' : 'All Users'} ({staffList.length + studentsList.length})
                     </button>
                     <button 
                       type="button"
                       className={`dir-filter-pill ${newChatTab === 'staff' ? 'active' : ''}`}
                       onClick={() => setNewChatTab('staff')}
                     >
-                      👨‍🏫 Faculty & Staff ({staffList.length})
+                      👨‍🏫 {isAlbanian ? 'Mësimdhënësit & Stafi' : 'Faculty & Staff'} ({staffList.length})
                     </button>
                     <button 
                       type="button"
                       className={`dir-filter-pill ${newChatTab === 'students' ? 'active' : ''}`}
                       onClick={() => setNewChatTab('students')}
                     >
-                      🎓 Students ({studentsList.length})
+                      🎓 {isAlbanian ? 'Nxënësit' : 'Students'} ({studentsList.length})
                     </button>
                   </div>
 
@@ -1064,7 +1205,7 @@ const Messages = ({ userRole = 'admin' }) => {
                     <Search size={17} className="search-icon" />
                     <input 
                       type="text" 
-                      placeholder="Type a name, department, role, or grade..." 
+                      placeholder={isAlbanian ? 'Shkruani emrin, departamentin, rolin apo klasën...' : 'Type a name, department, role, or grade...'} 
                       value={newChatSearch}
                       onChange={(e) => setNewChatSearch(e.target.value)}
                       autoFocus
@@ -1125,21 +1266,21 @@ const Messages = ({ userRole = 'admin' }) => {
                 <form onSubmit={handleCreateGroupSubmit} className="group-creator-pane">
                   <div className="form-grid-2">
                     <div className="input-group">
-                      <label>Channel Name *</label>
+                      <label>{isAlbanian ? 'Emri i Kanalit *' : 'Channel Name *'}</label>
                       <input 
                         type="text" 
                         required 
-                        placeholder="e.g. Physics 10-A Lab, Robotics Team"
+                        placeholder={isAlbanian ? 'p.sh. Laboratori i Fizikës 10-A, Klubi i Robotikës' : 'e.g. Physics 10-A Lab, Robotics Team'}
                         value={newGroupName}
                         onChange={(e) => setNewGroupName(e.target.value)}
                       />
                     </div>
 
                     <div className="input-group">
-                      <label>Channel Topic (Optional)</label>
+                      <label>{isAlbanian ? 'Tema e Kanalit (Opsionale)' : 'Channel Topic (Optional)'}</label>
                       <input 
                         type="text" 
-                        placeholder="e.g. Homework Q&A, lab schedules"
+                        placeholder={isAlbanian ? 'p.sh. Pyetje & Përgjigje për detyrat, oraret e laboratorit' : 'e.g. Homework Q&A, lab schedules'}
                         value={newGroupTopic}
                         onChange={(e) => setNewGroupTopic(e.target.value)}
                       />
@@ -1149,9 +1290,9 @@ const Messages = ({ userRole = 'admin' }) => {
                   <div className="group-members-section">
                     <div className="group-pick-header">
                       <div className="header-label-row">
-                        <label>Select Initial Members</label>
+                        <label>{isAlbanian ? 'Zgjidhni Anëtarët Fillestarë' : 'Select Initial Members'}</label>
                         <span className="selected-counter-badge">
-                          {selectedGroupMembers.length} Selected
+                          {selectedGroupMembers.length} {isAlbanian ? 'Të Zgjedhur' : 'Selected'}
                         </span>
                       </div>
 
@@ -1237,11 +1378,11 @@ const Messages = ({ userRole = 'admin' }) => {
 
                   <div className="modal-footer-actions">
                     <button type="button" className="btn-secondary" onClick={() => setIsNewChatOpen(false)}>
-                      Cancel
+                      {t('common.cancel', 'Cancel')}
                     </button>
                     <button type="submit" className="btn-primary" disabled={!newGroupName.trim()}>
                       <Check size={18} />
-                      Create Channel
+                      {isAlbanian ? 'Krijo Kanalin' : 'Create Channel'}
                     </button>
                   </div>
                 </form>

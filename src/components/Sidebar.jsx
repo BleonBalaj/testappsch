@@ -22,6 +22,7 @@ import {
 import { motion } from 'framer-motion';
 import { Avatar } from './Avatar';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useSchoolData, DEFAULT_ROLE_PERMISSIONS } from '../context/SchoolDataContext';
 import './Sidebar.css';
 
@@ -55,23 +56,24 @@ const SidebarItem = ({ icon: IconComponent, label, active, onClick, collapsed })
 
 const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage = 'en' }) => {
   const { currentUser, currentRole, activeSchool, logoutUser } = useAuth();
+  const { t } = useLanguage();
   const [collapsed, setCollapsed] = useState(false);
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'schedule', label: 'Schedule', icon: Calendar },
-    { id: 'classes', label: 'Classes', icon: Book },
-    { id: 'lesson-plans', label: lessonLanguage === 'sq' ? 'Planifikimi mësimor' : 'Lesson planning', icon: BookOpen, teacherAndAdminOnly: true },
-    { id: 'transcript', label: 'Transcript', icon: GraduationCap, studentOnly: true },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-    { id: 'messages', label: 'Messages', icon: MessageSquare },
-    { id: 'students', label: 'Students', icon: Users },
-    { id: 'staff', label: 'Staff Directory', icon: UserSquare2 },
-    { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
-    { id: 'events', label: 'Events Center', icon: CalendarDays },
-    { id: 'resources', label: 'Resource Hub', icon: Library },
-    { id: 'mood-insights', label: 'Mood Insights', icon: BarChart3 },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'schedule', label: t('nav.schedule'), icon: Calendar },
+    { id: 'classes', label: t('nav.classes'), icon: Book },
+    { id: 'lesson-plans', label: t('nav.lessonPlans'), icon: BookOpen, teacherAndAdminOnly: true },
+    { id: 'transcript', label: t('nav.transcript'), icon: GraduationCap, studentOnly: true },
+    { id: 'tasks', label: t('nav.tasks'), icon: CheckSquare },
+    { id: 'messages', label: t('nav.messages'), icon: MessageSquare },
+    { id: 'students', label: t('nav.students'), icon: Users },
+    { id: 'staff', label: t('nav.staff'), icon: UserSquare2 },
+    { id: 'leaderboard', label: t('nav.leaderboard'), icon: Trophy },
+    { id: 'events', label: t('nav.events'), icon: CalendarDays },
+    { id: 'resources', label: t('nav.resources'), icon: Library },
+    { id: 'mood-insights', label: t('nav.moodInsights'), icon: BarChart3 },
+    { id: 'settings', label: t('nav.settings'), icon: Settings },
   ];
 
   const isItemActive = (id) => {
@@ -118,13 +120,17 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
             <School size={28} color="hsl(var(--primary))" />
           </div>
           {!collapsed && (
-            <motion.span 
-              className="logo-text gradient-text"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+            <motion.div 
+              className="logo-text-group"
+              initial={{ opacity: 0, x: -5 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2 }}
             >
-              Noesis Horizon
-            </motion.span>
+              <span className="logo-text gradient-text">
+                Noesis Horizon
+              </span>
+              <span className="logo-author">by Bleon</span>
+            </motion.div>
           )}
         </div>
         <button className="collapse-btn" onClick={() => setCollapsed(!collapsed)}>
@@ -161,7 +167,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
                 {currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'User')}
               </p>
               <p className="user-role">
-                {isStudent ? 'Student' : currentRole === 'teacher' ? 'Teacher' : 'Administrator'}
+                {isStudent ? t('nav.student') : currentRole === 'teacher' ? t('nav.teacher') : t('nav.admin')}
               </p>
             </div>
           )}
@@ -172,8 +178,8 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
               if (logoutUser) await logoutUser();
               if (onNavigate) onNavigate('login');
             }} 
-            title="Sign Out / Switch Account"
-            aria-label="Logout"
+            title={t('nav.signOut')}
+            aria-label={t('nav.signOut')}
           >
             <LogOut size={16} />
           </button>

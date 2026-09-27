@@ -7,6 +7,7 @@ import {
   AlertTriangle, AlertCircle, CheckCircle2, RotateCcw, Users
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import './Students.css';
 
@@ -108,6 +109,7 @@ const StudentCard = ({ student, index, onSelect, onRequestDelete, onToggleArchiv
 
 const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   const { studentsList, addStudent, deleteStudent, toggleArchiveStudent } = useSchoolData();
+  const { language, t, isAlbanian } = useLanguage();
   const isAdmin = userRole === 'admin';
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -269,12 +271,12 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-              Students Directory
+              {t('students.title')}
               <Users size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
-            <span className="count-pill glass">{filteredStudents.length} Shown</span>
+            <span className="count-pill glass">{`${filteredStudents.length} ${t('common.total')}`}</span>
           </div>
-          <p>Track academic standing, status lifecycle, class assignments, and student profiles.</p>
+          <p>{t('students.subtitle')}</p>
         </div>
         <div className="header-actions">
           <button className="btn-secondary glass" onClick={handleExportStudents} title="Export Student Directory">
@@ -283,7 +285,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
           </button>
           <button className="btn-primary" onClick={() => setIsAddStudentOpen(true)}>
             <UserPlus size={20} />
-            Add Student
+            {t('students.addStudent')}
           </button>
         </div>
       </header>
@@ -295,7 +297,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
           <Search size={18} className="search-icon" />
           <input 
             type="text" 
-            placeholder="Search by student name, grade, email, or interests..." 
+            placeholder={t('students.search')} 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -402,8 +404,8 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                     <AlertTriangle size={20} />
                   </div>
                   <div>
-                    <h3>Delete Student Record?</h3>
-                    <p className="modal-subtitle">Permanent directory removal confirmation.</p>
+                    <h3>{isAlbanian ? 'Fshi të Dhënat e Studentit?' : 'Delete Student Record?'}</h3>
+                    <p className="modal-subtitle">{isAlbanian ? 'Konfirmim për heqjen e përhershme nga regjistri.' : 'Permanent directory removal confirmation.'}</p>
                   </div>
                 </div>
                 <button type="button" className="icon-btn-close" onClick={() => setStudentToDelete(null)} aria-label="Close">
@@ -413,23 +415,31 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
               <div className="delete-modal-body">
                 <p>
-                  Are you sure you want to permanently remove <strong>{studentToDelete.name}</strong> (Grade {studentToDelete.grade}) from this school?
+                  {isAlbanian ? (
+                    <>A jeni të sigurt që dëshironi të hiqni përgjithmonë <strong>{studentToDelete.name}</strong> (Klasa {studentToDelete.grade}) nga kjo shkollë?</>
+                  ) : (
+                    <>Are you sure you want to permanently remove <strong>{studentToDelete.name}</strong> (Grade {studentToDelete.grade}) from this school?</>
+                  )}
                 </p>
                 <div className="delete-warning-callout">
                   <ShieldAlert size={16} />
-                  <span>Their school login access will be revoked immediately. If they have no other school memberships, they will see a "not part of any school" screen on next login. Academic history will also be removed.</span>
+                  <span>
+                    {isAlbanian 
+                      ? 'Qasja e tyre në shkollë do të revokohet menjëherë. Nëse nuk kanë anëtarësim në shkolla të tjera, do të shohin ekranin "nuk jeni pjesë e asnjë shkolle".' 
+                      : 'Their school login access will be revoked immediately. If they have no other school memberships, they will see a "not part of any school" screen on next login. Academic history will also be removed.'}
+                  </span>
                 </div>
               </div>
 
               <div className="modal-footer-actions">
                 <button type="button" className="btn-secondary" onClick={() => setStudentToDelete(null)}>
-                  Cancel
+                  {isAlbanian ? 'Anulo' : 'Cancel'}
                 </button>
                 <button type="button" className="btn-secondary archive-instead-btn" onClick={handleArchiveInstead}>
-                  <Archive size={14} /> Archive Instead
+                  <Archive size={14} /> {isAlbanian ? 'Arkivo Në Vend të Fshirjes' : 'Archive Instead'}
                 </button>
                 <button type="button" className="btn-destructive-solid" onClick={handleConfirmDelete}>
-                  <Trash2 size={14} /> Delete Permanently
+                  <Trash2 size={14} /> {isAlbanian ? 'Fshi Përgjithmonë' : 'Delete Permanently'}
                 </button>
               </div>
             </motion.div>
@@ -450,8 +460,10 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>Enroll New Student</h3>
-                <p className="modal-subtitle">Enroll student to assign grade sections, classes, and track grades.</p>
+                <h3>{isAlbanian ? 'Regjistro Student të Ri' : 'Enroll New Student'}</h3>
+                <p className="modal-subtitle">
+                  {isAlbanian ? 'Regjistroni studentin për të caktuar klasat, lëndët dhe për të ndjekur notat.' : 'Enroll student to assign grade sections, classes, and track grades.'}
+                </p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddStudentOpen(false)} aria-label="Close">
                   <X size={16} />
                 </button>
@@ -460,21 +472,21 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
               <form onSubmit={handleAddStudentSubmit} className="modal-form">
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Student Full Name</label>
+                    <label>{isAlbanian ? 'Emri i Plotë i Studentit *' : 'Student Full Name *'}</label>
                     <input 
                       type="text" 
                       required 
-                      placeholder="e.g. Maya Lin"
+                      placeholder={isAlbanian ? 'p.sh. Era Berisha' : 'e.g. Maya Lin'}
                       value={studentForm.name}
                       onChange={e => setStudentForm({ ...studentForm, name: e.target.value })}
                     />
                   </div>
 
                   <div className="input-group">
-                    <label>Official Student ID</label>
+                    <label>{isAlbanian ? 'ID Zyrtare e Studentit' : 'Official Student ID'}</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. STU-1007 (Auto-generated if blank)"
+                      placeholder={isAlbanian ? 'p.sh. STU-1007 (Gjenerohet vetvetiu nëse lihet bosh)' : 'e.g. STU-1007 (Auto-generated if blank)'}
                       value={studentForm.studentId}
                       onChange={e => setStudentForm({ ...studentForm, studentId: e.target.value })}
                     />
@@ -483,42 +495,42 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Grade / Section</label>
+                    <label>{isAlbanian ? 'Klasa / Paralelja' : 'Grade / Section'}</label>
                     <select 
                       value={studentForm.grade}
                       onChange={e => setStudentForm({ ...studentForm, grade: e.target.value })}
                       className="custom-form-select"
                     >
-                      <option value="9A">Grade 9A</option>
-                      <option value="9B">Grade 9B</option>
-                      <option value="10A">Grade 10A</option>
-                      <option value="10B">Grade 10B</option>
-                      <option value="11A">Grade 11A</option>
-                      <option value="11C">Grade 11C</option>
-                      <option value="12A">Grade 12A</option>
+                      <option value="9A">{isAlbanian ? 'Klasa 9A' : 'Grade 9A'}</option>
+                      <option value="9B">{isAlbanian ? 'Klasa 9B' : 'Grade 9B'}</option>
+                      <option value="10A">{isAlbanian ? 'Klasa 10A' : 'Grade 10A'}</option>
+                      <option value="10B">{isAlbanian ? 'Klasa 10B' : 'Grade 10B'}</option>
+                      <option value="11A">{isAlbanian ? 'Klasa 11A' : 'Grade 11A'}</option>
+                      <option value="11C">{isAlbanian ? 'Klasa 11C' : 'Grade 11C'}</option>
+                      <option value="12A">{isAlbanian ? 'Klasa 12A' : 'Grade 12A'}</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Student Email *</label>
+                    <label>{isAlbanian ? 'Email-i i Studentit *' : 'Student Email *'}</label>
                     <input 
                       type="email" 
                       required 
-                      placeholder="e.g. maya.lin@student.edu"
+                      placeholder={isAlbanian ? 'p.sh. era.b@student.edu' : 'e.g. maya.lin@student.edu'}
                       value={studentForm.email}
                       onChange={e => setStudentForm({ ...studentForm, email: e.target.value })}
                     />
                   </div>
 
                   <div className="input-group">
-                    <label>Initial Login Password *</label>
+                    <label>{isAlbanian ? 'Fjalëkalimi Fillestar i Hyrjes *' : 'Initial Login Password *'}</label>
                     <input 
                       type="password" 
                       required 
                       minLength={6}
-                      placeholder="Min. 6 characters for first login"
+                      placeholder={isAlbanian ? 'Min. 6 karaktere për hyrjen e parë' : 'Min. 6 characters for first login'}
                       value={studentForm.password || ''}
                       onChange={e => setStudentForm({ ...studentForm, password: e.target.value })}
                     />
@@ -527,20 +539,20 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Phone / Contact</label>
+                    <label>{isAlbanian ? 'Telefoni / Kontakti' : 'Phone / Contact'}</label>
                     <input 
                       type="tel" 
-                      placeholder="e.g. +1 (555) 345-099"
+                      placeholder="e.g. +383 44 123 456"
                       value={studentForm.phone}
                       onChange={e => setStudentForm({ ...studentForm, phone: e.target.value })}
                     />
                   </div>
 
                   <div className="input-group">
-                    <label>Guardian / Parent Contact</label>
+                    <label>{isAlbanian ? 'Kontakti i Prindit / Kujdestarit' : 'Guardian / Parent Contact'}</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. David Lin (Father - +1 555-900-12)"
+                      placeholder={isAlbanian ? 'p.sh. Besnik Berisha (Babai - +383 44 123 456)' : 'e.g. David Lin (Father - +1 555-900-12)'}
                       value={studentForm.guardian}
                       onChange={e => setStudentForm({ ...studentForm, guardian: e.target.value })}
                     />
@@ -549,7 +561,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Initial GPA Target</label>
+                    <label>{isAlbanian ? 'Synimi Fillestar i Notës Mesatare (GPA)' : 'Initial GPA Target'}</label>
                     <input 
                       type="number" 
                       step="0.01"
@@ -562,27 +574,29 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
                   </div>
 
                   <div className="input-group">
-                    <label>Initial Course Enrollment</label>
+                    <label>{isAlbanian ? 'Regjistrimi Fillestar në Kurs' : 'Initial Course Enrollment'}</label>
                     <select
                       className="custom-form-select"
                       value={studentForm.assignedClassInput}
                       onChange={e => setStudentForm({ ...studentForm, assignedClassInput: e.target.value })}
                     >
-                      <option value="Advanced Math (MATH-301)">Advanced Math (MATH-301)</option>
-                      <option value="Physics 101 (PHYS-401)">Physics 101 (PHYS-401)</option>
-                      <option value="World History (HIST-202)">World History (HIST-202)</option>
-                      <option value="Digital Arts (ART-110)">Digital Arts (ART-110)</option>
-                      <option value="">Unassigned (Enroll Later)</option>
+                      <option value="Advanced Math (MATH-301)">{isAlbanian ? 'Matematikë e Avancuar (MATH-301)' : 'Advanced Math (MATH-301)'}</option>
+                      <option value="Physics 101 (PHYS-401)">{isAlbanian ? 'Fizikë 101 (PHYS-401)' : 'Physics 101 (PHYS-401)'}</option>
+                      <option value="World History (HIST-202)">{isAlbanian ? 'Histori Botërore (HIST-202)' : 'World History (HIST-202)'}</option>
+                      <option value="Digital Arts (ART-110)">{isAlbanian ? 'Arte Digjitale (ART-110)' : 'Digital Arts (ART-110)'}</option>
+                      <option value="">{isAlbanian ? 'I pacaktuar (Regjistro më vonë)' : 'Unassigned (Enroll Later)'}</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="modal-footer-actions">
                   <button type="button" className="btn-secondary" onClick={() => setIsAddStudentOpen(false)} disabled={isSubmittingStudent}>
-                    Cancel
+                    {isAlbanian ? 'Anulo' : 'Cancel'}
                   </button>
                   <button type="submit" className="btn-primary" disabled={isSubmittingStudent}>
-                    {isSubmittingStudent ? 'Creating User in Firebase...' : 'Enroll Student'}
+                    {isSubmittingStudent 
+                      ? (isAlbanian ? 'Duke krijuar llogarinë në Firebase...' : 'Creating User in Firebase...') 
+                      : (isAlbanian ? 'Regjistro Studentin' : 'Enroll Student')}
                   </button>
                 </div>
               </form>

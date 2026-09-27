@@ -7,6 +7,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import './StudentOverview.css';
 
@@ -56,6 +57,16 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const StudentOverview = ({ student, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const { studentsList, toggleArchiveStudent } = useSchoolData();
+  const { t, isAlbanian } = useLanguage();
+
+  const tabs = [
+    { id: 'overview',     label: t('student.overview', 'Overview'),         icon: BarChart2  },
+    { id: 'grades',       label: t('student.grades', 'Grades'),             icon: BookOpen   },
+    { id: 'assignments',  label: t('student.assignments', 'Assignments'),   icon: CheckSquare},
+    { id: 'attendance',   label: t('student.attendance', 'Attendance'),     icon: Calendar   },
+  ];
+
+  const days = isAlbanian ? ['Hën', 'Mar', 'Mër', 'Enj', 'Pre'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   if (!student) return null;
 
@@ -75,15 +86,15 @@ const StudentOverview = ({ student, onBack }) => {
           <div className="sov-banner-left">
             <Archive size={22} className="banner-icon-archived" />
             <div>
-              <h4>Archived Student Record</h4>
-              <p>This student is currently archived and marked as inactive in active rosters and attendance call sheets.</p>
+              <h4>{t('student.archivedRecord', 'Archived Student Record')}</h4>
+              <p>{t('student.archivedBanner', 'This student is currently archived and marked as inactive in active rosters and attendance call sheets.')}</p>
             </div>
           </div>
           <button 
             className="btn-secondary glass btn-sm"
             onClick={() => toggleArchiveStudent && toggleArchiveStudent(liveStudent.id)}
           >
-            <ArchiveRestore size={14} /> Restore / Unarchive Student
+            <ArchiveRestore size={14} /> {t('student.restoreStudent', 'Restore / Unarchive Student')}
           </button>
         </div>
       )}
@@ -93,8 +104,8 @@ const StudentOverview = ({ student, onBack }) => {
           <div className="sov-banner-left">
             <AlertTriangle size={22} className="banner-icon-unassigned" />
             <div>
-              <h4>Active Standing · No Assigned Classes</h4>
-              <p>This student is in good standing in the school directory, but is not yet assigned to any active class schedule or curriculum courses.</p>
+              <h4>{t('student.activeStandingNoClasses', 'Active Standing · No Assigned Classes')}</h4>
+              <p>{t('student.unassignedBanner', 'This student is in good standing in the school directory, but is not yet assigned to any active class schedule or curriculum courses.')}</p>
             </div>
           </div>
         </div>
@@ -108,21 +119,21 @@ const StudentOverview = ({ student, onBack }) => {
         {/* Top bar */}
         <div className="sov-hero-top">
           <button className="back-btn bouncy" onClick={onBack}>
-            <ArrowLeft size={16} /> All Students
+            <ArrowLeft size={16} /> {t('student.allStudents', 'All Students')}
           </button>
           <div className="sov-hero-actions">
             {isArchived && (
               <span className="sov-badge-status archived">
-                <Archive size={12} /> Inactive / Archived
+                <Archive size={12} /> {t('student.archived', 'Archived')}
               </span>
             )}
             {isUnassigned && (
               <span className="sov-badge-status unassigned">
-                <AlertTriangle size={12} /> No Classes
+                <AlertTriangle size={12} /> {t('student.noActiveClasses', 'No Active Classes')}
               </span>
             )}
-            <button className="btn-secondary glass btn-sm"><MessageSquare size={15} /> Message</button>
-            <button className="btn-primary btn-sm"><Mail size={15} /> Email</button>
+            <button className="btn-secondary glass btn-sm"><MessageSquare size={15} /> {t('student.message', 'Message')}</button>
+            <button className="btn-primary btn-sm"><Mail size={15} /> {t('student.email', 'Email')}</button>
           </div>
         </div>
 
@@ -136,7 +147,7 @@ const StudentOverview = ({ student, onBack }) => {
               <h2 className="sov-name">{liveStudent.name}</h2>
               <span className="sov-id-tag">{liveStudent.studentId || `STU-${1000 + liveStudent.id}`}</span>
             </div>
-            <p className="sov-sub">Grade {liveStudent.grade} • {liveStudent.assignedClasses?.length || 0} Classes Assigned</p>
+            <p className="sov-sub">Grade {liveStudent.grade} • {liveStudent.assignedClasses?.length || 0} {t('student.classesAssigned', 'Classes Assigned')}</p>
             <div className="sov-classes-pills">
               {liveStudent.assignedClasses && liveStudent.assignedClasses.length > 0 ? (
                 liveStudent.assignedClasses.map(cls => (
@@ -146,7 +157,7 @@ const StudentOverview = ({ student, onBack }) => {
                 ))
               ) : (
                 <span className="sov-class-pill unassigned">
-                  <AlertTriangle size={12} /> No Active Classes Enrolled
+                  <AlertTriangle size={12} /> {t('student.noActiveClasses', 'No Active Classes Enrolled')}
                 </span>
               )}
             </div>
@@ -161,35 +172,35 @@ const StudentOverview = ({ student, onBack }) => {
         <div className="sov-stat-strip">
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--primary)/0.35)', background: 'hsl(var(--primary)/0.12)' }}>
             <Star size={16} color="hsl(var(--primary))" />
-            <span>Points</span>
+            <span>{t('student.points', 'Points')}</span>
             <strong style={{ color: 'hsl(var(--primary))' }}>{liveStudent.points ?? 0}</strong>
           </div>
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--chart-2)/0.35)', background: 'hsl(var(--chart-2)/0.12)' }}>
             <TrendingUp size={16} color="hsl(var(--chart-2))" />
-            <span>GPA</span>
+            <span>{t('student.gpa', 'GPA')}</span>
             <strong style={{ color: 'hsl(var(--chart-2))' }}>{data.gpa}</strong>
           </div>
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--mood-happy)/0.35)', background: 'hsl(var(--mood-happy)/0.12)' }}>
             <CheckSquare size={16} color="hsl(var(--mood-happy))" />
-            <span>Attendance</span>
+            <span>{t('student.attendance', 'Attendance')}</span>
             <strong style={{ color: 'hsl(var(--mood-happy))' }}>{data.attendance}%</strong>
           </div>
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--chart-4)/0.35)', background: 'hsl(var(--chart-4)/0.12)' }}>
             <Trophy size={16} color="hsl(var(--chart-4))" />
-            <span>Class Rank</span>
+            <span>{t('student.rank', 'Class Rank')}</span>
             <strong style={{ color: 'hsl(var(--chart-4))' }}>#{data.rank}</strong>
           </div>
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--accent)/0.35)', background: 'hsl(var(--accent)/0.12)' }}>
             <BookOpen size={16} color="hsl(var(--accent))" />
-            <span>Enrolled</span>
-            <strong style={{ color: 'hsl(var(--accent))' }}>{liveStudent.assignedClasses?.length || 0} Classes</strong>
+            <span>{t('student.enrolled', 'Enrolled')}</span>
+            <strong style={{ color: 'hsl(var(--accent))' }}>{liveStudent.assignedClasses?.length || 0} {isAlbanian ? 'Lëndë' : 'Classes'}</strong>
           </div>
         </div>
       </div>
 
       {/* ── Tab Bar ── */}
       <div className="co-tab-bar glass">
-        {TABS.map(tab => {
+        {tabs.map(tab => {
           const Icon = tab.icon;
           return (
             <button
@@ -213,11 +224,11 @@ const StudentOverview = ({ student, onBack }) => {
 
               {/* Recent Activity */}
               <div className="sov-widget glass">
-                <h4 className="widget-title">Recent Activity</h4>
+                <h4 className="widget-title">{t('student.recentActivity', 'Recent Activity')}</h4>
                 <div className="activity-list">
                   {data.recentActivity.length === 0 ? (
                     <p style={{ padding: '1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem', textAlign: 'center' }}>
-                      No recent activity recorded.
+                      {t('student.noRecentActivity', 'No recent activity recorded.')}
                     </p>
                   ) : (
                     data.recentActivity.map((a, i) => (
@@ -235,28 +246,28 @@ const StudentOverview = ({ student, onBack }) => {
 
               {/* Guardian & Contact Details */}
               <div className="sov-widget glass">
-                <h4 className="widget-title">Guardian & Contact Details</h4>
+                <h4 className="widget-title">{t('student.guardianDetails', 'Guardian & Contact Details')}</h4>
                 <div className="sov-contact-card-info">
                   <div className="sov-detail-row">
-                    <span className="sov-detail-label">Official Student ID:</span>
+                    <span className="sov-detail-label">{t('student.officialId', 'Official Student ID:')}</span>
                     <strong>{liveStudent.studentId || `STU-${1000 + liveStudent.id}`}</strong>
                   </div>
                   <div className="sov-detail-row">
-                    <span className="sov-detail-label">Guardian:</span>
-                    <strong>{liveStudent.guardian || 'Primary Parent / Guardian'}</strong>
+                    <span className="sov-detail-label">{t('student.guardian', 'Guardian:')}</span>
+                    <strong>{liveStudent.guardian || (isAlbanian ? 'Prindi / Kujdestari Ligjor' : 'Primary Parent / Guardian')}</strong>
                   </div>
                   <div className="sov-detail-row">
-                    <span className="sov-detail-label">Phone:</span>
+                    <span className="sov-detail-label">{t('student.phone', 'Phone:')}</span>
                     <span>{liveStudent.phone || 'N/A'}</span>
                   </div>
                   <div className="sov-detail-row">
-                    <span className="sov-detail-label">Email:</span>
+                    <span className="sov-detail-label">{t('student.emailLabel', 'Email:')}</span>
                     <span>{liveStudent.email || 'N/A'}</span>
                   </div>
                   <div className="sov-detail-row">
-                    <span className="sov-detail-label">Standing:</span>
+                    <span className="sov-detail-label">{t('student.standing', 'Standing:')}</span>
                     <span className={`status-pill-mini ${liveStudent.status === 'archived' ? 'archived' : 'active'}`}>
-                      {liveStudent.status === 'archived' ? 'Archived' : 'Active Enrolled'}
+                      {liveStudent.status === 'archived' ? t('student.archived', 'Archived') : t('student.activeEnrolled', 'Active Enrolled')}
                     </span>
                   </div>
                 </div>
@@ -264,9 +275,9 @@ const StudentOverview = ({ student, onBack }) => {
 
               {/* Weekly Attendance mini-chart */}
               <div className="sov-widget glass">
-                <h4 className="widget-title">This Week's Attendance</h4>
+                <h4 className="widget-title">{t('student.thisWeekAttendance', "This Week's Attendance")}</h4>
                 <div className="week-attendance">
-                  {DAYS.map((d, i) => (
+                  {days.map((d, i) => (
                     <div key={d} className="day-col">
                       <div className={`day-dot ${data.weeklyAttendance[i] ? 'present' : 'absent'}`} />
                       <span className="day-label">{d}</span>
@@ -274,17 +285,17 @@ const StudentOverview = ({ student, onBack }) => {
                   ))}
                 </div>
                 <p className="attendance-note" style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.82rem', marginTop: '0.5rem' }}>
-                  {data.weeklyAttendance.filter(Boolean).length}/5 days present this week
+                  {data.weeklyAttendance.filter(Boolean).length}/5 {t('student.daysPresentThisWeek', 'days present this week')}
                 </p>
               </div>
 
               {/* Grade Snapshot */}
               <div className="sov-widget glass">
-                <h4 className="widget-title">Grade Snapshot</h4>
+                <h4 className="widget-title">{t('student.gradeSnapshot', 'Grade Snapshot')}</h4>
                 <div className="grade-snap-list">
                   {data.classes.length === 0 ? (
                     <p style={{ padding: '1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem', textAlign: 'center' }}>
-                      No classes enrolled yet.
+                      {t('student.noClassesEnrolled', 'No classes enrolled yet.')}
                     </p>
                   ) : (
                     data.classes.map((c, i) => (
@@ -310,13 +321,19 @@ const StudentOverview = ({ student, onBack }) => {
             <div className="co-table glass">
               <table>
                 <thead>
-                  <tr><th>Class</th><th>Teacher</th><th>Grade %</th><th>Letter</th><th>Status</th></tr>
+                  <tr>
+                    <th>{t('student.class', 'Class')}</th>
+                    <th>{t('student.teacher', 'Teacher')}</th>
+                    <th>{t('student.gradePct', 'Grade %')}</th>
+                    <th>{t('student.letter', 'Letter')}</th>
+                    <th>{t('student.status', 'Status')}</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {data.classes.length === 0 ? (
                     <tr>
                       <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
-                        No enrolled classes or course grades recorded.
+                        {t('student.noEnrolledGrades', 'No enrolled classes or course grades recorded.')}
                       </td>
                     </tr>
                   ) : (
@@ -333,7 +350,7 @@ const StudentOverview = ({ student, onBack }) => {
                           </div>
                         </td>
                         <td><span className="grade-badge" style={{ color: gradeColor(c.grade) }}>{gradeLabel(c.grade)}</span></td>
-                        <td><span className="status-chip" style={{ background: `${gradeColor(c.grade)}22`, color: gradeColor(c.grade) }}>{c.grade >= 70 ? 'Passing' : 'At Risk'}</span></td>
+                        <td><span className="status-chip" style={{ background: `${gradeColor(c.grade)}22`, color: gradeColor(c.grade) }}>{c.grade >= 70 ? t('student.passing', 'Passing') : t('student.atRisk', 'At Risk')}</span></td>
                       </tr>
                     ))
                   )}
@@ -349,13 +366,18 @@ const StudentOverview = ({ student, onBack }) => {
             <div className="co-table glass">
               <table>
                 <thead>
-                  <tr><th>Assignment</th><th>Due</th><th>Status</th><th>Score</th></tr>
+                  <tr>
+                    <th>{t('student.assignment', 'Assignment')}</th>
+                    <th>{t('student.due', 'Due')}</th>
+                    <th>{t('student.status', 'Status')}</th>
+                    <th>{t('student.score', 'Score')}</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {data.assignments.length === 0 ? (
                     <tr>
                       <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
-                        No assignments recorded for this student.
+                        {t('student.noAssignments', 'No assignments recorded for this student.')}
                       </td>
                     </tr>
                   ) : (
@@ -370,8 +392,8 @@ const StudentOverview = ({ student, onBack }) => {
                           <td><strong>{a.title}</strong></td>
                           <td className="muted">{a.due}</td>
                           <td>
-                            <span className="status-chip" style={{ background: `${statusColors[a.status]}22`, color: statusColors[a.status] }}>
-                              {a.status}
+                            <span className="status-chip" style={{ background: `${statusColors[a.status] || 'hsl(var(--muted-foreground))'}22`, color: statusColors[a.status] || 'hsl(var(--muted-foreground))' }}>
+                              {isAlbanian ? (a.status === 'Submitted' ? 'E Dorëzuar' : a.status === 'In Progress' ? 'Në Progres' : 'E Pa Filluar') : a.status}
                             </span>
                           </td>
                           <td><strong style={{ color: a.score ? gradeColor(parseInt(a.score)) : 'hsl(var(--muted-foreground))' }}>{a.score || '—'}</strong></td>
@@ -393,48 +415,58 @@ const StudentOverview = ({ student, onBack }) => {
                 <div className="att-icon" style={{ background: 'hsl(var(--mood-happy)/0.15)' }}>
                   <CheckSquare size={28} color="hsl(var(--mood-happy))" />
                 </div>
-                <span>Total Present</span>
-                <strong style={{ color: 'hsl(var(--mood-happy))' }}>{liveStudent.presentDays || 0} days</strong>
+                <span>{t('student.totalPresent', 'Total Present')}</span>
+                <strong style={{ color: 'hsl(var(--mood-happy))' }}>{liveStudent.presentDays || 0} {t('student.days', 'days')}</strong>
               </div>
               <div className="att-stat-card glass">
                 <div className="att-icon" style={{ background: 'hsl(var(--mood-sad)/0.15)' }}>
                   <AlertCircle size={28} color="hsl(var(--mood-sad))" />
                 </div>
-                <span>Total Absent</span>
-                <strong style={{ color: 'hsl(var(--mood-sad))' }}>{liveStudent.absentDays || 0} days</strong>
+                <span>{t('student.totalAbsent', 'Total Absent')}</span>
+                <strong style={{ color: 'hsl(var(--mood-sad))' }}>{liveStudent.absentDays || 0} {t('student.days', 'days')}</strong>
               </div>
               <div className="att-stat-card glass">
                 <div className="att-icon" style={{ background: 'hsl(var(--mood-neutral)/0.15)' }}>
                   <Clock size={28} color="hsl(var(--mood-neutral))" />
                 </div>
-                <span>Late Arrivals</span>
-                <strong style={{ color: 'hsl(var(--mood-neutral))' }}>{liveStudent.lateDays || 0} times</strong>
+                <span>{t('student.lateArrivals', 'Late Arrivals')}</span>
+                <strong style={{ color: 'hsl(var(--mood-neutral))' }}>{liveStudent.lateDays || 0} {t('student.times', 'times')}</strong>
               </div>
               <div className="att-stat-card glass">
                 <div className="att-icon" style={{ background: 'hsl(var(--chart-2)/0.15)' }}>
                   <TrendingUp size={28} color="hsl(var(--chart-2))" />
                 </div>
-                <span>Overall Rate</span>
+                <span>{t('student.overallRate', 'Overall Rate')}</span>
                 <strong style={{ color: 'hsl(var(--chart-2))' }}>{data.attendance}%</strong>
               </div>
             </div>
             <div className="co-table glass" style={{ marginTop: '1.25rem' }}>
               <table>
-                <thead><tr><th>Week</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Rate</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>{t('student.week', 'Week')}</th>
+                    <th>{days[0]}</th>
+                    <th>{days[1]}</th>
+                    <th>{days[2]}</th>
+                    <th>{days[3]}</th>
+                    <th>{days[4]}</th>
+                    <th>{t('student.rate', 'Rate')}</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {data.weeklyHistory.length === 0 ? (
                     <tr>
                       <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
-                        No weekly attendance history logged yet.
+                        {t('student.noWeeklyHistory', 'No weekly attendance history logged yet.')}
                       </td>
                     </tr>
                   ) : (
-                    data.weeklyHistory.map(([week,...days]) => {
-                      const present = days.slice(0,5).filter(Boolean).length;
+                    data.weeklyHistory.map(([week,...daysHistory]) => {
+                      const present = daysHistory.slice(0,5).filter(Boolean).length;
                       return (
                         <tr key={week}>
                           <td className="muted">{week}</td>
-                          {days.slice(0,5).map((d, i2) => (
+                          {daysHistory.slice(0,5).map((d, i2) => (
                             <td key={i2} className="centered">
                               <span style={{ fontSize: '1.25rem' }}>{d ? '✅' : '❌'}</span>
                             </td>

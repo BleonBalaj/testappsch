@@ -12,6 +12,8 @@ import {
   createPlan, dateInTimeZone, duplicatePlan, getDateRange, getSubjectArea, listSubjects, stageForClass,
 } from '../features/lessonPlans/index.js';
 import { translate, translateCatalogValue } from '../features/lessonPlans/i18n';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../services/firebase';
 import LessonPlanDocument from './LessonPlanDocument';
 import LessonPlanAdminSettings from './LessonPlanAdminSettings';
 import './LessonPlans.css';
@@ -186,6 +188,82 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [templateName, setTemplateName] = useState('');
   const [pendingTopic, setPendingTopic] = useState(null);
 
+  const savePlanToCloud = useCallback(async (plan) => {
+    if (!activeSchoolId || !plan?.id) return;
+    try {
+      const planDocRef = doc(db, 'schools', activeSchoolId, 'lessonPlans', String(plan.id));
+      await setDoc(planDocRef, {
+        ...plan,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Notice saving plan to Firestore:', err.message);
+    }
+  }, [activeSchoolId]);
+
+  // Real-time Cloud Sync with Firestore
+  useEffect(() => {
+    if (!activeSchoolId) return;
+
+    // 1. Sync Lesson Plans from Firestore
+    const plansCol = collection(db, 'schools', activeSchoolId, 'lessonPlans');
+    const unsubPlans = onSnapshot(plansCol, (snapshot) => {
+      let hasChanges = false;
+      snapshot.forEach(docSnap => {
+        const cloudPlan = { id: docSnap.id, ...docSnap.data() };
+        try {
+          repository.savePlan(cloudPlan);
+          hasChanges = true;
+        } catch (e) {
+          console.warn('Could not sync cloud plan locally:', e.message);
+        }
+      });
+      if (hasChanges || snapshot.empty) {
+        setPlans(repository.listPlans());
+      }
+    }, (err) => console.warn('Lesson plans cloud sync notice:', err.message));
+
+    // 2. Sync Templates from Firestore
+    const tplCol = collection(db, 'schools', activeSchoolId, 'templates');
+    const unsubTpl = onSnapshot(tplCol, (snapshot) => {
+      snapshot.forEach(docSnap => {
+        try {
+          repository.saveTemplate({ id: docSnap.id, ...docSnap.data() });
+        } catch (e) {}
+      });
+      setTemplates(repository.listTemplates());
+    }, (err) => console.warn('Templates cloud sync notice:', err.message));
+
+    // 3. Sync Topics from Firestore
+    const topicsCol = collection(db, 'schools', activeSchoolId, 'topics');
+    const unsubTopics = onSnapshot(topicsCol, (snapshot) => {
+      snapshot.forEach(docSnap => {
+        try {
+          repository.saveTopic({ id: docSnap.id, ...docSnap.data() });
+        } catch (e) {}
+      });
+      setTopics(repository.listTopics());
+    }, (err) => console.warn('Topics cloud sync notice:', err.message));
+
+    // 4. Sync Reusable Entries from Firestore
+    const reusableCol = collection(db, 'schools', activeSchoolId, 'reusableEntries');
+    const unsubReusable = onSnapshot(reusableCol, (snapshot) => {
+      snapshot.forEach(docSnap => {
+        try {
+          repository.saveReusableEntry({ id: docSnap.id, ...docSnap.data() });
+        } catch (e) {}
+      });
+      setReusable(repository.listReusableEntries());
+    }, (err) => console.warn('Reusable entries cloud sync notice:', err.message));
+
+    return () => {
+      unsubPlans();
+      unsubTpl();
+      unsubTopics();
+      unsubReusable();
+    };
+  }, [activeSchoolId, repository]);
+
   const refresh = useCallback(() => {
     setPlans(repository.listPlans());
     setTemplates(repository.listTemplates());
@@ -201,6 +279,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       setSaveState('saving');
       try {
         repository.savePlan(activePlan);
+        savePlanToCloud(activePlan);
         if (preferences.rememberLastUsed) {
           repository.savePreferences({ lastUsedClass: activePlan.classLabel, lastUsedSubject: activePlan.subject });
           setPreferences((current) => ({ ...current, lastUsedClass: activePlan.classLabel, lastUsedSubject: activePlan.subject }));
@@ -210,7 +289,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       catch { setSaveState('error'); }
     }, 550);
     return () => clearTimeout(timeout);
-  }, [activePlan, preferences.rememberLastUsed, repository, refresh, view]);
+  }, [activePlan, preferences.rememberLastUsed, repository, refresh, view, savePlanToCloud]);
   useEffect(() => {
     const flush = () => { if (activePlanRef.current) { try { repository.savePlan(activePlanRef.current); } catch { /* Visible save error remains in the editor. */ } } };
     window.addEventListener('pagehide', flush);
@@ -233,6 +312,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     if (!current) return;
     try {
       const saved = repository.savePlan(current);
+      savePlanToCloud(saved);
       if (preferences.rememberLastUsed) {
         repository.savePreferences({ lastUsedClass: current.classLabel, lastUsedSubject: current.subject });
         setPreferences((previous) => ({ ...previous, lastUsedClass: current.classLabel, lastUsedSubject: current.subject }));
@@ -255,6 +335,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
         ? duplicatePlan(template.plan || template, { date: todayLocal(), teacherId })
         : createPlan({ preferences, schoolData: { subjectMappings: schoolSubjects, stageMappings: repository.listStageMappings(), teacherName: currentUser.name }, teacherId, now: new Date() });
       const saved = repository.savePlan(plan);
+      savePlanToCloud(saved);
       activePlanRef.current = saved; setActivePlan(saved); setSaveState('saved'); refresh(); setMobilePane('editor'); setView('editor');
     } catch { notify(t('validation.saveFailed')); }
   };
@@ -268,13 +349,14 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       try {
         const plan = createPlan({ preferences, schoolData: { subjectMappings: schoolSubjects, stageMappings: repository.listStageMappings(), teacherName: currentUser.name }, scheduledLesson, teacherId, now: new Date() });
         const saved = repository.savePlan(plan);
+        savePlanToCloud(saved);
         activePlanRef.current = saved;
         setActivePlan(saved); setSaveState('saved'); refresh(); setMobilePane('editor'); setView('editor');
       } catch { setMessage(translate(language, 'validation.saveFailed')); }
       onScheduledLessonConsumed?.();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [scheduledLesson, preferences, schoolSubjects, repository, teacherId, currentUser.name, language, refresh, onScheduledLessonConsumed]);
+  }, [scheduledLesson, preferences, schoolSubjects, repository, teacherId, currentUser.name, language, refresh, onScheduledLessonConsumed, savePlanToCloud]);
   const openPlan = (plan, pane = 'editor') => { activePlanRef.current = plan; setActivePlan(plan); setSaveState('saved'); setMobilePane(pane); setView('editor'); };
   const leaveEditor = () => { if (!saveNow()) return; setView('plans'); setActivePlan(null); activePlanRef.current = null; };
   const changeSubject = (subject) => updatePlan((current) => changePlanSubject(current, subject, { schoolSubjects }));
@@ -290,14 +372,27 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   };
   const duplicate = (plan) => {
     const copy = duplicatePlan(plan, { date: todayLocal(), teacherId });
-    const saved = repository.savePlan(copy); refresh(); openPlan(saved); notify(t('notice.duplicateCreated'));
+    const saved = repository.savePlan(copy);
+    savePlanToCloud(saved);
+    refresh(); openPlan(saved); notify(t('notice.duplicateCreated'));
   };
-  const changeStatus = (plan, status) => { if (status === 'archived') repository.archivePlan(plan.id); else repository.restorePlan(plan.id); refresh(); notify(t(status === 'archived' ? 'notice.archived' : 'notice.restored')); };
+  const changeStatus = (plan, status) => {
+    if (status === 'archived') repository.archivePlan(plan.id);
+    else repository.restorePlan(plan.id);
+    if (activeSchoolId && plan.id) {
+      updateDoc(doc(db, 'schools', activeSchoolId, 'lessonPlans', String(plan.id)), { status }).catch(() => {});
+    }
+    refresh(); notify(t(status === 'archived' ? 'notice.archived' : 'notice.restored'));
+  };
   const makeTemplate = (plan) => { setTemplateSource(plan); setTemplateName(plan.lessonUnit || ct(plan.subject) || t('templates.newName')); };
   const saveTemplate = () => {
     if (!templateName.trim() || !templateSource) return;
     try {
-      repository.saveTemplate({ id: makeId(), name: templateName.trim(), plan: { ...templateSource, reflection: '', date: '', status: 'draft' } });
+      const tpl = { id: makeId(), name: templateName.trim(), plan: { ...templateSource, reflection: '', date: '', status: 'draft' } };
+      repository.saveTemplate(tpl);
+      if (activeSchoolId) {
+        setDoc(doc(db, 'schools', activeSchoolId, 'templates', String(tpl.id)), tpl, { merge: true }).catch(() => {});
+      }
       refresh(); setTemplateSource(null); notify(t('notice.templateSaved'));
     } catch { notify(t('validation.saveFailed')); }
   };
@@ -407,7 +502,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     </>}
 
     {view === 'templates' && <section className="lesson-list-panel glass"><div className="lesson-panel-heading"><div><h2>{t('templates.heading')}</h2><p>{t('templates.description')}</p></div></div>
-      {templates.length ? <div className="lesson-template-grid">{templates.map((template) => <article className="lesson-template-card" key={template.id}><span><LayoutTemplate size={20} /></span><h3>{template.name}</h3><p>{ct(template.plan?.subject) || t('templates.noSubject')} · {template.plan?.classLabel || t('templates.noClass')}</p><div><button type="button" className="btn-primary" onClick={() => startPlan(template)}><Plus size={16} /> {t('templates.use')}</button><button type="button" className="btn-secondary" onClick={() => { repository.deleteTemplate(template.id); refresh(); }}><Trash2 size={16} /> {t('templates.remove')}</button></div></article>)}</div>
+      {templates.length ? <div className="lesson-template-grid">{templates.map((template) => <article className="lesson-template-card" key={template.id}><span><LayoutTemplate size={20} /></span><h3>{template.name}</h3><p>{ct(template.plan?.subject) || t('templates.noSubject')} · {template.plan?.classLabel || t('templates.noClass')}</p><div><button type="button" className="btn-primary" onClick={() => startPlan(template)}><Plus size={16} /> {t('templates.use')}</button><button type="button" className="btn-secondary" onClick={() => { repository.deleteTemplate(template.id); if (activeSchoolId) deleteDoc(doc(db, 'schools', activeSchoolId, 'templates', String(template.id))).catch(() => {}); refresh(); }}><Trash2 size={16} /> {t('templates.remove')}</button></div></article>)}</div>
         : <div className="lesson-empty"><span><LayoutTemplate size={28} /></span><h3>{t('templates.emptyTitle')}</h3><p>{t('templates.emptyDescription')}</p></div>}
     </section>}
 
@@ -464,7 +559,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           <label className="lesson-check-row"><input type="checkbox" checked={Boolean(settingsDraft.rememberLastUsed)} onChange={(event) => setSettingsDraft({ ...settingsDraft, rememberLastUsed: event.target.checked })} /> {t('settings.rememberLastUsed')}</label>
           <datalist id="lesson-assigned-classes">{(settingsDraft.assignedClasses || []).map((value) => <option key={value} value={value} />)}</datalist>
         </div>
-        <div className="lesson-settings-footer"><button type="button" className="btn-primary" onClick={() => { try { const next = repository.savePreferences(settingsDraft); setPreferences(next); setSettingsDraft(next); notify(t('notice.settingsSaved')); } catch { notify(t('validation.saveFailed')); } }}><Save size={17} /> {t('settings.save')}</button></div>
+        <div className="lesson-settings-footer"><button type="button" className="btn-primary" onClick={() => { try { const next = repository.savePreferences(settingsDraft); setPreferences(next); setSettingsDraft(next); if (activeSchoolId && currentUser?.uid) { setDoc(doc(db, 'users', currentUser.uid, 'schoolPreferences', activeSchoolId), { ...settingsDraft, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {}); } notify(t('notice.settingsSaved')); } catch { notify(t('validation.saveFailed')); } }}><Save size={17} /> {t('settings.save')}</button></div>
       </div>
       <div className="lesson-settings-side">
         <div className="lesson-settings-card glass"><div className="lesson-settings-heading"><span><BookOpen size={20} /></span><div><h2>{t('settings.topicHeading')}</h2><p>{t('settings.topicDescription')}</p></div></div>
@@ -472,16 +567,16 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
             <Field label={t('editor.class')}><input value={topicDraft.classLabel} onChange={(event) => setTopicDraft({ ...topicDraft, classLabel: event.target.value })} placeholder={t('settings.exampleClass')} /></Field>
             <Field label={t('editor.subject')}><select value={topicDraft.subject} onChange={(event) => setTopicDraft({ ...topicDraft, subject: event.target.value })}><option value="">{t('settings.selectSubject')}</option>{listSubjects({ schoolSubjects }).map((subject) => <option key={subject.name} value={subject.name}>{ct(subject.name)}</option>)}</select></Field>
             <Field label={t('settings.topicOutcome')}><textarea value={topicDraft.outcome} onChange={(event) => setTopicDraft({ ...topicDraft, outcome: event.target.value })} rows="3" placeholder={t('settings.topicOutcomePlaceholder')} /></Field>
-            <button type="button" className="btn-secondary" onClick={() => { if (!topicDraft.title.trim()) return notify(t('validation.topicRequired')); if (!topicDraft.subject) return notify(t('validation.topicSubjectRequired')); try { repository.saveTopic({ ...topicDraft, id: makeId() }); setTopicDraft({ title: '', classLabel: '', subject: '', outcome: '' }); refresh(); notify(t('notice.topicSaved')); } catch { notify(t('validation.saveFailed')); } }}><Plus size={16} /> {t('settings.saveTopic')}</button>
+            <button type="button" className="btn-secondary" onClick={() => { if (!topicDraft.title.trim()) return notify(t('validation.topicRequired')); if (!topicDraft.subject) return notify(t('validation.topicSubjectRequired')); try { const newTop = { ...topicDraft, id: makeId() }; repository.saveTopic(newTop); if (activeSchoolId) { setDoc(doc(db, 'schools', activeSchoolId, 'topics', String(newTop.id)), newTop, { merge: true }).catch(() => {}); } setTopicDraft({ title: '', classLabel: '', subject: '', outcome: '' }); refresh(); notify(t('notice.topicSaved')); } catch { notify(t('validation.saveFailed')); } }}><Plus size={16} /> {t('settings.saveTopic')}</button>
           </div>
-          {!!topics.length && <div className="lesson-settings-list">{topics.map((topic) => <div key={topic.id}><span><strong>{topic.title}</strong><small>{[topic.classLabel, ct(topic.subject)].filter(Boolean).join(' · ')}</small></span><button type="button" aria-label={t('settings.removeTopicAria', { name: topic.title })} onClick={() => { repository.deleteTopic(topic.id); refresh(); }}><Trash2 size={15} /></button></div>)}</div>}
+          {!!topics.length && <div className="lesson-settings-list">{topics.map((topic) => <div key={topic.id}><span><strong>{topic.title}</strong><small>{[topic.classLabel, ct(topic.subject)].filter(Boolean).join(' · ')}</small></span><button type="button" aria-label={t('settings.removeTopicAria', { name: topic.title })} onClick={() => { repository.deleteTopic(topic.id); if (activeSchoolId) { deleteDoc(doc(db, 'schools', activeSchoolId, 'topics', String(topic.id))).catch(() => {}); } refresh(); }}><Trash2 size={15} /></button></div>)}</div>}
         </div>
         <div className="lesson-settings-card glass"><div className="lesson-settings-heading"><span><Sparkles size={20} /></span><div><h2>{t('settings.reusableHeading')}</h2><p>{t('settings.reusableDescription')}</p></div></div>
           <div className="lesson-settings-fields"><Field label={t('settings.entryType')}><select value={reusableDraft.type} onChange={(event) => setReusableDraft({ ...reusableDraft, type: event.target.value })}>{REUSABLE_TYPES.map((value) => <option key={value} value={value}>{t(`reusable.${value}`)}</option>)}</select></Field>
             <Field label={t('settings.entryContent')}><textarea value={reusableDraft.text} onChange={(event) => setReusableDraft({ ...reusableDraft, text: event.target.value })} rows="3" placeholder={t('settings.entryPlaceholder')} /></Field>
-            <button type="button" className="btn-secondary" onClick={() => { if (!reusableDraft.text.trim()) return notify(t('validation.entryRequired')); try { repository.saveReusableEntry({ ...reusableDraft, id: makeId() }); setReusableDraft({ ...reusableDraft, text: '' }); refresh(); notify(t('notice.entrySaved')); } catch { notify(t('validation.saveFailed')); } }}><Plus size={16} /> {t('settings.saveEntry')}</button>
+            <button type="button" className="btn-secondary" onClick={() => { if (!reusableDraft.text.trim()) return notify(t('validation.entryRequired')); try { const newRe = { ...reusableDraft, id: makeId() }; repository.saveReusableEntry(newRe); if (activeSchoolId) { setDoc(doc(db, 'schools', activeSchoolId, 'reusableEntries', String(newRe.id)), newRe, { merge: true }).catch(() => {}); } setReusableDraft({ ...reusableDraft, text: '' }); refresh(); notify(t('notice.entrySaved')); } catch { notify(t('validation.saveFailed')); } }}><Plus size={16} /> {t('settings.saveEntry')}</button>
           </div>
-          {!!reusable.length && <div className="lesson-settings-list">{reusable.map((entry) => <div key={entry.id}><span><strong>{entry.text}</strong><small>{t(`reusable.${entry.type}`)}</small></span><button type="button" aria-label={t('settings.removeEntryAria')} onClick={() => { repository.deleteReusableEntry(entry.id); refresh(); }}><Trash2 size={15} /></button></div>)}</div>}
+          {!!reusable.length && <div className="lesson-settings-list">{reusable.map((entry) => <div key={entry.id}><span><strong>{entry.text}</strong><small>{t(`reusable.${entry.type}`)}</small></span><button type="button" aria-label={t('settings.removeEntryAria')} onClick={() => { repository.deleteReusableEntry(entry.id); if (activeSchoolId) { deleteDoc(doc(db, 'schools', activeSchoolId, 'reusableEntries', String(entry.id))).catch(() => {}); } refresh(); }}><Trash2 size={15} /></button></div>)}</div>}
         </div>
         {isAdmin && <LessonPlanAdminSettings repository={repository} onChange={refresh} notify={notify} language={language} />}
       </div>

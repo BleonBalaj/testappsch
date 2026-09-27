@@ -23,6 +23,7 @@ import QuickAction from './components/QuickAction';
 import Login from './pages/Login';
 import SchoolSwitcher from './components/SchoolSwitcher';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MoodProvider } from './context/MoodContext';
 import { SchoolDataProvider, useSchoolData } from './context/SchoolDataContext';
 import { TasksProvider } from './context/TasksContext';
@@ -30,7 +31,8 @@ import { Calendar, Sparkles, School, Plus, LogOut } from 'lucide-react';
 import './App.css';
 
 function AppContent() {
-  const { currentUser, currentRole, activeSchoolId, activeSchool, authLoading, schoolLinks, createNewSchool, logoutUser } = useAuth();
+  const { currentUser, currentRole, activeSchoolId, activeSchool, authLoading, schoolLinks, schoolLinksLoaded, createNewSchool, logoutUser } = useAuth();
+  const { language, t } = useLanguage();
   const { classesList = [], eventsList = [] } = useSchoolData();
 
   const getInitialPath = () => {
@@ -51,6 +53,12 @@ function AppContent() {
   const [notifications, setNotifications] = useState([]);
   const [lessonLanguage, setLessonLanguage] = useState(() => localStorage.getItem('lumi-lesson-language') === 'sq' ? 'sq' : 'en');
   
+  useEffect(() => {
+    if (language) {
+      setLessonLanguage(language);
+    }
+  }, [language]);
+
   const mainContentRef = useRef(null);
 
   // The active role strictly tracks currentRole attached to active school membership
@@ -130,7 +138,8 @@ function AppContent() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  if (authLoading) {
+  // 1. Initial loading screen (auth resolving or waiting for initial school links)
+  if (authLoading || (currentUser && !schoolLinksLoaded && schoolLinks.length === 0)) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -148,8 +157,13 @@ function AppContent() {
     );
   }
 
-  // No-school screen: user is logged in but not part of any school (e.g. removed by admin)
-  if (currentUser && currentPath !== 'login' && schoolLinks !== undefined && schoolLinks.length === 0 && !authLoading) {
+  // 2. Unauthenticated user
+  if (!currentUser) {
+    return <Login onLogin={() => handleNavigate('dashboard')} onNavigate={handleNavigate} addNotification={addNotification} />;
+  }
+
+  // 3. No-school screen: user is logged in, school links definitively verified loaded, and strictly 0 schools
+  if (currentPath !== 'login' && schoolLinksLoaded && schoolLinks.length === 0) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -316,7 +330,7 @@ function AppContent() {
       case 'events':
         return <Events userRole={userRole} />;
       case 'schedule':
-        return <Schedule userRole={userRole} lessonLanguage={lessonLanguage} onCreateLessonPlan={(scheduledLesson) => { setPendingScheduledLesson(scheduledLesson); setCurrentPath('lesson-plans'); }} />;
+        return <Schedule userRole={userRole} lessonLanguage={language} onCreateLessonPlan={(scheduledLesson) => { setPendingScheduledLesson(scheduledLesson); setCurrentPath('lesson-plans'); }} />;
       case 'messages':
         return <Messages userRole={userRole} />;
       case 'settings':
@@ -324,7 +338,7 @@ function AppContent() {
           <Settings 
             addNotification={addNotification} 
             userRole={userRole} 
-            lessonLanguage={lessonLanguage}
+            lessonLanguage={language}
             onNavigate={handleNavigate}
             onLogout={() => handleNavigate('login')}
           />
@@ -369,7 +383,7 @@ function AppContent() {
         currentPath={currentPath} 
         onNavigate={handleNavigate} 
         userRole={userRole} 
-        lessonLanguage={lessonLanguage} 
+        lessonLanguage={language} 
       />
       <main className="main-content" ref={mainContentRef}>
         {currentPath !== 'messages' && (
@@ -377,7 +391,7 @@ function AppContent() {
             <div className="header-search glass" onClick={() => setIsSearchOpen(true)}>
               <input 
                 type="text" 
-                placeholder={userRole === 'student' ? 'Search your classes, assignments, campus events...' : 'Search for students, staff, classes, events...'} 
+                placeholder={t('header.searchPlaceholder')} 
                 readOnly 
               />
             </div>
@@ -393,7 +407,14 @@ function AppContent() {
               </button>
               <div className="date-display">
                 <Calendar size={15} className="date-icon" />
-                <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+                <span>
+                  {language === 'sq' ? (() => {
+                    const d = new Date();
+                    const albanianDays = ['E Diel', 'E Hënë', 'E Martë', 'E Mërkurë', 'E Enjte', 'E Premte', 'E Shtunë'];
+                    const albanianMonths = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Korr', 'Gush', 'Sht', 'Tet', 'Nën', 'Dhj'];
+                    return `${albanianDays[d.getDay()]}, ${d.getDate()} ${albanianMonths[d.getMonth()]}`;
+                  })() : new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                </span>
               </div>
             </div>
           </header>
@@ -430,13 +451,15 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <SchoolDataProvider>
-        <TasksProvider>
-          <MoodProvider>
-            <AppContent />
-          </MoodProvider>
-        </TasksProvider>
-      </SchoolDataProvider>
+      <LanguageProvider>
+        <SchoolDataProvider>
+          <TasksProvider>
+            <MoodProvider>
+              <AppContent />
+            </MoodProvider>
+          </TasksProvider>
+        </SchoolDataProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

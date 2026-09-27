@@ -6,10 +6,12 @@ import {
   TrendingUp, BarChart3, Filter, Download
 } from 'lucide-react';
 import { useMood } from '../context/MoodContext';
+import { useLanguage } from '../context/LanguageContext';
 import './MoodInsights.css';
 
 const MoodInsights = () => {
   const { moodHistory } = useMood();
+  const { language, t, isAlbanian } = useLanguage();
   const [dateRange, setDateRange] = useState('7days');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -37,14 +39,16 @@ const MoodInsights = () => {
         <div className="header-content">
           <div className="title-with-icon">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-              Mood Insights
+              {t('mood.title')}
               <BarChart3 size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
           </div>
-          <p>Analyze your real logged emotional well-being from the dashboard.</p>
+          <p>{t('mood.subtitle')}</p>
         </div>
         <div className="header-actions">
-          <button className="icon-btn glass bouncy"><Download size={20} /></button>
+          <button className="icon-btn glass bouncy" title={isAlbanian ? 'Shkarko Të Dhënat' : 'Download Data'}>
+            <Download size={20} />
+          </button>
           <div className="range-pills glass">
             {['7days', '30days', 'alltime', 'custom'].map((range) => (
               <button 
@@ -52,10 +56,10 @@ const MoodInsights = () => {
                 className={`range-pill ${dateRange === range ? 'active' : ''}`}
                 onClick={() => setDateRange(range)}
               >
-                {range === '7days' && '7 Days'}
-                {range === '30days' && '30 Days'}
-                {range === 'alltime' && 'All Time'}
-                {range === 'custom' && 'Custom'}
+                {range === '7days' && t('mood.days7')}
+                {range === '30days' && t('mood.days30')}
+                {range === 'alltime' && t('mood.allTime')}
+                {range === 'custom' && t('mood.custom')}
               </button>
             ))}
             <motion.div 
@@ -80,14 +84,14 @@ const MoodInsights = () => {
           animate={{ opacity: 1, height: 'auto' }}
         >
           <div className="input-group">
-            <label>Start Date</label>
+            <label>{isAlbanian ? 'Data e Fillimit' : 'Start Date'}</label>
             <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
           </div>
           <div className="input-group">
-            <label>End Date</label>
+            <label>{isAlbanian ? 'Data e Mbarimit' : 'End Date'}</label>
             <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
           </div>
-          <button className="btn-primary">Apply Filter</button>
+          <button className="btn-primary">{isAlbanian ? 'Apliko Filtrin' : 'Apply Filter'}</button>
         </motion.div>
       )}
 
@@ -98,15 +102,19 @@ const MoodInsights = () => {
               <div className="stat-icon-wrap happy-bg">
                 <Smile size={24} />
               </div>
-              <span className="stat-trend positive"><ArrowUpRight size={16} /> Logged Data</span>
+              <span className="stat-trend positive">
+                <ArrowUpRight size={16} /> {isAlbanian ? 'Të Dhëna të Regjistruara' : 'Logged Data'}
+              </span>
             </div>
             <div className="stat-body">
-              <h3>{dominantMood} Vibe</h3>
-              <p>Based on your {moodHistory.length} total logs</p>
+              <h3>
+                {dominantMood === 'Happy' ? (isAlbanian ? 'I Gëzuar' : 'Happy') : (isAlbanian ? 'I Balancuar' : 'Balanced')} - {t('mood.dominantVibe')}
+              </h3>
+              <p>{isAlbanian ? `Bazuar në ${moodHistory.length} regjistrime gjithsej` : `Based on your ${moodHistory.length} total logs`}</p>
             </div>
             <div className="stat-footer">
               <div className="progress-bar-wrap">
-                <div className="progress-bar" style={{ width: `${(happyCount/moodHistory.length)*100}%` }}></div>
+                <div className="progress-bar" style={{ width: `${moodHistory.length ? (happyCount/moodHistory.length)*100 : 0}%` }}></div>
               </div>
             </div>
           </div>
@@ -114,9 +122,9 @@ const MoodInsights = () => {
 
         <section className="chart-section glass">
           <div className="chart-header">
-            <h3>Mood Trend</h3>
+            <h3>{t('mood.moodTrend')}</h3>
             <div className="chart-legend">
-              <span className="legend-item"><span className="dot happy-dot"></span> Recorded Moods</span>
+              <span className="legend-item"><span className="dot happy-dot"></span> {isAlbanian ? 'Gjendja e regjistruar' : 'Recorded Moods'}</span>
             </div>
           </div>
           <div className="chart-container">
@@ -134,9 +142,11 @@ const MoodInsights = () => {
                      transition={{ delay: i * 0.1 }}
                    >
                      <div className={`chart-bar happy-bar`}>
-                       <div className="bar-tooltip">{item.mood.toUpperCase()}</div>
+                       <div className="bar-tooltip">
+                         {item.mood === 'happy' ? (isAlbanian ? 'I GËZUAR' : 'HAPPY') : item.mood === 'neutral' ? (isAlbanian ? 'I BALANCUAR' : 'BALANCED') : (isAlbanian ? 'E VËSHTIRË' : 'TOUGH')}
+                       </div>
                      </div>
-                     <span className="bar-label">{new Date(item.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                     <span className="bar-label">{new Date(item.date).toLocaleDateString(isAlbanian ? 'sq-AL' : 'en-US', { weekday: 'short' })}</span>
                    </motion.div>
                  );
                })}
@@ -146,8 +156,8 @@ const MoodInsights = () => {
 
         <section className="history-section glass">
           <div className="section-header">
-            <h3>Mood History Log</h3>
-            <button className="text-btn">Clear Storage</button>
+            <h3>{t('mood.historyLog')}</h3>
+            <button className="text-btn">{t('common.delete')}</button>
           </div>
           <div className="history-list">
             {moodHistory.map((item) => (
@@ -157,13 +167,13 @@ const MoodInsights = () => {
                     {getMoodIcon(item.mood)}
                   </div>
                   <div className="history-details">
-                    <strong>{item.note || 'No note added'}</strong>
-                    <span>{new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    <strong>{item.note || (isAlbanian ? 'Pa shënim' : 'No note added')}</strong>
+                    <span>{new Date(item.date).toLocaleDateString(isAlbanian ? 'sq-AL' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                   </div>
                 </div>
                 <div className="history-right">
                   <div className={`mood-status-tag ${item.mood}`}>
-                    {item.mood.toUpperCase()}
+                    {item.mood === 'happy' ? (isAlbanian ? 'I GËZUAR' : 'HAPPY') : item.mood === 'neutral' ? (isAlbanian ? 'I QETË' : 'NEUTRAL') : (isAlbanian ? 'E VËSHTIRË' : 'TOUGH')}
                   </div>
                 </div>
               </div>

@@ -18,6 +18,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Transcript.css';
 
 // Student profile default structure
@@ -59,6 +60,7 @@ const GRADING_SCALE = [
 
 const Transcript = ({ userRole = 'student' }) => {
   const { currentUser, activeSchool } = useAuth();
+  const { t, isAlbanian } = useLanguage();
   const [selectedTermFilter, setSelectedTermFilter] = useState('all');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,13 +169,13 @@ const Transcript = ({ userRole = 'student' }) => {
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-              Academic Transcript
+              {t('transcript.title', 'Academic Transcript')}
               <GraduationCap size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
-            <span className="count-pill glass">Official Student Record</span>
+            <span className="count-pill glass">{t('transcript.officialRecord', 'Official Student Record')}</span>
           </div>
           <p>
-            Certified historical record of completed terms, awarded course grades, cumulative credit hours, and academic honors.
+            {t('transcript.subtitle', 'Certified historical record of completed terms, awarded course grades, cumulative credit hours, and academic honors.')}
           </p>
         </div>
 
@@ -182,20 +184,20 @@ const Transcript = ({ userRole = 'student' }) => {
             type="button" 
             className="btn-secondary glass" 
             onClick={handleCopyHash}
-            title="Copy Verification Hash"
+            title={isAlbanian ? 'Kopjo Kodin e Verifikimit' : 'Copy Verification Hash'}
           >
             {copiedHash ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-            {copiedHash ? 'Code Copied!' : 'Verification Code'}
+            {copiedHash ? t('transcript.codeCopied', 'Code Copied!') : t('transcript.verificationCode', 'Verification Code')}
           </button>
           
           <button 
             type="button" 
             className="btn-primary" 
             onClick={handlePrintPDF}
-            title="Export official PDF format"
+            title={isAlbanian ? 'Eksporto formatin zyrtar PDF' : 'Export official PDF format'}
           >
             <Printer size={17} />
-            Export as PDF
+            {t('transcript.exportPdf', 'Export as PDF')}
           </button>
         </div>
       </header>
@@ -247,35 +249,35 @@ const Transcript = ({ userRole = 'student' }) => {
         {/* Student Identification & Academic Metrics Ledger */}
         <div className="student-credentials-grid">
           <div className="cred-field">
-            <span className="cred-label">Student Name:</span>
+            <span className="cred-label">{t('transcript.studentName', 'Student Name')}:</span>
             <span className="cred-val highlight">{STUDENT_PROFILE.name}</span>
           </div>
           <div className="cred-field">
-            <span className="cred-label">Student ID:</span>
+            <span className="cred-label">{t('transcript.studentId', 'Student ID')}:</span>
             <span className="cred-val">{STUDENT_PROFILE.studentId}</span>
           </div>
           <div className="cred-field">
-            <span className="cred-label">Current Grade / Level:</span>
+            <span className="cred-label">{t('transcript.currentGrade', 'Current Grade / Level')}:</span>
             <span className="cred-val">{STUDENT_PROFILE.grade}</span>
           </div>
           <div className="cred-field">
-            <span className="cred-label">Homeroom / Class:</span>
+            <span className="cred-label">{isAlbanian ? 'Klasa / Kujdestaria' : 'Homeroom / Class'}:</span>
             <span className="cred-val">{STUDENT_PROFILE.homeroom}</span>
           </div>
           <div className="cred-field">
-            <span className="cred-label">Admit Date:</span>
+            <span className="cred-label">{isAlbanian ? 'Data e Regjistrimit' : 'Admit Date'}:</span>
             <span className="cred-val">{STUDENT_PROFILE.admitDate}</span>
           </div>
           <div className="cred-field">
-            <span className="cred-label">Anticipated Graduation:</span>
+            <span className="cred-label">{isAlbanian ? 'Diplomimi i Pritur' : 'Anticipated Graduation'}:</span>
             <span className="cred-val">{STUDENT_PROFILE.expectedGraduation}</span>
           </div>
           <div className="cred-field">
-            <span className="cred-label">Academic Counselor:</span>
+            <span className="cred-label">{isAlbanian ? 'Këshilltari Akademik' : 'Academic Counselor'}:</span>
             <span className="cred-val">{STUDENT_PROFILE.counselor}</span>
           </div>
           <div className="cred-field">
-            <span className="cred-label">Program of Study:</span>
+            <span className="cred-label">{isAlbanian ? 'Programi Mësimor' : 'Program of Study'}:</span>
             <span className="cred-val">{STUDENT_PROFILE.program}</span>
           </div>
         </div>
@@ -283,24 +285,24 @@ const Transcript = ({ userRole = 'student' }) => {
         {/* Quick Summary Cards (Stat Bar) */}
         <div className="transcript-stats-strip">
           <div className="stat-pill-box">
-            <span className="stat-label">Cumulative GPA</span>
+            <span className="stat-label">{t('transcript.gpa', 'Cumulative GPA')}</span>
             <span className="stat-number">{STUDENT_PROFILE.cumulativeGpa.toFixed(2)}</span>
-            <span className="stat-sub">Weighted: {STUDENT_PROFILE.weightedGpa.toFixed(2)}</span>
+            <span className="stat-sub">{isAlbanian ? 'E ponderuar' : 'Weighted'}: {STUDENT_PROFILE.weightedGpa.toFixed(2)}</span>
           </div>
           <div className="stat-pill-box">
-            <span className="stat-label">Credits Earned</span>
+            <span className="stat-label">{t('transcript.credits', 'Credits Earned')}</span>
             <span className="stat-number">{STUDENT_PROFILE.totalCreditsEarned.toFixed(1)}</span>
-            <span className="stat-sub">of {STUDENT_PROFILE.totalCreditsRequired.toFixed(1)} Required</span>
+            <span className="stat-sub">{isAlbanian ? `nga ${STUDENT_PROFILE.totalCreditsRequired.toFixed(1)} të kërkuara` : `of ${STUDENT_PROFILE.totalCreditsRequired.toFixed(1)} Required`}</span>
           </div>
           <div className="stat-pill-box">
-            <span className="stat-label">Class Standing</span>
+            <span className="stat-label">{isAlbanian ? 'Rangu në Shkollë' : 'Class Standing'}</span>
             <span className="stat-number">{STUDENT_PROFILE.classRank}</span>
             <span className="stat-sub">{STUDENT_PROFILE.academicStanding}</span>
           </div>
           <div className="stat-pill-box">
-            <span className="stat-label">Transcript Status</span>
-            <span className="stat-number status-active">Certified</span>
-            <span className="stat-sub">Issued: {STUDENT_PROFILE.issuedDate}</span>
+            <span className="stat-label">{isAlbanian ? 'Statusi i Dokumentit' : 'Transcript Status'}</span>
+            <span className="stat-number status-active">{isAlbanian ? 'I Çertifikuar' : 'Certified'}</span>
+            <span className="stat-sub">{isAlbanian ? 'Lëshuar' : 'Issued'}: {STUDENT_PROFILE.issuedDate}</span>
           </div>
         </div>
       </div>

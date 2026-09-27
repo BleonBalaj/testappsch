@@ -70,13 +70,23 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow write: if isOwner(uid) || isSignedIn();
       }
+
+      // User personal mood tracking
+      match /moods/{date} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Any other user private documents
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // ──────────────────────────────────────────────────────────
     // SCHOOL TENANTS & SUBCOLLECTIONS
     // ──────────────────────────────────────────────────────────
     match /schools/{schoolId} {
-      allow read: if isSchoolMember(schoolId) || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)/schoolLinks/$(schoolId)));
+      allow read: if (isSignedIn() && resource.data.creatorUid == request.auth.uid) || isSchoolMember(schoolId) || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)/schoolLinks/$(schoolId)));
       allow create: if isSignedIn();
       allow update: if isSchoolAdmin(schoolId);
       allow delete: if false;
@@ -111,6 +121,10 @@ service cloud.firestore {
       match /classes/{classId} {
         allow read: if isSchoolMember(schoolId);
         allow write: if isSchoolTeacherOrAdmin(schoolId);
+
+        match /{allClassSubcollections=**} {
+          allow read, write: if isSchoolTeacherOrAdmin(schoolId) || isSchoolMember(schoolId);
+        }
       }
 
       // Class enrollments
@@ -137,40 +151,32 @@ service cloud.firestore {
         allow write: if isSchoolTeacherOrAdmin(schoolId);
       }
 
-      // Grades: Students can only read their own grade documents!
+      // Grades
       match /grades/{gradeId} {
-        allow read: if isSchoolTeacherOrAdmin(schoolId) ||
-          (isSchoolMember(schoolId) && resource.data.studentUid == request.auth.uid);
-        allow write: if isSchoolTeacherOrAdmin(schoolId);
+        allow read, write: if isSchoolTeacherOrAdmin(schoolId) || isSchoolMember(schoolId);
       }
 
       // Attendance records
       match /attendanceRecords/{recordId} {
+        allow read, write: if isSchoolTeacherOrAdmin(schoolId);
+      }
+
+      // Lesson Plans (Author, Teachers, and Admins)
+      match /lessonPlans/{planId} {
         allow read: if isSchoolMember(schoolId);
         allow write: if isSchoolTeacherOrAdmin(schoolId);
       }
 
-      // Lesson Plans (Author or Admin only)
-      match /lessonPlans/{planId} {
-        allow read: if isSchoolAdmin(schoolId) ||
-          (isSchoolMember(schoolId) && resource.data.teacherId == request.auth.uid);
-        allow create: if isSchoolTeacherOrAdmin(schoolId) && request.resource.data.teacherId == request.auth.uid;
-        allow update: if isSchoolAdmin(schoolId) ||
-          (isSchoolMember(schoolId) && resource.data.teacherId == request.auth.uid);
-        allow delete: if isSchoolAdmin(schoolId) ||
-          (isSchoolMember(schoolId) && resource.data.teacherId == request.auth.uid);
-      }
-
       // Lesson Plan Templates
       match /templates/{templateId} {
-        allow read: if isSchoolMember(schoolId) && (resource.data.teacherId == request.auth.uid || isSchoolAdmin(schoolId));
-        allow write: if isSchoolTeacherOrAdmin(schoolId) && (request.resource.data.teacherId == request.auth.uid || isSchoolAdmin(schoolId));
+        allow read: if isSchoolMember(schoolId);
+        allow write: if isSchoolTeacherOrAdmin(schoolId);
       }
 
       // Lesson Reusable Entries
       match /reusableEntries/{entryId} {
-        allow read: if isSchoolMember(schoolId) && (resource.data.teacherId == request.auth.uid || isSchoolAdmin(schoolId));
-        allow write: if isSchoolTeacherOrAdmin(schoolId) && (request.resource.data.teacherId == request.auth.uid || isSchoolAdmin(schoolId));
+        allow read: if isSchoolMember(schoolId);
+        allow write: if isSchoolTeacherOrAdmin(schoolId);
       }
 
       // Topics
@@ -195,41 +201,23 @@ service cloud.firestore {
         allow write: if isSchoolTeacherOrAdmin(schoolId);
       }
 
-      // Conversations & Messages
+      // Conversations & Messages (Real-time Chat)
       match /conversations/{conversationId} {
-        allow read: if isSchoolMember(schoolId);
-        allow write: if isSchoolMember(schoolId);
+        allow read, write: if isSchoolMember(schoolId);
 
         match /messages/{messageId} {
-          allow read: if isSchoolMember(schoolId);
-          allow create: if isSchoolMember(schoolId);
-          allow update: if isSchoolMember(schoolId) && (
-            resource.data.senderUid == request.auth.uid || isSchoolTeacherOrAdmin(schoolId)
-          );
-          allow delete: if isSchoolMember(schoolId) && (
-            resource.data.senderUid == request.auth.uid || isSchoolTeacherOrAdmin(schoolId)
-          );
+          allow read, write: if isSchoolMember(schoolId);
         }
       }
 
       // Tasks
       match /tasks/{taskId} {
-        allow read: if isSchoolMember(schoolId);
-        allow create: if isSchoolMember(schoolId);
-        allow update: if isSchoolMember(schoolId);
-        allow delete: if isSchoolMember(schoolId) && (
-          resource.data.ownerUid == request.auth.uid || isSchoolAdmin(schoolId)
-        );
+        allow read, write: if isSchoolMember(schoolId);
       }
 
       // Mood entries
       match /moodEntries/{entryId} {
-        allow read: if isSchoolMember(schoolId) && (
-          resource.data.uid == request.auth.uid || isSchoolAdmin(schoolId)
-        );
-        allow create: if isSchoolMember(schoolId) && request.resource.data.uid == request.auth.uid;
-        allow update: if isSchoolMember(schoolId) && resource.data.uid == request.auth.uid;
-        allow delete: if isSchoolMember(schoolId) && resource.data.uid == request.auth.uid;
+        allow read, write: if isSchoolMember(schoolId);
       }
 
       // Invitations

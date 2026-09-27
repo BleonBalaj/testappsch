@@ -5,13 +5,14 @@ import {
   Settings as SettingsIcon, Camera, Moon, Sun, Laptop,
   Calendar, Book, CheckSquare, MessageSquare, Users, UserSquare2,
   Trophy, CalendarDays, Library, BarChart3, CheckCircle2, RotateCcw, Trash2,
-  KeyRound, Lock
+  KeyRound, Lock, Info, Mail, Sparkles, User
 } from 'lucide-react';
 import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { Avatar } from '../components/Avatar';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useSchoolData, DEFAULT_ROLE_PERMISSIONS } from '../context/SchoolDataContext';
 import './Settings.css';
 
@@ -56,6 +57,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
     changeUserPassword
   } = useAuth();
   const { rolePermissions, updateRolePermissions } = useSchoolData();
+  const { language, changeLanguage, t, isAlbanian } = useLanguage();
 
   const isAdmin = currentRole === 'admin';
 
@@ -362,10 +364,10 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
       <header className="page-header">
         <div>
           <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-            Settings
+            {t('settings.title')}
             <SettingsIcon size={32} style={{ color: 'hsl(var(--primary))' }} />
           </h1>
-          <p>Personalize your Noesis Horizon experience, manage preferences, and view identity details.</p>
+          <p>{t('settings.subtitle')}</p>
         </div>
       </header>
 
@@ -380,13 +382,13 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
 
       <div className="settings-grid">
         <section className="settings-section glass">
-          <h3>Profile & Identity</h3>
+          <h3>{t('settings.userProfile')}</h3>
           <div className="profile-edit">
             <div className="avatar-edit-col">
               <div 
                 className="avatar-large" 
                 onClick={() => avatarInputRef.current?.click()}
-                title="Click to upload profile picture"
+                title={t('settings.changePhoto')}
               >
                 <Avatar 
                   src={userPhoto || currentUser?.photoURL} 
@@ -397,8 +399,8 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                 <button 
                   type="button" 
                   className="edit-badge" 
-                  title="Change Profile Picture" 
-                  aria-label="Change Profile Picture"
+                  title={t('settings.changePhoto')} 
+                  aria-label={t('settings.changePhoto')}
                   disabled={isUploadingPhoto}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -414,17 +416,17 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                   className="btn-remove-avatar"
                   onClick={handleRemoveAvatar}
                   disabled={isUploadingPhoto}
-                  title="Remove Profile Picture"
+                  title={t('settings.removePhoto')}
                 >
                   <Trash2 size={13} />
-                  <span>Remove Picture</span>
+                  <span>{t('settings.removePhoto')}</span>
                 </button>
               )}
             </div>
             <div className="profile-inputs">
               {/* User display name - Fully Editable */}
               <div className="input-group">
-                <label>Display Name (User Profile)</label>
+                <label>{t('settings.displayName')}</label>
                 <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
                   <input 
                     type="text" 
@@ -441,14 +443,14 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                     onClick={handleSaveDisplayName}
                     style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem', height: '42px', flexShrink: 0, whiteSpace: 'nowrap' }}
                   >
-                    {isSavingName ? 'Saving...' : 'Save Name'}
+                    {isSavingName ? t('settings.saving') : t('settings.saveName')}
                   </button>
                 </div>
               </div>
 
               {/* Email Address - Read only global UID */}
               <div className="input-group">
-                <label>Firebase Auth Email (Global Identity)</label>
+                <label>{t('settings.authEmail')}</label>
                 <input 
                   type="email" 
                   value={email}
@@ -460,14 +462,14 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
               {/* School Name - Editable for Admins */}
               <div className="input-group">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <label>Active School Organization</label>
+                  <label>{t('settings.activeSchool')}</label>
                   {isAdmin ? (
                     <span style={{ fontSize: '0.75rem', color: 'hsl(var(--primary))', fontWeight: 700 }}>
-                      🛡️ Admin Editable
+                      🛡️ {t('settings.adminEditable')}
                     </span>
                   ) : (
                     <span style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))' }}>
-                      (Admin only)
+                      {t('settings.adminOnly')}
                     </span>
                   )}
                 </div>
@@ -489,7 +491,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                       onClick={handleSaveSchoolName}
                       style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem', height: '42px', flexShrink: 0, whiteSpace: 'nowrap' }}
                     >
-                      {isSavingSchool ? 'Saving...' : 'Save School'}
+                      {isSavingSchool ? t('settings.saving') : t('settings.saveSchool')}
                     </button>
                   )}
                 </div>
@@ -497,7 +499,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
 
               {/* Active Role - STRICTLY READ-ONLY BADGE (Users CANNOT change role) */}
               <div className="input-group">
-                <label>Active Role in this School</label>
+                <label>{t('settings.activeRole')}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
                   {currentRole === 'admin' ? (
                     <span style={{
@@ -512,7 +514,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                       fontWeight: 700,
                       fontSize: '0.88rem'
                     }}>
-                      <Shield size={15} /> Administrator (Full Governance)
+                      <Shield size={15} /> {t('settings.adminRole')}
                     </span>
                   ) : currentRole === 'teacher' ? (
                     <span style={{
@@ -527,7 +529,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                       fontWeight: 700,
                       fontSize: '0.88rem'
                     }}>
-                      <GraduationCap size={15} /> Teacher / Faculty Member
+                      <GraduationCap size={15} /> {t('settings.teacherRole')}
                     </span>
                   ) : (
                     <span style={{
@@ -542,11 +544,11 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                       fontWeight: 700,
                       fontSize: '0.88rem'
                     }}>
-                      🎓 Student
+                      🎓 {t('settings.studentRole')}
                     </span>
                   )}
                   <span style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))' }}>
-                    (Role is attached to school membership)
+                    {t('settings.roleNote')}
                   </span>
                 </div>
               </div>
@@ -562,7 +564,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
           <div className="role-dashboard-notice glass">
             <span className="notice-icon">{currentRole === 'student' ? '🎓' : currentRole === 'teacher' ? '📚' : '🛡️'}</span>
             <div>
-              <strong>Active Portal: {currentRole === 'student' ? 'Student' : currentRole === 'teacher' ? 'Teacher' : 'Administrator'}</strong>
+              <strong>Active Portal: {currentRole === 'student' ? t('nav.student') : currentRole === 'teacher' ? t('nav.teacher') : t('nav.admin')}</strong>
               <p>
                 {currentRole === 'student' 
                   ? 'Access to enrolled classes, gradebook, transcripts, and personal tasks.'
@@ -590,17 +592,17 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
         <section className="settings-section glass">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <KeyRound size={22} style={{ color: 'hsl(var(--primary))' }} />
-            <h3 style={{ margin: 0, border: 'none', padding: 0 }}>Security & Password</h3>
+            <h3 style={{ margin: 0, border: 'none', padding: 0 }}>{t('settings.changePassword')}</h3>
           </div>
           <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
-            Update your account password. For your security, you must enter your current password accurately to confirm identity before setting a new password.
+            {t('settings.passwordSubtitle')}
           </p>
 
           <form onSubmit={handleChangePassword} className="password-change-form">
             <div className="input-group">
-              <label>Current Password *</label>
+              <label>{t('settings.currentPassword')}</label>
               <input 
-                type="password"
+                type="password" 
                 required
                 placeholder="Enter current password accurately"
                 value={passwordForm.currentPassword}
@@ -614,9 +616,9 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
 
             <div className="form-grid-2">
               <div className="input-group">
-                <label>New Password *</label>
+                <label>{t('settings.newPassword')}</label>
                 <input 
-                  type="password"
+                  type="password" 
                   required
                   minLength={6}
                   placeholder="Min. 6 characters"
@@ -630,9 +632,9 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
               </div>
 
               <div className="input-group">
-                <label>Confirm New Password *</label>
+                <label>{t('settings.confirmPassword')}</label>
                 <input 
-                  type="password"
+                  type="password" 
                   required
                   minLength={6}
                   placeholder="Re-type new password"
@@ -666,18 +668,79 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                 style={{ padding: '0.65rem 1.4rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
               >
                 <Lock size={15} />
-                {isUpdatingPassword ? 'Verifying & Updating...' : 'Update Password'}
+                {isUpdatingPassword ? t('settings.saving') : t('settings.updatePassword')}
               </button>
             </div>
           </form>
         </section>
 
         <section className="settings-section glass">
-          <h3>Preferences & Theme</h3>
+          <h3>{t('settings.preferences')}</h3>
           
+          {/* Real-time Language Preference Selector */}
+          <div className="input-group" style={{ marginBottom: '1.25rem' }}>
+            <label>{t('settings.language')}</label>
+            <p style={{ fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))', margin: '0.2rem 0 0.6rem 0' }}>
+              {t('settings.languageSubtitle')}
+            </p>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              background: 'hsla(var(--background), 0.5)',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: '9999px',
+              padding: '0.35rem 0.5rem',
+              width: 'fit-content'
+            }}>
+              <button
+                type="button"
+                className={`lang-dock-btn ${language === 'en' ? 'active' : ''}`}
+                onClick={() => changeLanguage('en')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.45rem 1.1rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: language === 'en' ? 'hsl(var(--primary))' : 'transparent',
+                  color: language === 'en' ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <span>🇬🇧 English</span>
+              </button>
+              <button
+                type="button"
+                className={`lang-dock-btn ${language === 'sq' ? 'active' : ''}`}
+                onClick={() => changeLanguage('sq')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.45rem 1.1rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: language === 'sq' ? 'hsl(var(--primary))' : 'transparent',
+                  color: language === 'sq' ? (themeMode === 'light' ? '#ffffff' : 'hsl(var(--primary-foreground))') : 'hsl(var(--muted-foreground))',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <span>🇦🇱 Shqip (Albanian)</span>
+              </button>
+            </div>
+          </div>
+
           {/* Real-time Theme Dock in Settings */}
           <div className="input-group" style={{ marginBottom: '1.25rem' }}>
-            <label>Interface Theme</label>
+            <label>{t('settings.interfaceTheme')}</label>
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -707,7 +770,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                 }}
               >
                 <Moon size={15} />
-                <span>Dark</span>
+                <span>{t('settings.dark')}</span>
               </button>
               <button
                 type="button"
@@ -728,7 +791,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                 }}
               >
                 <Sun size={15} />
-                <span>Light</span>
+                <span>{t('settings.light')}</span>
               </button>
               <button
                 type="button"
@@ -749,22 +812,149 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                 }}
               >
                 <Laptop size={15} />
-                <span>Auto</span>
+                <span>{t('settings.auto')}</span>
               </button>
             </div>
           </div>
 
           <div className="toggles-list">
             <Toggle 
-              label="Push Notifications" 
+              label={t('settings.pushNotifications')} 
               active={notifications} 
               onToggle={() => handleToggle(setNotifications, notifications, 'Notifications')} 
             />
             <Toggle 
-              label="Enable Animations" 
+              label={t('settings.enableAnimations')} 
               active={animations} 
               onToggle={() => handleToggle(setAnimations, animations, 'Animations')} 
             />
+          </div>
+        </section>
+
+        {/* ── About Us / Platform Architecture (Immediately after Preferences) ── */}
+        <section className="settings-section glass about-us-section">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <Sparkles size={22} style={{ color: 'hsl(var(--primary))' }} />
+            <h3 style={{ margin: 0, border: 'none', padding: 0 }}>{t('settings.aboutUs')}</h3>
+          </div>
+          <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
+            {t('settings.aboutSubtitle')}
+          </p>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '1rem',
+            marginTop: '0.5rem'
+          }}>
+            <div style={{
+              background: 'hsla(var(--background), 0.6)',
+              border: '1px solid hsla(var(--border), 0.6)',
+              borderRadius: '16px',
+              padding: '1.1rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem'
+            }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: 'hsla(var(--primary), 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'hsl(var(--primary))',
+                flexShrink: 0
+              }}>
+                <User size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'hsl(var(--muted-foreground))', display: 'block' }}>
+                  {t('settings.creator')}
+                </span>
+                <strong style={{ fontSize: '1.05rem', color: 'hsl(var(--foreground))', display: 'block', marginTop: '0.15rem' }}>
+                  Bleon Balaj
+                </strong>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'hsla(var(--background), 0.6)',
+              border: '1px solid hsla(var(--border), 0.6)',
+              borderRadius: '16px',
+              padding: '1.1rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem'
+            }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: 'hsla(var(--primary), 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'hsl(var(--primary))',
+                flexShrink: 0
+              }}>
+                <Mail size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'hsl(var(--muted-foreground))', display: 'block' }}>
+                  {t('settings.contact')}
+                </span>
+                <a 
+                  href="mailto:b.balaj@hotmail.com" 
+                  style={{ 
+                    fontSize: '0.96rem', 
+                    fontWeight: 700,
+                    color: 'hsl(var(--primary))', 
+                    textDecoration: 'none',
+                    display: 'block',
+                    marginTop: '0.15rem',
+                    wordBreak: 'break-all'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                  onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                >
+                  b.balaj@hotmail.com
+                </a>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'hsla(var(--background), 0.6)',
+              border: '1px solid hsla(var(--border), 0.6)',
+              borderRadius: '16px',
+              padding: '1.1rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem'
+            }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: 'hsla(var(--primary), 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'hsl(var(--primary))',
+                flexShrink: 0
+              }}>
+                <Info size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'hsl(var(--muted-foreground))', display: 'block' }}>
+                  {t('settings.platform')}
+                </span>
+                <strong style={{ fontSize: '0.98rem', color: 'hsl(var(--foreground))', display: 'block', marginTop: '0.15rem' }}>
+                  Noesis Horizon · v2.4.0
+                </strong>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -773,9 +963,9 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
           <section className="settings-section glass role-permissions-section">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid hsla(var(--border), 0.5)', paddingBottom: '0.85rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
-                <h3 style={{ margin: 0, border: 'none', padding: 0 }}>Role Permissions & Feature Access</h3>
+                <h3 style={{ margin: 0, border: 'none', padding: 0 }}>{t('settings.rolePermissions')}</h3>
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
-                  Control exactly which modules and pages are visible to teachers or students across your school.
+                  {t('settings.rolePermissionsSubtitle')}
                 </p>
               </div>
               <div className="role-perm-tab-toggle glass">
@@ -784,14 +974,14 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                   className={`perm-tab-btn ${permTargetRole === 'teacher' ? 'active' : ''}`}
                   onClick={() => setPermTargetRole('teacher')}
                 >
-                  <GraduationCap size={16} /> Teachers
+                  <GraduationCap size={16} /> {t('settings.teachers')}
                 </button>
                 <button
                   type="button"
                   className={`perm-tab-btn ${permTargetRole === 'student' ? 'active' : ''}`}
                   onClick={() => setPermTargetRole('student')}
                 >
-                  <Users size={16} /> Students
+                  <Users size={16} /> {t('settings.students')}
                 </button>
               </div>
             </div>
@@ -800,6 +990,8 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
               {PERMISSIBLE_MODULES.map(mod => {
                 const isEnabled = (rolePermissions?.[permTargetRole]?.[mod.id] ?? DEFAULT_ROLE_PERMISSIONS[permTargetRole]?.[mod.id]) ?? false;
                 const IconComponent = mod.icon;
+                const moduleKey = mod.id === 'classes' ? 'classes' : mod.id === 'lesson-plans' ? 'lessonPlans' : mod.id === 'mood-insights' ? 'moodInsights' : mod.id;
+                const translatedLabel = t(`nav.${moduleKey}`, mod.label);
                 return (
                   <div key={mod.id} className="permission-card glass">
                     <div className="permission-card-info">
@@ -807,7 +999,7 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
                         <IconComponent size={18} />
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <strong>{mod.label}</strong>
+                        <strong>{translatedLabel}</strong>
                         <p>{mod.desc}</p>
                       </div>
                     </div>
@@ -824,8 +1016,8 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
         )}
 
         <section className="settings-section glass danger-zone">
-          <h3 style={{ color: 'hsl(var(--destructive))' }}>Account & Session</h3>
-          <p>Sign out of your active session or switch institutions.</p>
+          <h3 style={{ color: 'hsl(var(--destructive))' }}>{t('settings.dangerZone')}</h3>
+          <p>{t('settings.dangerSubtitle')}</p>
           <div className="logout-section">
             <button 
               type="button" 
@@ -833,7 +1025,11 @@ const Settings = ({ addNotification, userRole, lessonLanguage = 'en', onNavigate
               onClick={handleLogout}
             >
               <LogOut size={20} />
-              <span>Sign Out from Noesis Horizon</span>
+              <span>
+                {isAlbanian 
+                  ? `Dil nga ${activeSchool?.name?.trim() || schoolNameInput?.trim() || 'Noesis Horizon'}` 
+                  : `Sign Out from ${activeSchool?.name?.trim() || schoolNameInput?.trim() || 'Noesis Horizon'}`}
+              </span>
             </button>
           </div>
         </section>

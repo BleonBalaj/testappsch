@@ -251,19 +251,6 @@
   object-fit: cover;
 }
 
-.rating-badge {
-  position: absolute;
-  bottom: -6px;
-  right: -6px;
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 10px;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
 .staff-primary-details {
   flex: 1;
   min-width: 0;

@@ -1,18 +1,23 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronLeft, ChevronRight, Clock, MapPin, User, Search, 
   Filter, Calendar, Download, Plus, X, Check, BookOpen, 
-  Sparkles, RotateCcw, Tag, Layers, GraduationCap, CheckCircle2
+  Sparkles, RotateCcw, Tag, Layers, GraduationCap, CheckCircle2,
+  Trash2
 } from 'lucide-react';
 import ClassDetail from '../components/ClassDetail';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { db } from '../services/firebase';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { Avatar } from '../components/Avatar';
 import { SUBJECTS } from '../features/lessonPlans/catalog';
 import { translateCatalogValue } from '../features/lessonPlans/i18n';
 import './Schedule.css';
 
-const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
+const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot, isAlbanian }) => (
   <motion.div 
     className={`schedule-item glass bouncy ${item.isEvent ? 'event-type' : ''}`}
     initial={{ opacity: 0, x: 20 }}
@@ -29,18 +34,18 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
           <span className="class-time">{item.time}</span>
           {item.isEvent && (
             <span className="event-tag">
-              <Calendar size={11} /> Event
+              <Calendar size={11} /> {isAlbanian ? 'Ngjarje' : 'Event'}
             </span>
           )}
           {item.classLabel && !item.isEvent && (
-            <span className="category-tag glass">Class {item.classLabel} · P{item.period}</span>
+            <span className="category-tag glass">{isAlbanian ? `Klasa ${item.classLabel} · P${item.period}` : `Class ${item.classLabel} · P${item.period}`}</span>
           )}
           {item.subjectCategory && !item.isEvent && !item.classLabel && (
             <span className="category-tag glass">{item.subjectCategory}</span>
           )}
           {activeTab === 'all-schedule' && userRole !== 'admin' && item.enrolled && !item.isEvent && (
             <span className="enrolled-status-pill">
-              <CheckCircle2 size={11} /> {userRole === 'teacher' ? 'My Class' : 'Enrolled'}
+              <CheckCircle2 size={11} /> {userRole === 'teacher' ? (isAlbanian ? 'Lënda Ime' : 'My Class') : (isAlbanian ? 'I Regjistruar' : 'Enrolled')}
             </span>
           )}
         </div>
@@ -58,8 +63,19 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole }) => (
               <Avatar alt={item.teacher} />
             )}
           </div>
-          <span className="teacher-name">{item.isEvent ? `${item.attendees || 50} Registered` : item.teacher}</span>
+          <span className="teacher-name">{item.isEvent ? (isAlbanian ? `${item.attendees || 50} Të Regjistruar` : `${item.attendees || 50} Registered`) : item.teacher}</span>
         </div>
+        {userRole !== 'student' && !item.isEvent && onDeleteSlot && (
+          <button 
+            type="button" 
+            className="icon-action-btn delete glass"
+            style={{ marginLeft: 'auto', padding: '4px', opacity: 0.7 }}
+            onClick={(e) => { e.stopPropagation(); onDeleteSlot(item.id); }}
+            title={isAlbanian ? 'Fshij Orën' : 'Delete Slot'}
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
     </div>
   </motion.div>
@@ -91,7 +107,57 @@ function dateForDay(monday, day) {
 
 const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonPlan }) => {
   const { staffList } = useSchoolData();
+  const { activeSchoolId, currentUser } = useAuth();
+  const { language, t, isAlbanian } = useLanguage();
   const [scheduleState, setScheduleState] = useState(INITIAL_SCHEDULE);
+
+  useEffect(() => {
+    if (!activeSchoolId) {
+      setScheduleState(INITIAL_SCHEDULE);
+      return;
+    }
+
+    const entriesCol = collection(db, 'schools', activeSchoolId, 'scheduleEntries');
+    const unsubscribe = onSnapshot(entriesCol, (snapshot) => {
+      const grouped = {
+        'Monday': [],
+        'Tuesday': [],
+        'Wednesday': [],
+        'Thursday': [],
+        'Friday': []
+      };
+      snapshot.forEach(docSnap => {
+        const item = { id: docSnap.id, ...docSnap.data() };
+        if (grouped[item.day]) {
+          grouped[item.day].push(item);
+        }
+      });
+      setScheduleState(grouped);
+    }, (err) => {
+      console.warn('Notice listening to schedule entries:', err.message);
+    });
+
+    return () => unsubscribe();
+  }, [activeSchoolId]);
+
+  const handleDeleteSlot = async (slotId) => {
+    if (!activeSchoolId) {
+      setScheduleState(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(day => {
+          next[day] = next[day].filter(item => String(item.id) !== String(slotId));
+        });
+        return next;
+      });
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'schools', activeSchoolId, 'scheduleEntries', String(slotId)));
+    } catch (err) {
+      console.warn('Error deleting schedule entry:', err.message);
+    }
+  };
+
   const [selectedDay, setSelectedDay] = useState('Monday');
   const [selectedClass, setSelectedClass] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -143,6 +209,20 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     const friday = new Date(weekMonday);
     friday.setDate(friday.getDate() + 4);
 
+    if (isAlbanian) {
+      const albanianMonths = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Korr', 'Gush', 'Sht', 'Tet', 'Nën', 'Dhj'];
+      const startMonth = albanianMonths[weekMonday.getMonth()];
+      const endMonth = albanianMonths[friday.getMonth()];
+      const startDay = weekMonday.getDate();
+      const endDay = friday.getDate();
+      const year = friday.getFullYear();
+
+      if (startMonth === endMonth) {
+        return `${startDay} – ${endDay} ${startMonth}, ${year}`;
+      }
+      return `${startDay} ${startMonth} – ${endDay} ${endMonth}, ${year}`;
+    }
+
     const startMonth = weekMonday.toLocaleString('en-US', { month: 'short' });
     const endMonth = friday.toLocaleString('en-US', { month: 'short' });
     const startDay = weekMonday.getDate();
@@ -153,7 +233,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
       return `${startMonth} ${startDay} – ${endDay}, ${year}`;
     }
     return `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${year}`;
-  }, [weekMonday]);
+  }, [weekMonday, isAlbanian]);
 
   // Determine if an item belongs in My Schedule
   const isItemInMySchedule = useCallback((item) => {
@@ -240,19 +320,30 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     setIsDetailOpen(false);
   };
 
-  const handleAddSlotSubmit = (e) => {
+  const handleAddSlotSubmit = async (e) => {
     e.preventDefault();
     if (!newSlotForm.subject || !newSlotForm.classLabel || !newSlotForm.curriculumSubject || !newSlotForm.period) return;
 
+    const slotId = `slot_${Date.now()}`;
     const newItem = {
       ...newSlotForm,
-      id: Date.now()
+      id: slotId,
+      createdByUid: currentUser?.uid || '',
+      createdAt: serverTimestamp()
     };
 
-    setScheduleState(prev => ({
-      ...prev,
-      [newSlotForm.day]: [...(prev[newSlotForm.day] || []), newItem]
-    }));
+    if (activeSchoolId) {
+      try {
+        await setDoc(doc(db, 'schools', activeSchoolId, 'scheduleEntries', slotId), newItem);
+      } catch (err) {
+        console.warn('Error saving schedule entry to Firestore:', err.message);
+      }
+    } else {
+      setScheduleState(prev => ({
+        ...prev,
+        [newSlotForm.day]: [...(prev[newSlotForm.day] || []), newItem]
+      }));
+    }
 
     setIsAddSlotOpen(false);
     setNewSlotForm({
@@ -311,28 +402,14 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-              {userRole === 'admin'
-                ? 'Campus Master Schedule'
-                : (effectiveTab === 'my-schedule'
-                    ? (userRole === 'student' ? 'My Class Timetable' : 'My Teaching Schedule')
-                    : 'Campus Master Schedule')}
+              {t('schedule.title')}
               <Calendar size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
             <span className="count-pill glass">
-              {userRole === 'admin'
-                ? `${currentSchedule.length} Master Periods Today`
-                : `${currentSchedule.length} Periods Today`}
+              {`${currentSchedule.length} ${t('common.total')}`}
             </span>
           </div>
-          <p>
-            {userRole === 'admin'
-              ? 'Master school-wide timetable for classes, science labs, faculty periods, and campus events.'
-              : (effectiveTab === 'my-schedule'
-                  ? (userRole === 'student'
-                      ? 'Personalized daily schedule, enrolled room assignments, instructor periods, and campus sessions.'
-                      : 'Personal teaching timetable and assigned campus sessions.')
-                  : 'Master school-wide timetable for classes, science labs, and campus events.')}
-          </p>
+          <p>{t('schedule.subtitle')}</p>
         </div>
 
         <div className="header-actions">
@@ -343,20 +420,20 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                 type="button"
                 className={`segmented-tab ${effectiveTab === 'my-schedule' ? 'active' : ''}`}
                 onClick={() => setActiveTab('my-schedule')}
-                title={userRole === 'student' ? 'Show My Enrolled Classes & Events' : 'Show My Teaching Timetable'}
+                title={userRole === 'student' ? (isAlbanian ? 'Shfaq Lëndët & Ngjarjet e Mia' : 'Show My Enrolled Classes & Events') : (isAlbanian ? 'Shfaq Orarin Tim Mësimor' : 'Show My Teaching Timetable')}
               >
                 <Calendar size={14} />
-                <span>{userRole === 'student' ? 'My Schedule' : 'My Timetable'}</span>
+                <span>{userRole === 'student' ? (isAlbanian ? 'Orari Im' : 'My Schedule') : (isAlbanian ? 'Orari Im Mësimor' : 'My Timetable')}</span>
                 <span className="segmented-counter">{myScheduleCount}</span>
               </button>
               <button
                 type="button"
                 className={`segmented-tab ${effectiveTab === 'all-schedule' ? 'active' : ''}`}
                 onClick={() => setActiveTab('all-schedule')}
-                title="Show Master Campus Schedule"
+                title={isAlbanian ? 'Shfaq Orarin Kryesor të Shkollës' : 'Show Master Campus Schedule'}
               >
                 <Layers size={14} />
-                <span>All Campus</span>
+                <span>{isAlbanian ? 'I Gjithë Kampusi' : 'All Campus'}</span>
                 <span className="segmented-counter">{allScheduleCount}</span>
               </button>
             </div>
@@ -367,7 +444,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             <button 
               className="week-nav-btn glass" 
               onClick={() => setWeekOffset(prev => prev - 1)}
-              title="Previous Week"
+              title={isAlbanian ? 'Java e Kaluar' : 'Previous Week'}
               aria-label="Previous Week"
             >
               <ChevronLeft size={18} />
@@ -376,14 +453,14 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             <div className="week-date-info">
               <span className="week-label">{weekDateString}</span>
               {weekOffset === 0 ? (
-                <span className="current-week-tag">Current Week</span>
+                <span className="current-week-tag">{isAlbanian ? 'Java Aktuale' : 'Current Week'}</span>
               ) : (
                 <button 
                   className="reset-week-btn" 
                   onClick={() => setWeekOffset(0)}
-                  title="Jump to current week"
+                  title={isAlbanian ? 'Kthehu te java aktuale' : 'Jump to current week'}
                 >
-                  <RotateCcw size={11} /> Reset
+                  <RotateCcw size={11} /> {isAlbanian ? 'Rivendos' : 'Reset'}
                 </button>
               )}
             </div>
@@ -391,22 +468,22 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             <button 
               className="week-nav-btn glass" 
               onClick={() => setWeekOffset(prev => prev + 1)}
-              title="Next Week"
+              title={isAlbanian ? 'Java e Ardhshme' : 'Next Week'}
               aria-label="Next Week"
             >
               <ChevronRight size={18} />
             </button>
           </div>
 
-          <button className="btn-secondary glass" onClick={handleExportTimetable} title="Export CSV Timetable">
+          <button className="btn-secondary glass" onClick={handleExportTimetable} title={isAlbanian ? 'Eksporto Orarin CSV' : 'Export CSV Timetable'}>
             <Download size={16} />
-            <span className="export-btn-text">{userRole === 'admin' || effectiveTab === 'all-schedule' ? 'Export Master' : 'Export Timetable'}</span>
+            <span className="export-btn-text">{isAlbanian ? 'Eksporto Orarin' : (userRole === 'admin' || effectiveTab === 'all-schedule' ? 'Export Master' : 'Export Timetable')}</span>
           </button>
           
           {userRole !== 'student' && (
             <button className="btn-primary" onClick={() => setIsAddSlotOpen(true)}>
               <Plus size={16} />
-              <span>Add Period</span>
+              <span>{t('schedule.addEntry')}</span>
             </button>
           )}
         </div>
@@ -419,7 +496,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
           <Search size={18} className="search-icon" />
           <input 
             type="text" 
-            placeholder={effectiveTab === 'my-schedule' ? "Search within my scheduled classes, rooms, or teachers..." : "Search all classes, teachers, subjects, rooms, or events..."} 
+            placeholder={effectiveTab === 'my-schedule' ? (isAlbanian ? 'Kërko në orarin tim, sallat, apo mësimdhënësit...' : 'Search within my scheduled classes, rooms, or teachers...') : (isAlbanian ? 'Kërko të gjitha lëndët, mësimdhënësit, sallat, apo ngjarjet...' : 'Search all classes, teachers, subjects, rooms, or events...')} 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -433,7 +510,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         {/* Filter Dropdowns & Pills Row */}
         <div className="filters-flex-row">
           <div className="filter-group-item">
-            <label><User size={13} /> Teacher:</label>
+            <label><User size={13} /> {isAlbanian ? 'MËSIMDHËNËSI:' : 'Teacher:'}</label>
             <select 
               value={teacherFilter} 
               onChange={(e) => setTeacherFilter(e.target.value)}
@@ -441,24 +518,36 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             >
               {teachersList.map(t => (
                 <option key={t} value={t}>
-                  {t === 'all' ? 'All Teachers & Faculty' : t}
+                  {t === 'all' ? (isAlbanian ? 'Të Gjithë Mësimdhënësit' : 'All Teachers & Faculty') : t}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="filter-group-item">
-            <label><Tag size={13} /> Subject / Category:</label>
+            <label><Tag size={13} /> {isAlbanian ? 'LËNDA / KATEGORIA:' : 'Subject / Category:'}</label>
             <select 
               value={categoryFilter} 
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="schedule-filter-select glass"
             >
-              {categoriesList.map(c => (
-                <option key={c} value={c}>
-                  {c === 'all' ? 'All Subjects & Domains' : c}
-                </option>
-              ))}
+              {categoriesList.map(c => {
+                const categoryTranslations = {
+                  'Math': 'Matematikë',
+                  'Science': 'Shkencë',
+                  'Humanities': 'Shkenca Shoqërore',
+                  'Technology': 'Teknologji',
+                  'Arts': 'Arte',
+                  'Athletics': 'Edukim Fizik',
+                  'Event': 'Ngjarje'
+                };
+                const displayCategory = isAlbanian && categoryTranslations[c] ? categoryTranslations[c] : c;
+                return (
+                  <option key={c} value={c}>
+                    {c === 'all' ? (isAlbanian ? 'Të Gjitha Lëndët & Fushat' : 'All Subjects & Domains') : displayCategory}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -467,19 +556,19 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               className={`type-pill ${typeFilter === 'all' ? 'active' : ''}`}
               onClick={() => setTypeFilter('all')}
             >
-              All
+              {isAlbanian ? 'Të Gjitha' : 'All'}
             </button>
             <button 
               className={`type-pill ${typeFilter === 'classes' ? 'active' : ''}`}
               onClick={() => setTypeFilter('classes')}
             >
-              Classes
+              {isAlbanian ? 'Lëndët' : 'Classes'}
             </button>
             <button 
               className={`type-pill ${typeFilter === 'events' ? 'active' : ''}`}
               onClick={() => setTypeFilter('events')}
             >
-              Events
+              {isAlbanian ? 'Ngjarjet' : 'Events'}
             </button>
           </div>
 
@@ -493,7 +582,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                 setTypeFilter('all');
               }}
             >
-              <RotateCcw size={13} /> Clear Filters
+              <RotateCcw size={13} /> {isAlbanian ? 'Pastro Filtrat' : 'Clear Filters'}
             </button>
           )}
         </div>
@@ -509,7 +598,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               className={`day-btn ${selectedDay === day ? 'active glass' : ''}`}
               onClick={() => setSelectedDay(day)}
             >
-              <span className="day-name">{day}</span>
+              <span className="day-name">{t(`schedule.${day.toLowerCase()}`, day)}</span>
               <span className="day-count-badge">{count}</span>
             </button>
           );
@@ -534,27 +623,27 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               </div>
               <h3>
                 {effectiveTab === 'my-schedule'
-                  ? `No classes scheduled in your personal timetable for ${selectedDay}`
-                  : `No scheduled periods found for ${selectedDay}`}
+                  ? (isAlbanian ? `Nuk ka lëndë të planifikuara në orarin tuaj për ${t('schedule.' + selectedDay.toLowerCase(), selectedDay)}` : `No classes scheduled in your personal timetable for ${selectedDay}`)
+                  : (isAlbanian ? `Nuk u gjetën orë të planifikuara për ${t('schedule.' + selectedDay.toLowerCase(), selectedDay)}` : `No scheduled periods found for ${selectedDay}`)}
               </h3>
               <p>
                 {effectiveTab === 'my-schedule'
-                  ? 'You have no enrolled classes or registered events for this day. Switch to "All Campus Schedule" to view what is happening campus-wide.'
-                  : 'Try adjusting your search criteria or switch to another day of the week.'}
+                  ? (isAlbanian ? 'Nuk keni lëndë të regjistruara apo ngjarje për këtë ditë. Kaloni te "I Gjithë Kampusi" për të parë orarin e përgjithshëm.' : 'You have no enrolled classes or registered events for this day. Switch to "All Campus Schedule" to view what is happening campus-wide.')
+                  : (isAlbanian ? 'Provoni të rregulloni filtrat e kërkimit ose kaloni në një ditë tjetër të javës.' : 'Try adjusting your search criteria or switch to another day of the week.')}
               </p>
               {effectiveTab === 'my-schedule' && userRole !== 'admin' ? (
                 <button 
                   className="btn-secondary glass btn-small"
                   onClick={() => setActiveTab('all-schedule')}
                 >
-                  Browse All Campus Schedule
+                  {isAlbanian ? 'Eksploro Orarin e Shkollës' : 'Browse All Campus Schedule'}
                 </button>
               ) : hasActiveFilters ? (
                 <button 
                   className="btn-secondary glass btn-small"
                   onClick={() => { setSearchTerm(''); setTeacherFilter('all'); setCategoryFilter('all'); setTypeFilter('all'); }}
                 >
-                  Reset Active Filters
+                  {isAlbanian ? 'Rivendos Filtrat' : 'Reset Active Filters'}
                 </button>
               ) : null}
             </div>
@@ -568,6 +657,8 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                   onClick={handleClassClick}
                   activeTab={effectiveTab}
                   userRole={userRole}
+                  onDeleteSlot={handleDeleteSlot}
+                  isAlbanian={isAlbanian}
                 />
               ))}
             </AnimatePresence>
@@ -588,8 +679,8 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>Add Period or Event</h3>
-                <p className="modal-subtitle">Schedule a class period, laboratory session, or campus event.</p>
+                <h3>{isAlbanian ? 'Shto Orë ose Ngjarje' : 'Add Period or Event'}</h3>
+                <p className="modal-subtitle">{isAlbanian ? 'Planifikoni një orë mësimore, sesion laboratori, ose ngjarje të shkollës.' : 'Schedule a class period, laboratory session, or campus event.'}</p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddSlotOpen(false)} aria-label="Close">
                   <X size={16} />
                 </button>
@@ -598,20 +689,20 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               <form onSubmit={handleAddSlotSubmit} className="modal-form">
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Day of Week</label>
+                    <label>{isAlbanian ? 'Dita e Javës' : 'Day of Week'}</label>
                     <select 
                       value={newSlotForm.day}
                       onChange={e => setNewSlotForm({ ...newSlotForm, day: e.target.value })}
                       className="custom-form-select"
                     >
                       {days.map(d => (
-                        <option key={d} value={d}>{d}</option>
+                        <option key={d} value={d}>{t(`schedule.${d.toLowerCase()}`, d)}</option>
                       ))}
                     </select>
                   </div>
 
                   <div className="input-group">
-                    <label>Time Slot</label>
+                    <label>{isAlbanian ? 'Orari' : 'Time Slot'}</label>
                     <input 
                       type="text" 
                       required 
@@ -623,11 +714,11 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                 </div>
 
                 <div className="input-group">
-                  <label>Subject / Event Title</label>
+                  <label>{isAlbanian ? 'Titulli i Lëndës / Ngjarjes' : 'Subject / Event Title'}</label>
                   <input 
                     type="text" 
                     required 
-                    placeholder="e.g. Advanced Calculus, Robotics Workshop"
+                    placeholder={isAlbanian ? 'p.sh. Kalkulus i Avancuar, Punëtori Robotike' : 'e.g. Advanced Calculus, Robotics Workshop'}
                     value={newSlotForm.subject}
                     onChange={e => setNewSlotForm({ ...newSlotForm, subject: e.target.value })}
                   />
@@ -635,7 +726,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label htmlFor="schedule-class-label">Class</label>
+                    <label htmlFor="schedule-class-label">{isAlbanian ? 'Klasa' : 'Class'}</label>
                     <input
                       id="schedule-class-label"
                       type="text"
@@ -646,7 +737,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                     />
                   </div>
                   <div className="input-group">
-                    <label htmlFor="schedule-period">Period</label>
+                    <label htmlFor="schedule-period">{isAlbanian ? 'Ora Mësimore' : 'Period'}</label>
                     <input
                       id="schedule-period"
                       type="number"
@@ -661,7 +752,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                 </div>
 
                 <div className="input-group">
-                  <label htmlFor="schedule-curriculum-subject">Curriculum subject for lesson planning</label>
+                  <label htmlFor="schedule-curriculum-subject">{isAlbanian ? 'Lënda kurrikulare për planin mësimor' : 'Curriculum subject for lesson planning'}</label>
                   <select
                     id="schedule-curriculum-subject"
                     className="custom-form-select"
@@ -669,7 +760,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                     value={newSlotForm.curriculumSubject}
                     onChange={e => setNewSlotForm({ ...newSlotForm, curriculumSubject: e.target.value })}
                   >
-                    <option value="">Select subject</option>
+                    <option value="">{isAlbanian ? 'Zgjidh lëndën' : 'Select subject'}</option>
                     {SUBJECTS.map(subject => (
                       <option key={subject.name} value={subject.name}>{translateCatalogValue(lessonLanguage, subject.name)}</option>
                     ))}
@@ -678,21 +769,21 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Instructor / Host</label>
+                    <label>{isAlbanian ? 'Mësimdhënësi / Organizatori' : 'Instructor / Host'}</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. Dr. Sarah Smith"
+                      placeholder={isAlbanian ? 'p.sh. Dr. Sarah Smith' : 'e.g. Dr. Sarah Smith'}
                       value={newSlotForm.teacher}
                       onChange={e => setNewSlotForm({ ...newSlotForm, teacher: e.target.value })}
                     />
                   </div>
 
                   <div className="input-group">
-                    <label>Room / Location</label>
+                    <label>{isAlbanian ? 'Salla / Lokacioni' : 'Room / Location'}</label>
                     <input 
                       type="text" 
                       required
-                      placeholder="e.g. Room 302, Main Gym"
+                      placeholder={isAlbanian ? 'p.sh. Salla 302, Palestra' : 'e.g. Room 302, Main Gym'}
                       value={newSlotForm.room}
                       onChange={e => setNewSlotForm({ ...newSlotForm, room: e.target.value })}
                     />
@@ -701,35 +792,35 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Category</label>
+                    <label>{isAlbanian ? 'Kategoria' : 'Category'}</label>
                     <select 
                       value={newSlotForm.subjectCategory}
                       onChange={e => setNewSlotForm({ ...newSlotForm, subjectCategory: e.target.value })}
                       className="custom-form-select"
                     >
-                      <option value="Math">Mathematics</option>
-                      <option value="Science">Science & Labs</option>
-                      <option value="Humanities">Humanities & Languages</option>
-                      <option value="Technology">Technology & CS</option>
-                      <option value="Arts">Arts & Music</option>
-                      <option value="Athletics">Athletics & PE</option>
-                      <option value="Event">Campus Event</option>
+                      <option value="Math">{isAlbanian ? 'Matematikë' : 'Mathematics'}</option>
+                      <option value="Science">{isAlbanian ? 'Shkencë & Laboratore' : 'Science & Labs'}</option>
+                      <option value="Humanities">{isAlbanian ? 'Shkenca Shoqërore & Gjuhë' : 'Humanities & Languages'}</option>
+                      <option value="Technology">{isAlbanian ? 'Teknologji & TIK' : 'Technology & CS'}</option>
+                      <option value="Arts">{isAlbanian ? 'Art & Muzikë' : 'Arts & Music'}</option>
+                      <option value="Athletics">{isAlbanian ? 'Edukim Fizik & Sport' : 'Athletics & PE'}</option>
+                      <option value="Event">{isAlbanian ? 'Ngjarje Shkollore' : 'Campus Event'}</option>
                     </select>
                   </div>
 
                   <div className="input-group">
-                    <label>Color Accent</label>
+                    <label>{isAlbanian ? 'Ngjyra e Theksit' : 'Color Accent'}</label>
                     <select 
                       value={newSlotForm.color}
                       onChange={e => setNewSlotForm({ ...newSlotForm, color: e.target.value })}
                       className="custom-form-select"
                     >
-                      <option value="--primary">Primary Theme (Purple)</option>
-                      <option value="--accent">Accent Violet</option>
-                      <option value="--chart-1">Chart Rose</option>
-                      <option value="--chart-2">Chart Indigo</option>
-                      <option value="--chart-3">Chart Cyan</option>
-                      <option value="--mood-happy">Emerald Green</option>
+                      <option value="--primary">{isAlbanian ? 'Tema Kryesore (Vjollcë)' : 'Primary Theme (Purple)'}</option>
+                      <option value="--accent">{isAlbanian ? 'Vjollcë e Çelët' : 'Accent Violet'}</option>
+                      <option value="--chart-1">{isAlbanian ? 'Rozë' : 'Chart Rose'}</option>
+                      <option value="--chart-2">{isAlbanian ? 'Indigo' : 'Chart Indigo'}</option>
+                      <option value="--chart-3">{isAlbanian ? 'Cian' : 'Chart Cyan'}</option>
+                      <option value="--mood-happy">{isAlbanian ? 'E Gjelbër Smerald' : 'Emerald Green'}</option>
                     </select>
                   </div>
                 </div>
@@ -744,17 +835,17 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                       style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                     />
                     <label htmlFor="enrolledCheck" style={{ cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>
-                      {userRole === 'teacher' ? 'Include in personal teaching timetable' : 'Include in personal student timetable'}
+                      {userRole === 'teacher' ? (isAlbanian ? 'Përfshi në orarin tim mësimor' : 'Include in personal teaching timetable') : (isAlbanian ? 'Përfshi në orarin tim personal' : 'Include in personal student timetable')}
                     </label>
                   </div>
                 )}
 
                 <div className="modal-footer-actions">
                   <button type="button" className="btn-secondary" onClick={() => setIsAddSlotOpen(false)}>
-                    Cancel
+                    {isAlbanian ? 'Anulo' : 'Cancel'}
                   </button>
                   <button type="submit" className="btn-primary">
-                    Save to Schedule
+                    {isAlbanian ? 'Ruaj në Orar' : 'Save to Schedule'}
                   </button>
                 </div>
               </form>

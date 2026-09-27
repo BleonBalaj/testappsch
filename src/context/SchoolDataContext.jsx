@@ -131,9 +131,28 @@ export const SchoolDataProvider = ({ children }) => {
       if (schoolSnap?.exists()) {
         const schoolData = schoolSnap.data();
         const creatorUid = schoolData?.creatorUid;
+
+        const computeAdminName = (currentDocName, email) => {
+          if (currentDocName && currentDocName.toLowerCase() !== 'administrator' && currentDocName.toLowerCase() !== 'admin') {
+            return currentDocName;
+          }
+          if (currentUser?.uid === creatorUid && currentUser?.displayName) {
+            return currentUser.displayName;
+          }
+          if (schoolData.creatorName && schoolData.creatorName.toLowerCase() !== 'administrator' && schoolData.creatorName.toLowerCase() !== 'admin') {
+            return schoolData.creatorName;
+          }
+          const userEmail = email || (currentUser?.uid === creatorUid ? currentUser?.email : schoolData.creatorEmail) || '';
+          if (userEmail) {
+            const prefix = userEmail.split('@')[0];
+            return prefix.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          }
+          return 'Administrator';
+        };
+
         if (creatorUid && !staff.some(s => String(s.id) === String(creatorUid))) {
-          const adminName = schoolData.creatorName || (currentUser?.uid === creatorUid ? (currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Administrator') : 'Administrator');
           const adminEmail = schoolData.creatorEmail || (currentUser?.uid === creatorUid ? currentUser?.email : '');
+          const adminName = computeAdminName(null, adminEmail);
           const adminStaffDoc = {
             id: creatorUid,
             staffId: 'STF-001',
@@ -161,6 +180,21 @@ export const SchoolDataProvider = ({ children }) => {
             console.warn('Could not auto-create admin staff doc:', e.message);
             // Fall through and show what we have
             staff.push({ ...adminStaffDoc, createdAt: null });
+          }
+        } else {
+          // If admin doc already exists in staff, check if name is generic 'Administrator' and heal it
+          for (const s of staff) {
+            if (s.roleId === 'admin' || String(s.id) === String(creatorUid)) {
+              if (!s.name || s.name.toLowerCase() === 'administrator' || s.name.toLowerCase() === 'admin') {
+                const betterName = computeAdminName(s.name, s.email);
+                if (betterName && betterName.toLowerCase() !== 'administrator' && betterName.toLowerCase() !== 'admin') {
+                  s.name = betterName;
+                  try {
+                    updateDoc(doc(db, 'schools', activeSchoolId, 'staff', s.id), { name: betterName });
+                  } catch (e) {}
+                }
+              }
+            }
           }
         }
       }
@@ -247,7 +281,6 @@ export const SchoolDataProvider = ({ children }) => {
       ...newStaff,
       id: staffId,
       staffId: newStaff.staffId || `STF-${Math.floor(100 + Math.random() * 900)}`,
-      rating: newStaff.rating || 5.0,
       status: newStaff.status || 'active',
       joinDate: newStaff.joinDate || new Date().toISOString().split('T')[0],
       createdAt: serverTimestamp()

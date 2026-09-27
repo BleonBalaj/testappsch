@@ -8,6 +8,7 @@ import {
 import { Avatar } from '../components/Avatar';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Leaderboard.css';
 
 export const STUDENTS_DATABASE = [];
@@ -81,6 +82,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
   const isStudent = userRole === 'student';
   const { studentsList = [] } = useSchoolData();
   const { currentUser } = useAuth();
+  const { t, isAlbanian } = useLanguage();
   const [activeFilter, setActiveFilter] = useState('overall');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
@@ -229,12 +231,12 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-              Academic Leaderboard
+              {t('leaderboard.title', 'Academic Leaderboard')}
               <Trophy size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
-            <span className="count-pill glass">Season 2026</span>
+            <span className="count-pill glass">{t('leaderboard.season', 'Season 2026')}</span>
           </div>
-          <p>Celebrating high academic achievements, subject mastery, and class excellence.</p>
+          <p>{t('leaderboard.subtitle', 'Celebrating high academic achievements, subject mastery, and class excellence.')}</p>
         </div>
       </header>
 
@@ -250,7 +252,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
           >
             <div className="trigger-left">
               <CurrentIcon size={16} className="trigger-icon" />
-              <span className="trigger-label-muted">Filter:</span>
+              <span className="trigger-label-muted">{t('common.filter', 'Filter')}:</span>
               <strong className="trigger-value">{currentOption.label}</strong>
             </div>
             <ChevronDown size={16} className={`chevron-arrow ${isDropdownOpen ? 'open' : ''}`} />
@@ -360,17 +362,17 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
           {/* Rankings List */}
           <section className="rankings-list glass">
             <div className="list-header">
-              <span>Rank</span>
-              <span>Student & Distinction</span>
-              <span>Class</span>
-              <span>Trend</span>
-              <span>Points</span>
+              <span>{t('leaderboard.rank', 'Rank')}</span>
+              <span>{t('leaderboard.distinction', 'Student & Distinction')}</span>
+              <span>{t('leaderboard.class', 'Class')}</span>
+              <span>{t('leaderboard.trend', 'Trend')}</span>
+              <span>{t('leaderboard.points', 'Points')}</span>
             </div>
             <div className="list-body">
               <AnimatePresence mode="wait">
                 {rest.length === 0 && filteredRankings.length <= 3 ? (
                   <div className="empty-rankings-note">
-                    <span>All top enrolled students are featured on the podium above! Click any student to view their profile. 🌟</span>
+                    <span>{t('leaderboard.allTopNote', 'All top enrolled students are featured on the podium above! Click any student to view their profile. 🌟')}</span>
                   </div>
                 ) : (
                   rest.map((student, index) => {
@@ -385,7 +387,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                         transition={{ duration: 0.2, delay: index * 0.04 }}
                         onClick={() => handleStudentClick(student)}
                         style={{ cursor: isStudent ? 'default' : 'pointer' }}
-                        title={isCurrentUser ? 'Your Ranking Profile' : (isStudent ? `${student.name}'s Academic Standing` : `View ${student.name}'s Profile`)}
+                        title={isCurrentUser ? (isAlbanian ? 'Profili Juaj në Renditje' : 'Your Ranking Profile') : (isStudent ? `${student.name}'s Academic Standing` : `View ${student.name}'s Profile`)}
                       >
                         <div className="rank-col">#{student.rank}</div>
                         <div className="student-col">
@@ -395,7 +397,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                           <div className="student-info-col">
                             <div className="student-name-row">
                               <span className="student-name">{student.name}</span>
-                              {isCurrentUser && <span className="you-pill-badge">You</span>}
+                              {isCurrentUser && <span className="you-pill-badge">{t('leaderboard.you', 'You')}</span>}
                               {!isStudent && <ArrowUpRight size={13} className="student-view-icon" />}
                             </div>
                             {student.badge && <span className="student-badge-pill">{student.badge}</span>}

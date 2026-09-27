@@ -36,10 +36,28 @@
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
+.logo-text-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
 .logo-text {
-  font-size: 1.5rem;
+  font-size: 1.15rem;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.logo-author {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  letter-spacing: 0.35px;
+  margin-top: 1px;
+  white-space: nowrap;
 }
 
 .collapse-btn {

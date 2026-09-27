@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Classes.css';
 
 export const INITIAL_CLASSES = [];
@@ -96,6 +97,7 @@ const ClassCard = ({ classInfo, onClick, userRole = 'student' }) => {
 const Classes = ({ onClassSelect, userRole = 'student' }) => {
   const { staffList, classesList = [], addClass } = useSchoolData();
   const { currentUser } = useAuth();
+  const { language, t, isAlbanian } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -120,6 +122,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
   const [newClassRoom, setNewClassRoom] = useState('Room 301');
   const [newClassSchedule, setNewClassSchedule] = useState('Mon, Wed 10:00 AM');
   const [newClassColor, setNewClassColor] = useState('--primary');
+  const [formError, setFormError] = useState('');
 
   const departments = ['All', 'Science', 'Mathematics', 'Humanities', 'Technology'];
 
@@ -157,20 +160,29 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
 
   const handleCreateClass = async (e) => {
     e.preventDefault();
-    if (!newClassName.trim() || !newClassCode.trim()) return;
+    if (!newClassName.trim()) {
+      setFormError(isAlbanian ? 'Ju lutem shënoni titullin e kursit.' : 'Please enter the course title.');
+      return;
+    }
+    if (!newClassCode.trim()) {
+      setFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm (p.sh. CS-101, CHEM-302).' : 'Course code is required (e.g. CS-101, CHEM-302).');
+      return;
+    }
+
+    setFormError('');
 
     const newClass = {
       name: newClassName.trim(),
       code: newClassCode.trim().toUpperCase(),
       department: newClassDept,
-      teacher: newClassTeacher || staffList[0]?.name || 'Instructor',
-      room: newClassRoom.trim(),
-      schedule: newClassSchedule.trim(),
-      color: newClassColor,
+      teacher: newClassTeacher || staffList[0]?.name || currentUser?.displayName || 'Lead Instructor',
+      room: newClassRoom.trim() || 'Room 101',
+      schedule: newClassSchedule.trim() || 'Mon, Wed 10:00 AM',
+      color: newClassColor || '--primary',
       students: 0,
       progress: 0,
-      enrolled: false,
-      taughtByMe: userRole === 'teacher'
+      enrolled: true,
+      taughtByMe: true
     };
 
     if (addClass) {
@@ -202,22 +214,14 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-              {userRole === 'student' ? 'Courses & Learning' : 'Courses & Classes'}
+              {t('classes.title')}
               <Book size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
             <span className="count-pill glass">
-              {userRole === 'admin' 
-                ? `${filteredClasses.length} Courses Catalog` 
-                : (effectiveTab === 'my-classes' ? `${filteredClasses.length} My Classes` : `${classesList.length} Total`)}
+              {`${filteredClasses.length} ${t('common.total')}`}
             </span>
           </div>
-          <p>
-            {userRole === 'student' 
-              ? 'View your enrolled subjects, course grades, syllabus materials, and class assignments.'
-              : userRole === 'teacher'
-              ? 'Manage your assigned teaching classes, rosters, curriculum materials, and student submissions.'
-              : 'School-wide curriculum management, course creation, instructor assignments, and catalog governance.'}
-          </p>
+          <p>{t('classes.subtitle')}</p>
         </div>
         <div className="header-actions">
           <button type="button" className="btn-secondary glass" onClick={handleExportClasses}>
@@ -227,7 +231,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
           {userRole !== 'student' && (
             <button type="button" className="btn-primary" onClick={() => setIsAddModalOpen(true)}>
               <Plus size={18} />
-              Add Course
+              {t('classes.addClass')}
             </button>
           )}
         </div>
@@ -297,7 +301,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
           <Search size={17} className="search-icon" />
           <input 
             type="text" 
-            placeholder={effectiveTab === 'my-classes' ? "Search within my classes..." : "Search all classes by title, code, teacher..."}
+            placeholder={t('classes.search')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -377,84 +381,121 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>Add New Course</h3>
-                <p className="modal-subtitle">Create a curriculum subject and assign a lead instructor.</p>
+                <h3>{isAlbanian ? 'Shto Kurs të Ri' : 'Add New Course'}</h3>
+                <p className="modal-subtitle">
+                  {isAlbanian ? 'Krijoni një lëndë mësimore dhe caktoni mësimdhënësin kryesor.' : 'Create a curriculum subject and assign a lead instructor.'}
+                </p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddModalOpen(false)} aria-label="Close">
                   <X size={16} />
                 </button>
               </div>
 
               <form onSubmit={handleCreateClass} className="modal-form">
+                {formError && (
+                  <div style={{
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '10px',
+                    background: 'hsla(var(--destructive), 0.15)',
+                    border: '1px solid hsla(var(--destructive), 0.35)',
+                    color: 'hsl(var(--destructive))',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    marginBottom: '0.5rem'
+                  }}>
+                    {formError}
+                  </div>
+                )}
+
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Course Title</label>
+                    <label>
+                      {isAlbanian ? 'Titulli i Kursit' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                    </label>
                     <input 
                       type="text" 
                       required 
-                      placeholder="e.g. Organic Chemistry II"
+                      placeholder={isAlbanian ? 'p.sh. Kimi Organike II' : 'e.g. Organic Chemistry II'}
                       value={newClassName}
-                      onChange={(e) => setNewClassName(e.target.value)}
+                      onChange={(e) => { setNewClassName(e.target.value); if (formError) setFormError(''); }}
                     />
                   </div>
 
                   <div className="input-group">
-                    <label>Course Code</label>
+                    <label>
+                      {isAlbanian ? 'Kodi i Kursit' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'hsl(var(--primary))', marginLeft: '0.35rem' }}>
+                        ({isAlbanian ? 'I Detyrueshëm' : 'Required'})
+                      </span>
+                    </label>
                     <input 
                       type="text" 
                       required 
-                      placeholder="e.g. CHEM-302"
+                      placeholder="e.g. CHEM-302, MATH-101"
                       value={newClassCode}
-                      onChange={(e) => setNewClassCode(e.target.value)}
+                      onChange={(e) => { setNewClassCode(e.target.value); if (formError) setFormError(''); }}
                     />
+                    <small style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.73rem', color: 'hsl(var(--muted-foreground))' }}>
+                      {isAlbanian ? 'Kodi unik për orar dhe regjistër (p.sh. CS-101)' : 'Unique identifier for schedule and roster (e.g. CS-101)'}
+                    </small>
                   </div>
                 </div>
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Department</label>
+                    <label>
+                      {isAlbanian ? 'Departamenti' : 'Department'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                    </label>
                     <select 
                       value={newClassDept}
                       onChange={(e) => setNewClassDept(e.target.value)}
                       className="custom-form-select"
                     >
-                      <option value="Science">Science & Labs</option>
-                      <option value="Mathematics">Mathematics</option>
-                      <option value="Humanities">Humanities & Languages</option>
-                      <option value="Technology">Technology & Computer Science</option>
-                      <option value="Arts">Fine Arts & Music</option>
+                      <option value="Science">{isAlbanian ? 'Shkenca & Laboratore' : 'Science & Labs'}</option>
+                      <option value="Mathematics">{isAlbanian ? 'Matematikë' : 'Mathematics'}</option>
+                      <option value="Humanities">{isAlbanian ? 'Shkenca Shoqërore & Gjuhë' : 'Humanities & Languages'}</option>
+                      <option value="Technology">{isAlbanian ? 'Teknologji & Informatikë' : 'Technology & Computer Science'}</option>
+                      <option value="Arts">{isAlbanian ? 'Arte & Muzikë' : 'Fine Arts & Music'}</option>
                     </select>
                   </div>
 
                   <div className="input-group">
-                    <label>Lead Instructor</label>
+                    <label>
+                      {isAlbanian ? 'Mësimdhënësi Udhëheqës' : 'Lead Instructor'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                    </label>
                     <select 
                       value={newClassTeacher}
                       onChange={(e) => setNewClassTeacher(e.target.value)}
                       className="custom-form-select"
                     >
-                      {staffList.map(s => (
-                        <option key={s.id} value={s.name}>{s.name} ({s.department || s.roleName || 'Faculty'})</option>
-                      ))}
+                      {staffList.length > 0 ? (
+                        staffList.map(s => (
+                          <option key={s.id} value={s.name}>{s.name} ({s.department || s.roleName || 'Faculty'})</option>
+                        ))
+                      ) : (
+                        <option value={currentUser?.displayName || 'Lead Instructor'}>
+                          {currentUser?.displayName || 'Lead Instructor'} (Instructor)
+                        </option>
+                      )}
                     </select>
                   </div>
                 </div>
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Assigned Room</label>
+                    <label>{isAlbanian ? 'Salla / Dhoma e Caktuar' : 'Assigned Room'}</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. Chemistry Lab 3"
+                      placeholder={isAlbanian ? 'p.sh. Salla 104' : 'e.g. Chemistry Lab 3'}
                       value={newClassRoom}
                       onChange={(e) => setNewClassRoom(e.target.value)}
                     />
                   </div>
 
                   <div className="input-group">
-                    <label>Schedule & Time</label>
+                    <label>{isAlbanian ? 'Orari & Dita' : 'Schedule & Time'}</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. Tue, Thu 09:30 AM"
+                      placeholder={isAlbanian ? 'p.sh. E Martë, E Enjte 09:30' : 'e.g. Tue, Thu 09:30 AM'}
                       value={newClassSchedule}
                       onChange={(e) => setNewClassSchedule(e.target.value)}
                     />
@@ -462,7 +503,7 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
                 </div>
 
                 <div className="input-group">
-                  <label>Card Color Accent</label>
+                  <label>{isAlbanian ? 'Ngjyra e Kartelës' : 'Card Color Accent'}</label>
                   <div className="swatch-picker-row">
                     {SWATCH_OPTIONS.map(swatch => (
                       <button
@@ -480,11 +521,11 @@ const Classes = ({ onClassSelect, userRole = 'student' }) => {
                 </div>
 
                 <div className="modal-footer-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setIsAddModalOpen(false)}>
-                    Cancel
+                  <button type="button" className="btn-secondary" onClick={() => { setIsAddModalOpen(false); setFormError(''); }}>
+                    {isAlbanian ? 'Anulo' : 'Cancel'}
                   </button>
-                  <button type="submit" className="btn-primary" disabled={!newClassName.trim() || !newClassCode.trim()}>
-                    Create Course
+                  <button type="submit" className="btn-primary">
+                    {isAlbanian ? 'Krijo Kursin' : 'Create Course'}
                   </button>
                 </div>
               </form>

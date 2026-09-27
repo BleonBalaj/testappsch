@@ -5,11 +5,12 @@ import {
   X, Check, Download, Sparkles, Filter 
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Events.css';
 
 const INITIAL_EVENTS = [];
 
-const EventCard = ({ event, onToggleStar }) => (
+const EventCard = ({ event, onToggleStar, t, isAlbanian }) => (
   <motion.div 
     className="event-card-large glass bouncy"
     initial={{ opacity: 0, y: 20 }}
@@ -19,7 +20,7 @@ const EventCard = ({ event, onToggleStar }) => (
     style={{ borderLeft: `6px solid hsl(var(${event.color || '--primary'}))` }}
   >
     <div className="event-date-box" style={{ background: `hsla(var(${event.color || '--primary'}), 0.15)`, color: `hsl(var(${event.color || '--primary'}))` }}>
-      <span className="event-month">{new Date(event.date || Date.now()).toLocaleString('default', { month: 'short' })}</span>
+      <span className="event-month">{new Date(event.date || Date.now()).toLocaleString(isAlbanian ? 'sq-AL' : 'default', { month: 'short' })}</span>
       <span className="event-day">{new Date(event.date || Date.now()).getDate()}</span>
     </div>
     
@@ -27,7 +28,13 @@ const EventCard = ({ event, onToggleStar }) => (
       <div className="event-header">
         <h3>{event.title}</h3>
         <span className="event-type-badge" style={{ background: `hsla(var(${event.color || '--primary'}), 0.2)`, color: `hsl(var(${event.color || '--primary'}))` }}>
-          {event.type}
+          {isAlbanian ? (
+            event.type === 'Academic' ? 'Akademike' :
+            event.type === 'Sports' ? 'Sport' :
+            event.type === 'Arts' ? 'Arte' :
+            event.type === 'Staff' ? 'Stafi' :
+            event.type === 'Meeting' ? 'Mbledhje' : event.type
+          ) : event.type}
         </span>
       </div>
       
@@ -42,7 +49,7 @@ const EventCard = ({ event, onToggleStar }) => (
         </div>
         <div className="meta-info">
           <Users size={16} />
-          <span>{event.attendees || 0} Registered</span>
+          <span>{event.attendees || 0} {t('events.registered', 'Registered')}</span>
         </div>
       </div>
     </div>
@@ -51,17 +58,18 @@ const EventCard = ({ event, onToggleStar }) => (
       <button 
         className={`icon-btn-secondary bouncy ${event.starred ? 'starred' : ''}`}
         onClick={() => onToggleStar(event.id)}
-        title={event.starred ? 'Starred Event' : 'Star Event'}
+        title={event.starred ? t('events.starred', 'Starred Event') : 'Star Event'}
       >
         <Star size={18} fill={event.starred ? 'hsl(var(--mood-neutral))' : 'none'} color={event.starred ? 'hsl(var(--mood-neutral))' : 'currentColor'} />
       </button>
-      <button className="btn-secondary glass btn-small">Details</button>
+      <button className="btn-secondary glass btn-small">{t('events.details', 'Details')}</button>
     </div>
   </motion.div>
 );
 
 const Events = ({ userRole = 'student' }) => {
   const { eventsList = [], addEvent, updateEvent } = useSchoolData();
+  const { t, isAlbanian } = useLanguage();
   const [filter, setFilter] = useState('All');
   const [isNewEventOpen, setIsNewEventOpen] = useState(false);
 
@@ -79,6 +87,19 @@ const Events = ({ userRole = 'student' }) => {
   const types = userRole === 'student' 
     ? ['All', 'Academic', 'Sports', 'Arts', 'Starred'] 
     : ['All', 'Academic', 'Sports', 'Arts', 'Staff', 'Meeting'];
+
+  const getFilterLabel = (key) => {
+    switch(key) {
+      case 'All': return t('common.all', 'All');
+      case 'Academic': return t('events.academic', 'Academic');
+      case 'Sports': return t('events.sports', 'Sports');
+      case 'Arts': return t('events.arts', 'Arts');
+      case 'Starred': return t('events.starred', 'Starred');
+      case 'Staff': return t('events.staff', 'Staff');
+      case 'Meeting': return t('events.meeting', 'Meeting');
+      default: return key;
+    }
+  };
 
   const filteredEvents = filter === 'All' 
     ? (userRole === 'student' ? eventsList.filter(e => e.type !== 'Staff') : eventsList)
@@ -140,27 +161,27 @@ const Events = ({ userRole = 'student' }) => {
         <div className="header-left">
           <div className="title-group">
             <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-              {userRole === 'student' ? 'Campus & Academic Events' : 'Campus Events Calendar'}
+              {t('events.title', userRole === 'student' ? 'Campus & Academic Events' : 'Campus Events Calendar')}
               <CalendarIcon size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
-            <span className="count-pill glass">{filteredEvents.length} Events</span>
+            <span className="count-pill glass">{filteredEvents.length} {t('events.title', 'Events')}</span>
           </div>
           <p>
-            {userRole === 'student'
+            {t('events.subtitle', userRole === 'student'
               ? 'Stay informed with school-wide assemblies, academic dates, science fairs, and extracurriculars.'
-              : 'School-wide events, assemblies, holidays, and extracurricular schedules.'}
+              : 'School-wide events, assemblies, holidays, and extracurricular schedules.')}
           </p>
         </div>
 
         <div className="header-actions">
           <button className="btn-secondary glass" onClick={handleExportEvents} title="Export Calendar">
             <Download size={18} />
-            Export Events
+            {t('events.export', 'Export Events')}
           </button>
           {userRole !== 'student' && (
             <button className="btn-primary" onClick={() => setIsNewEventOpen(true)}>
               <Plus size={18} />
-              New Event
+              {t('events.addEvent', 'Schedule Event')}
             </button>
           )}
         </div>
@@ -168,13 +189,13 @@ const Events = ({ userRole = 'student' }) => {
 
       <div className="events-controls glass">
         <div className="filter-scroll">
-          {types.map(t => (
+          {types.map(filt => (
             <button 
-              key={t}
-              className={`filter-pill ${filter === t ? 'active' : ''}`}
-              onClick={() => setFilter(t)}
+              key={filt}
+              className={`filter-pill ${filter === filt ? 'active' : ''}`}
+              onClick={() => setFilter(filt)}
             >
-              {t} {t === 'All' ? `(${eventsList.length})` : `(${eventsList.filter(e => e.type === t).length})`}
+              {getFilterLabel(filt)} {filt === 'All' ? `(${eventsList.length})` : `(${eventsList.filter(e => e.type === filt).length})`}
             </button>
           ))}
         </div>
@@ -183,7 +204,7 @@ const Events = ({ userRole = 'student' }) => {
       <div className="events-feed">
         <AnimatePresence>
           {filteredEvents.map(event => (
-            <EventCard key={event.id} event={event} onToggleStar={toggleStar} />
+            <EventCard key={event.id} event={event} onToggleStar={toggleStar} t={t} isAlbanian={isAlbanian} />
           ))}
           {filteredEvents.length === 0 && (
             <motion.div 
@@ -192,8 +213,8 @@ const Events = ({ userRole = 'student' }) => {
               animate={{ opacity: 1 }}
             >
               <CalendarIcon size={48} color="hsl(var(--muted-foreground))" />
-              <h3>No events found</h3>
-              <p>There are no events scheduled for this category.</p>
+              <h3>{t('common.noData', 'No events found')}</h3>
+              <p>{isAlbanian ? 'Nuk ka ngjarje të planifikuara për këtë kategori.' : 'There are no events scheduled for this category.'}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -212,8 +233,8 @@ const Events = ({ userRole = 'student' }) => {
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>Create Campus Event</h3>
-                <p className="modal-subtitle">Schedule a school assembly, exam, sports match, or club activity.</p>
+                <h3>{t('events.addEvent', 'Schedule Event')}</h3>
+                <p className="modal-subtitle">{isAlbanian ? 'Planifikoni mbledhje shkollore, provime, ndeshje sportive apo aktivitete klubesh.' : 'Schedule a school assembly, exam, sports match, or club activity.'}</p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsNewEventOpen(false)} aria-label="Close">
                   <X size={16} />
                 </button>
@@ -221,11 +242,11 @@ const Events = ({ userRole = 'student' }) => {
 
               <form onSubmit={handleAddEventSubmit} className="modal-form">
                 <div className="input-group">
-                  <label>Event Title</label>
+                  <label>{isAlbanian ? 'Titulli i Ngjarjes' : 'Event Title'}</label>
                   <input 
                     type="text" 
                     required 
-                    placeholder="e.g. Annual STEM Expo, Basketball Finals"
+                    placeholder={isAlbanian ? 'p.sh. Panairi Vjetor STEM, Finalet e Basketbollit' : 'e.g. Annual STEM Expo, Basketball Finals'}
                     value={eventForm.title}
                     onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
                   />
@@ -233,7 +254,7 @@ const Events = ({ userRole = 'student' }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Event Date</label>
+                    <label>{t('common.date', 'Event Date')}</label>
                     <input 
                       type="date" 
                       required 
@@ -243,7 +264,7 @@ const Events = ({ userRole = 'student' }) => {
                   </div>
 
                   <div className="input-group">
-                    <label>Time Interval</label>
+                    <label>{t('common.time', 'Time Interval')}</label>
                     <input 
                       type="text" 
                       required 
@@ -256,35 +277,35 @@ const Events = ({ userRole = 'student' }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Location / Venue</label>
+                    <label>{isAlbanian ? 'Lokacioni / Salla' : 'Location / Venue'}</label>
                     <input 
                       type="text" 
                       required 
-                      placeholder="e.g. Main Auditorium, Gymnasium"
+                      placeholder={isAlbanian ? 'p.sh. Amfiteatri Kryesor, Salla e Sporteve' : 'e.g. Main Auditorium, Gymnasium'}
                       value={eventForm.location}
                       onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
                     />
                   </div>
 
                   <div className="input-group">
-                    <label>Event Category</label>
+                    <label>{isAlbanian ? 'Kategoria' : 'Event Category'}</label>
                     <select 
                       value={eventForm.type}
                       onChange={e => setEventForm({ ...eventForm, type: e.target.value })}
                       className="custom-form-select"
                     >
-                      <option value="Academic">Academic</option>
-                      <option value="Staff">Staff</option>
-                      <option value="Meeting">Meeting</option>
-                      <option value="Sports">Sports</option>
-                      <option value="Arts">Arts & Culture</option>
+                      <option value="Academic">{t('events.academic', 'Academic')}</option>
+                      <option value="Staff">{t('events.staff', 'Staff')}</option>
+                      <option value="Meeting">{t('events.meeting', 'Meeting')}</option>
+                      <option value="Sports">{t('events.sports', 'Sports')}</option>
+                      <option value="Arts">{t('events.arts', 'Arts & Culture')}</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>Expected Attendees</label>
+                    <label>{isAlbanian ? 'Pjesëmarrës të Pritur' : 'Expected Attendees'}</label>
                     <input 
                       type="number" 
                       min="1"
@@ -295,28 +316,28 @@ const Events = ({ userRole = 'student' }) => {
                   </div>
 
                   <div className="input-group">
-                    <label>Badge Color Accent</label>
+                    <label>{isAlbanian ? 'Ngjyra e Shenjës' : 'Badge Color Accent'}</label>
                     <select 
                       value={eventForm.color}
                       onChange={e => setEventForm({ ...eventForm, color: e.target.value })}
                       className="custom-form-select"
                     >
-                      <option value="--primary">Primary (Purple)</option>
-                      <option value="--accent">Accent (Violet)</option>
-                      <option value="--chart-1">Rose Pink</option>
-                      <option value="--chart-2">Indigo Blue</option>
-                      <option value="--chart-4">Amber Orange</option>
-                      <option value="--mood-happy">Emerald Green</option>
+                      <option value="--primary">{isAlbanian ? 'Vjollcë Kryesore' : 'Primary (Purple)'}</option>
+                      <option value="--accent">{isAlbanian ? 'Vjollcë e Çelët' : 'Accent (Violet)'}</option>
+                      <option value="--chart-1">{isAlbanian ? 'Rozë' : 'Rose Pink'}</option>
+                      <option value="--chart-2">{isAlbanian ? 'Kaltër Indigo' : 'Indigo Blue'}</option>
+                      <option value="--chart-4">{isAlbanian ? 'Portokalli e Artë' : 'Amber Orange'}</option>
+                      <option value="--mood-happy">{isAlbanian ? 'E Gjelbër Smerald' : 'Emerald Green'}</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="modal-footer-actions">
                   <button type="button" className="btn-secondary" onClick={() => setIsNewEventOpen(false)}>
-                    Cancel
+                    {t('common.cancel', 'Cancel')}
                   </button>
                   <button type="submit" className="btn-primary">
-                    Publish Event
+                    {isAlbanian ? 'Publiko Ngjarjen' : 'Publish Event'}
                   </button>
                 </div>
               </form>

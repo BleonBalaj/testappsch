@@ -35,6 +35,8 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
     updateGlobalPreferences 
   } = useAuth();
 
+  // Temporarily hide sign up (toggle to true when ready to re-enable)
+  const SHOW_SIGNUP = false;
   // Active tab: 'signin' or 'signup'
   const [activeTab, setActiveTab] = useState('signin');
   const [email, setEmail] = useState('');
@@ -129,7 +131,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setErrorMessage('Incorrect password. Please verify your credentials or recover your password.');
       } else if (err.code === 'auth/user-not-found') {
-        setErrorMessage('Account not found. Please verify your email or switch to Sign Up.');
+        setErrorMessage(SHOW_SIGNUP ? 'Account not found. Please verify your email or switch to Sign Up.' : 'Account not found. Please verify your email address.');
       } else if (err.code === 'auth/too-many-requests') {
         setErrorMessage('Access temporarily blocked due to multiple failed attempts. Please reset password or wait a moment.');
       } else {
@@ -367,43 +369,45 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
             <header className="auth-card-header">
               <h1 className="login-welcome-cursive">Welcome</h1>
               <p className="auth-card-subtitle">
-                {activeTab === 'signin' ? 'Sign in to access your school portal' : 'Create your account & provision your school'}
+                {SHOW_SIGNUP && activeTab === 'signup' ? 'Create your account & provision your school' : 'Sign in to access your school portal'}
               </p>
             </header>
 
-            {/* Pill Tab Switcher: Sign In vs Sign Up */}
-            <div className="auth-tab-pill-container" id="auth-tab-selector">
-              <button
-                type="button"
-                id="tab-signin-btn"
-                className={`auth-tab-button ${activeTab === 'signin' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('signin');
-                  setErrorMessage('');
-                  setInfoMessage('');
-                }}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                id="tab-signup-btn"
-                className={`auth-tab-button ${activeTab === 'signup' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('signup');
-                  setErrorMessage('');
-                  setInfoMessage('');
-                }}
-              >
-                Sign Up
-              </button>
-              <motion.div 
-                className="auth-tab-slider" 
-                layoutId="auth-tab-slider"
-                animate={{ x: activeTab === 'signup' ? '100%' : '0%' }}
-                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-              />
-            </div>
+            {/* Pill Tab Switcher: Sign In vs Sign Up (Temporarily hidden) */}
+            {SHOW_SIGNUP && (
+              <div className="auth-tab-pill-container" id="auth-tab-selector">
+                <button
+                  type="button"
+                  id="tab-signin-btn"
+                  className={`auth-tab-button ${activeTab === 'signin' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('signin');
+                    setErrorMessage('');
+                    setInfoMessage('');
+                  }}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  id="tab-signup-btn"
+                  className={`auth-tab-button ${activeTab === 'signup' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('signup');
+                    setErrorMessage('');
+                    setInfoMessage('');
+                  }}
+                >
+                  Sign Up
+                </button>
+                <motion.div 
+                  className="auth-tab-slider" 
+                  layoutId="auth-tab-slider"
+                  animate={{ x: activeTab === 'signup' ? '100%' : '0%' }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              </div>
+            )}
 
             {/* Error & Info Callouts */}
             {errorMessage && (
@@ -541,8 +545,8 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
               </form>
             )}
 
-            {/* ──────── SIGN UP FORM ──────── */}
-            {activeTab === 'signup' && (
+            {/* ──────── SIGN UP FORM (Temporarily hidden) ──────── */}
+            {SHOW_SIGNUP && activeTab === 'signup' && (
               <form className="auth-form-fields" onSubmit={handleSignUp} id="login-signup-form">
                 <div className="auth-input-group">
                   <label className="auth-input-label" htmlFor="input-signup-email">Email Address</label>
