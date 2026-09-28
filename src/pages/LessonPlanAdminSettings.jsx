@@ -197,7 +197,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
       snap.forEach(docSnap => {
         try {
           repository.saveSubjectMapping({ id: docSnap.id, ...docSnap.data() }, { isAdmin: true });
-        } catch {}
+        } catch { /* Ignore invalid mapping records and keep the valid ones. */ }
       });
       setSubjects(repository.listSubjectMappings());
     }, (err) => console.warn('Subject mappings cloud sync notice:', err.message));
@@ -207,7 +207,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
       snap.forEach(docSnap => {
         try {
           repository.saveStageMapping({ id: docSnap.id, ...docSnap.data() }, { isAdmin: true });
-        } catch {}
+        } catch { /* Ignore invalid mapping records and keep the valid ones. */ }
       });
       setStages(repository.listStageMappings());
     }, (err) => console.warn('Stage mappings cloud sync notice:', err.message));

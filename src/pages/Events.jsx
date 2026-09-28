@@ -37,8 +37,8 @@ const EventCard = ({ event, onToggleStar, t, isAlbanian }) => (
     style={{ borderLeft: `6px solid hsl(var(${event.color || '--primary'}))` }}
   >
     <div className="event-date-box" style={{ background: `hsla(var(${event.color || '--primary'}), 0.15)`, color: `hsl(var(${event.color || '--primary'}))` }}>
-      <span className="event-month">{new Date(event.date || Date.now()).toLocaleString(isAlbanian ? 'sq-AL' : 'default', { month: 'short' })}</span>
-      <span className="event-day">{new Date(event.date || Date.now()).getDate()}</span>
+      <span className="event-month">{event.date && !Number.isNaN(new Date(event.date).getTime()) ? new Date(event.date).toLocaleString(isAlbanian ? 'sq-AL' : 'default', { month: 'short' }) : '—'}</span>
+      <span className="event-day">{event.date && !Number.isNaN(new Date(event.date).getTime()) ? new Date(event.date).getDate() : '—'}</span>
     </div>
     
     <div className="event-main-info">

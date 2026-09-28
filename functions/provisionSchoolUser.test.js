@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canProvision } from './provisionSchoolUser.js';
+import { canProvision, canEditStudentCourses } from './provisionSchoolUser.js';
 
 const school = { rolePermissions: { teacher: { students: true } } };
 
@@ -17,4 +17,12 @@ test('administrators can add staff and students; unrelated members cannot', () =
   assert.equal(canProvision({ creatorUid: 'owner', callerUid: 'owner', member: null, school, role: 'teacher' }), true);
   assert.equal(canProvision({ creatorUid: 'owner', callerUid: 'admin', member: { status: 'active', role: 'admin' }, school, role: 'student' }), true);
   assert.equal(canProvision({ creatorUid: 'owner', callerUid: 'student', member: { status: 'active', role: 'student' }, school, role: 'student' }), false);
+});
+
+test('adding courses to an existing student obeys the separate edit permission', () => {
+  const base = { creatorUid: 'owner', callerUid: 'teacher', member: { status: 'active', role: 'teacher' }, school };
+  assert.equal(canEditStudentCourses(base), true);
+  assert.equal(canEditStudentCourses({ ...base, school: { rolePermissions: { teacher: { students: true, canEditDeleteStudents: false } } } }), false);
+  assert.equal(canEditStudentCourses({ ...base, member: { status: 'archived', role: 'teacher' } }), false);
+  assert.equal(canEditStudentCourses({ ...base, callerUid: 'owner' }), true);
 });

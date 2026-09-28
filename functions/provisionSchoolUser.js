@@ -15,6 +15,15 @@ export function canProvision({ creatorUid, callerUid, member, school, role }) {
   return school?.rolePermissions?.teacher?.students !== false;
 }
 
+export function canEditStudentCourses({ creatorUid, callerUid, member, school }) {
+  if (callerUid === creatorUid) return true;
+  if (member?.status !== 'active') return false;
+  if (member.role === 'admin') return true;
+  return ['teacher', 'dept_head'].includes(member.role) &&
+    school?.rolePermissions?.teacher?.students !== false &&
+    school?.rolePermissions?.teacher?.canEditDeleteStudents !== false;
+}
+
 function roleData({ role, uid, email, name, extra }) {
   if (role === 'student') return {
     id: uid, studentId: safeString(extra.studentId, 50) || `STU-${uid.slice(0, 8).toUpperCase()}`,
@@ -89,7 +98,29 @@ export async function provisionUser(request) {
   if (existingMember.exists) {
     const existing = existingMember.data();
     if (existing.role !== role) throw new HttpsError('already-exists', 'This account already belongs to the school with a different role. Edit its membership instead.');
-    if (existing.status === 'active') return { uid, email, name: existing.name || name, role, isExisting: true, alreadyMember: true };
+    if (existing.status === 'active') {
+      if (role !== 'student') return { uid, email, name: existing.name || name, role, isExisting: true, alreadyMember: true };
+      const requestedClasses = safeList(extra.assignedClasses);
+      if (requestedClasses.length && !canEditStudentCourses({ creatorUid: school.creatorUid, callerUid, member: callerMemberSnap.data(), school })) {
+        throw new HttpsError('permission-denied', 'This student already belongs to the school. Editing their courses is disabled for teachers.');
+      }
+      const studentRef = schoolRef.collection('students').doc(uid);
+      const studentSnap = await studentRef.get();
+      if (!studentSnap.exists || requestedClasses.length) {
+        const batch = db.batch();
+        if (!studentSnap.exists) {
+          batch.set(studentRef, { ...roleData({ role, uid, email, name, extra }), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        } else {
+          const existingClasses = studentSnap.data()?.assignedClasses;
+          const assignedClasses = Array.isArray(existingClasses)
+            ? FieldValue.arrayUnion(...requestedClasses)
+            : [...new Set([...(typeof existingClasses === 'string' && existingClasses.trim() ? [existingClasses.trim()] : []), ...requestedClasses])];
+          batch.update(studentRef, { assignedClasses, updatedAt: FieldValue.serverTimestamp() });
+        }
+        await batch.commit();
+      }
+      return { uid, email, name: existing.name || name, role, isExisting: true, alreadyMember: true, updatedEnrollment: requestedClasses.length > 0 };
+    }
   }
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();

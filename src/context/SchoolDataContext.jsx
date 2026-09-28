@@ -68,6 +68,8 @@ export const SchoolDataProvider = ({ children }) => {
   const [rolesList, setRolesList] = useState(INITIAL_ROLES);
   const [studentsList, setStudentsList] = useState([]);
   const [classesList, setClassesList] = useState([]);
+  const [classesLoaded, setClassesLoaded] = useState(false);
+  const [classesError, setClassesError] = useState(null);
   const [eventsList, setEventsList] = useState([]);
   const [rolePermissions, setRolePermissions] = useState(DEFAULT_ROLE_PERMISSIONS);
   const [loading, setLoading] = useState(true);
@@ -80,6 +82,8 @@ export const SchoolDataProvider = ({ children }) => {
       setStaffList([]);
       setStudentsList([]);
       setClassesList([]);
+      setClassesLoaded(true);
+      setClassesError(null);
       setEventsList([]);
       setRolesList(INITIAL_ROLES);
       setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
@@ -90,6 +94,8 @@ export const SchoolDataProvider = ({ children }) => {
     setStaffList([]);
     setStudentsList([]);
     setClassesList([]);
+    setClassesLoaded(false);
+    setClassesError(null);
     setEventsList([]);
     setRolesList(INITIAL_ROLES);
     setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
@@ -97,6 +103,7 @@ export const SchoolDataProvider = ({ children }) => {
 
     const handleSnapshotError = (colName) => (err) => {
       console.warn(`Snapshot listener notice for ${colName}:`, err.message);
+      if (colName === 'classes') { setClassesLoaded(true); setClassesError(err.message || 'Course data is unavailable.'); }
       setLoading(false);
     };
 
@@ -231,6 +238,8 @@ export const SchoolDataProvider = ({ children }) => {
         cls.push({ id: docSnap.id, ...docSnap.data() });
       });
       setClassesList(cls);
+      setClassesLoaded(true);
+      setClassesError(null);
     }, handleSnapshotError('classes'));
 
     // 5. Events Listener (Live production data from Firestore, empty initially)
@@ -361,7 +370,7 @@ export const SchoolDataProvider = ({ children }) => {
 
   // Class Handlers
   const addClass = useCallback(async (newClass) => {
-    if (!activeSchoolId) return;
+    if (!activeSchoolId) throw new Error('Select a school before creating a course.');
     const classId = newClass.id || `cls_${Date.now()}`;
     const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classId));
     const payload = {
@@ -377,7 +386,7 @@ export const SchoolDataProvider = ({ children }) => {
   }, [activeSchoolId]);
 
   const updateClass = useCallback(async (id, updates) => {
-    if (!activeSchoolId) return;
+    if (!activeSchoolId) throw new Error('Select a school before editing a course.');
     const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(id));
     await updateDoc(classDocRef, { ...updates, updatedAt: serverTimestamp() });
   }, [activeSchoolId]);
@@ -433,6 +442,8 @@ export const SchoolDataProvider = ({ children }) => {
       rolesList,
       studentsList,
       classesList,
+      classesLoaded,
+      classesError,
       eventsList,
       rolePermissions,
       loading,
@@ -466,6 +477,8 @@ export const useSchoolData = () => {
       rolesList: [],
       studentsList: [],
       classesList: [],
+      classesLoaded: false,
+      classesError: null,
       eventsList: [],
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
       loading: false,

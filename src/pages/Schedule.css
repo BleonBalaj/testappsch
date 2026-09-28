@@ -5,6 +5,30 @@
   padding-bottom: 3rem;
 }
 
+.schedule-unscheduled,
+.schedule-source-notice {
+  border: 1px solid hsl(var(--border));
+  border-radius: 20px;
+  background: hsl(var(--card));
+  padding: 1.15rem 1.4rem;
+  color: hsl(var(--foreground));
+}
+
+.schedule-unscheduled {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.schedule-unscheduled h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+.schedule-unscheduled p { margin: 0; color: hsl(var(--muted-foreground)); }
+.schedule-unscheduled ul { margin: 0.7rem 0 0; padding-left: 1.3rem; line-height: 1.6; }
+.schedule-form-error { color: hsl(var(--destructive)); font-weight: 700; }
+.schedule-event-toggle { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; }
+.schedule-event-toggle input { width: 18px; height: 18px; }
+
 .page-header {
   display: flex;
   justify-content: space-between;

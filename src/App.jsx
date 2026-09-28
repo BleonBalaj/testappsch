@@ -33,7 +33,7 @@ import './App.css';
 function AppContent() {
   const { currentUser, currentRole, activeSchoolId, activeSchool, authLoading, schoolLinks, schoolLinksLoaded, createNewSchool, logoutUser } = useAuth();
   const { language, t } = useLanguage();
-  const { classesList = [], eventsList = [], rolePermissions } = useSchoolData();
+  const { classesList = [], classesLoaded, eventsList = [], rolePermissions } = useSchoolData();
 
   const getInitialPath = () => {
     if (typeof window !== 'undefined') {
@@ -60,6 +60,24 @@ function AppContent() {
   }, [language]);
 
   const mainContentRef = useRef(null);
+  const previousSchoolIdRef = useRef(activeSchoolId);
+
+  useEffect(() => {
+    if (previousSchoolIdRef.current && previousSchoolIdRef.current !== activeSchoolId) {
+      setSelectedClass(null);
+      setSelectedStudent(null);
+      setCurrentPath('dashboard');
+    }
+    previousSchoolIdRef.current = activeSchoolId;
+  }, [activeSchoolId]);
+
+  useEffect(() => {
+    if (currentPath === 'class-overview' && selectedClass && classesLoaded &&
+        !classesList.some(course => String(course.id) === String(selectedClass.id))) {
+      setSelectedClass(null);
+      setCurrentPath('classes');
+    }
+  }, [currentPath, selectedClass, classesLoaded, classesList]);
 
   // The active role strictly tracks currentRole attached to active school membership
   const userRole = currentRole || 'student';
@@ -289,7 +307,7 @@ function AppContent() {
         />;
       case 'class-overview':
         return <ClassOverview 
-          classData={selectedClass} 
+          classData={classesList.find(course => String(course.id) === String(selectedClass?.id)) || selectedClass}
           userRole={userRole}
           onBack={() => setCurrentPath('classes')}
           onStudentSelect={(s) => { 
@@ -339,7 +357,7 @@ function AppContent() {
       case 'events':
         return <Events userRole={userRole} />;
       case 'schedule':
-        return <Schedule userRole={userRole} lessonLanguage={language} onCreateLessonPlan={(scheduledLesson) => { setPendingScheduledLesson(scheduledLesson); setCurrentPath('lesson-plans'); }} />;
+        return <Schedule userRole={userRole} lessonLanguage={language} onOpenCourses={() => setCurrentPath('classes')} onCreateLessonPlan={(scheduledLesson) => { setPendingScheduledLesson(scheduledLesson); setCurrentPath('lesson-plans'); }} />;
       case 'messages':
         return <Messages userRole={userRole} />;
       case 'settings':

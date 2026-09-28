@@ -1,52 +1,16 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Trophy, Medal, Star, TrendingUp, Award, Zap, 
-  Sparkles, Filter, Users, BookOpen, Search, ChevronDown, 
-  Check, X, ArrowUpRight 
-} from 'lucide-react';
+import { Trophy, Medal, Users, BookOpen, Search, ChevronDown, Check, X, ArrowUpRight } from 'lucide-react';
 import { Avatar } from '../components/Avatar';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { buildSchoolRankings } from '../features/gradebook/schoolResults';
+import { useCourseRecords } from '../features/gradebook/useCourseRecords';
+import { isStudentEnrolledInCourse } from '../features/enrollment';
 import './Leaderboard.css';
 
-export const STUDENTS_DATABASE = [];
-
-const DROPDOWN_GROUPS = [
-  {
-    category: 'General',
-    items: [
-      { id: 'overall', label: 'Overall (All Classes & Subjects)', icon: Trophy }
-    ]
-  },
-  {
-    category: 'Classes & Cohorts',
-    items: [
-      { id: '10a', label: 'Class 10A (Sophomores)', icon: Users },
-      { id: '11b', label: 'Class 11B (Juniors)', icon: Users },
-      { id: '12a', label: 'Class 12A (Seniors)', icon: Users },
-      { id: 'math301', label: 'Advanced Mathematics (MATH-301)', icon: BookOpen },
-      { id: 'hist202', label: 'World History (HIST-202)', icon: BookOpen },
-      { id: 'phys401', label: 'Physics Mechanics (PHYS-401)', icon: BookOpen },
-      { id: 'eng101', label: 'English Literature (ENG-101)', icon: BookOpen },
-      { id: 'cs501', label: 'Computer Science (CS-501)', icon: BookOpen },
-      { id: 'bio201', label: 'Biology Labs (BIO-201)', icon: BookOpen }
-    ]
-  },
-  {
-    category: 'Subject Disciplines',
-    items: [
-      { id: 'math', label: 'Mathematics', icon: Star },
-      { id: 'science', label: 'Science & Physics', icon: Sparkles },
-      { id: 'arts', label: 'Arts & Literature', icon: Award },
-      { id: 'tech', label: 'Technology & Computing', icon: Zap },
-      { id: 'humanities', label: 'Humanities & Civics', icon: BookOpen }
-    ]
-  }
-];
-
-const PodiumStep = ({ student, rank, height, color, delay, onSelect }) => {
+const PodiumStep = ({ student, rank, height, color, delay, onSelect, isAlbanian }) => {
   if (!student) return null;
   return (
     <motion.div 
@@ -55,7 +19,7 @@ const PodiumStep = ({ student, rank, height, color, delay, onSelect }) => {
       animate={{ height: `${height}px`, opacity: 1 }}
       transition={{ delay, duration: 0.5, type: 'spring', bounce: 0.3 }}
       onClick={() => onSelect && onSelect(student)}
-      title={`View ${student.name}'s Profile`}
+      title={student.name}
     >
       <motion.div 
         className="podium-avatar"
@@ -69,10 +33,10 @@ const PodiumStep = ({ student, rank, height, color, delay, onSelect }) => {
         </div>
       </motion.div>
       <div className="podium-base glass" style={{ backgroundColor: color }}>
-        <span className="rank-num">#{rank}</span>
+        <span className="rank-num">#{student.rank}</span>
         <h4>{student.name}</h4>
-        <span className="points">{student.points} pts</span>
-        {student.badge && <span className="podium-badge-label">{student.badge}</span>}
+        <span className="points">{student.average}%</span>
+        <span className="podium-badge-label">{student.gradedCourses} {isAlbanian ? 'lëndë me nota' : student.gradedCourses === 1 ? 'graded course' : 'graded courses'}</span>
       </div>
     </motion.div>
   );
@@ -80,14 +44,28 @@ const PodiumStep = ({ student, rank, height, color, delay, onSelect }) => {
 
 const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
   const isStudent = userRole === 'student';
-  const { studentsList = [] } = useSchoolData();
-  const { currentUser } = useAuth();
+  const { studentsList = [], classesList = [], classesLoaded } = useSchoolData();
+  const { currentUser, activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
   const [activeFilter, setActiveFilter] = useState('overall');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
+  const assessedCourses = useMemo(() => classesList.filter(course => studentsList.some(student => student.status !== 'archived' && isStudentEnrolledInCourse(student, course))), [classesList, studentsList]);
+  const { records, loading: gradesLoading, error: gradesError } = useCourseRecords(activeSchoolId, assessedCourses);
+
+  const dropdownGroups = useMemo(() => {
+    const cohorts = [...new Set(studentsList.filter(student => student.status !== 'archived').map(student => String(student.grade || '').trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map(grade => ({ id: `cohort:${grade}`, label: `${isAlbanian ? 'Klasa' : 'Class'} ${grade}`, icon: Users }));
+    const courses = classesList.map(course => ({ id: `course:${course.id}`, label: [course.name, course.code && `(${course.code})`].filter(Boolean).join(' '), icon: BookOpen }));
+    return [
+      { category: isAlbanian ? 'Të gjitha' : 'General', items: [{ id: 'overall', label: isAlbanian ? 'Mesatarja e të gjitha lëndëve' : 'All graded courses', icon: Trophy }] },
+      ...(cohorts.length ? [{ category: isAlbanian ? 'Klasat' : 'Class groups', items: cohorts }] : []),
+      ...(courses.length ? [{ category: isAlbanian ? 'Lëndët' : 'Courses', items: courses }] : []),
+    ];
+  }, [studentsList, classesList, isAlbanian]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -109,109 +87,29 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
 
   // Find active filter label and icon
   const currentOption = useMemo(() => {
-    for (const group of DROPDOWN_GROUPS) {
+    for (const group of dropdownGroups) {
       const match = group.items.find(item => item.id === activeFilter);
       if (match) return match;
     }
-    return DROPDOWN_GROUPS[0].items[0];
-  }, [activeFilter]);
+    return dropdownGroups[0].items[0];
+  }, [activeFilter, dropdownGroups]);
 
   // Filtered dropdown items for search
   const filteredDropdownGroups = useMemo(() => {
-    if (!dropdownSearch.trim()) return DROPDOWN_GROUPS;
+    if (!dropdownSearch.trim()) return dropdownGroups;
     const query = dropdownSearch.toLowerCase();
-    return DROPDOWN_GROUPS.map(group => ({
+    return dropdownGroups.map(group => ({
       ...group,
       items: group.items.filter(item => item.label.toLowerCase().includes(query))
     })).filter(group => group.items.length > 0);
-  }, [dropdownSearch]);
+  }, [dropdownSearch, dropdownGroups]);
 
-  const studentsDatabase = useMemo(() => {
-    return studentsList.map(student => ({
-      id: student.id,
-      name: student.name,
-      avatar: student.name,
-      classId: student.grade ? String(student.grade).toLowerCase().replace(/[^a-z0-9]/g, '') : 'all',
-      className: student.grade ? `Class ${student.grade}` : 'General Cohort',
-      grade: student.grade || '',
-      overallPoints: Number(student.points) || 0,
-      overallBadge: student.overallBadge || (student.gpa ? `GPA ${student.gpa}` : 'Honor Roll'),
-      trend: 'same',
-      subjects: {}
-    }));
-  }, [studentsList]);
-
-  const filteredRankings = useMemo(() => {
-    if (studentsDatabase.length === 0) return [];
-    
-    // 1. Overall filter
-    if (activeFilter === 'overall') {
-      return studentsDatabase.map(student => ({
-        id: student.id,
-        name: student.name,
-        className: student.className,
-        grade: student.grade,
-        points: student.overallPoints,
-        badge: student.overallBadge,
-        trend: student.trend
-      })).sort((a, b) => b.points - a.points).map((item, index) => ({
-        ...item,
-        rank: index + 1
-      }));
-    }
-
-    // 2. Class cohorts
-    const cohortMatches = studentsDatabase.filter(student => student.classId === activeFilter);
-    if (cohortMatches.length > 0) {
-      return cohortMatches
-        .map(student => ({
-          id: student.id,
-          name: student.name,
-          className: student.className,
-          grade: student.grade,
-          points: student.overallPoints,
-          badge: student.overallBadge,
-          trend: student.trend
-        }))
-        .sort((a, b) => b.points - a.points)
-        .map((item, index) => ({
-          ...item,
-          rank: index + 1
-        }));
-    }
-
-    // 3. Fallback
-    return studentsDatabase
-      .map(student => ({
-        id: student.id,
-        name: student.name,
-        className: student.className,
-        grade: student.grade,
-        points: student.overallPoints,
-        badge: student.overallBadge,
-        trend: student.trend
-      }))
-      .sort((a, b) => b.points - a.points)
-      .map((item, index) => ({
-        ...item,
-        rank: index + 1
-      }));
-  }, [studentsDatabase, activeFilter]);
+  const filteredRankings = useMemo(() => gradesLoading || gradesError ? [] : buildSchoolRankings(studentsList, classesList, records, currentOption.id), [studentsList, classesList, records, currentOption.id, gradesLoading, gradesError]);
 
   const handleStudentClick = (student) => {
     if (isStudent) return; // Students do not access administrative student overview
-    if (onStudentSelect) {
-      onStudentSelect({
-        id: student.id,
-        name: student.name,
-        grade: student.grade || '12',
-        email: `${student.name.toLowerCase().replace(' ', '.')}@lumischool.edu`,
-        phone: '+1 (555) 234-0' + student.id,
-        points: student.points,
-        badge: student.badge,
-        tags: ['Honor Roll', 'Active Leader', 'Dean\'s Scholar']
-      });
-    }
+    const actualStudent = studentsList.find(item => String(item.id) === String(student.id));
+    if (onStudentSelect && actualStudent) onStudentSelect(actualStudent);
   };
 
   const top1 = filteredRankings[0];
@@ -234,9 +132,9 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
               {t('leaderboard.title', 'Academic Leaderboard')}
               <Trophy size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
-            <span className="count-pill glass">{t('leaderboard.season', 'Season 2026')}</span>
+            <span className="count-pill glass">{isAlbanian ? 'Notat aktuale' : 'Current grades'}</span>
           </div>
-          <p>{t('leaderboard.subtitle', 'Celebrating high academic achievements, subject mastery, and class excellence.')}</p>
+          <p>{isAlbanian ? 'Renditja bazohet në mesataren e notave të lëndëve me vlerësime në shkollën aktive.' : 'Ranked by the average grade across assessed courses in the active school.'}</p>
         </div>
       </header>
 
@@ -274,7 +172,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                   <input 
                     ref={searchInputRef}
                     type="text"
-                    placeholder="Search classes, cohorts, or subjects..."
+                    placeholder={isAlbanian ? 'Kërko klasa ose lëndë...' : 'Search class groups or courses...'}
                     value={dropdownSearch}
                     onChange={(e) => setDropdownSearch(e.target.value)}
                   />
@@ -293,7 +191,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                 <div className="dropdown-options-list">
                   {filteredDropdownGroups.length === 0 ? (
                     <div className="dropdown-empty-state">
-                      <span>No matching class or subject found</span>
+                      <span>{isAlbanian ? 'Nuk u gjet klasë ose lëndë' : 'No matching class group or course'}</span>
                     </div>
                   ) : (
                     filteredDropdownGroups.map(group => (
@@ -301,7 +199,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                         <div className="dropdown-group-title">{group.category}</div>
                         {group.items.map(item => {
                           const Icon = item.icon;
-                          const isSelected = activeFilter === item.id;
+                          const isSelected = currentOption.id === item.id;
                           return (
                             <button
                               key={item.id}
@@ -331,52 +229,61 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
         </div>
 
         {/* Quick Reset to Overall Pill */}
-        {activeFilter !== 'overall' && (
+        {currentOption.id !== 'overall' && (
           <button 
             type="button" 
             className="reset-overall-pill bouncy"
             onClick={() => setActiveFilter('overall')}
           >
-            <Trophy size={13} /> Reset to Overall
+            <Trophy size={13} /> {isAlbanian ? 'Të gjitha lëndët' : 'All courses'}
           </button>
         )}
       </div>
 
-      {filteredRankings.length === 0 ? (
+      {gradesError ? (
+        <section className="empty-leaderboard glass" style={{ padding: '3rem 2rem', textAlign: 'center', borderRadius: '24px', margin: '2rem 0' }}>
+          <h3>{isAlbanian ? 'Notat nuk mund të ngarkohen' : 'Grades could not be loaded'}</h3>
+          <p>{isAlbanian ? 'Kontrolloni lejet e lëndëve dhe provoni përsëri.' : 'Check course access and try again.'}</p>
+        </section>
+      ) : (gradesLoading || !classesLoaded) ? (
+        <section className="empty-leaderboard glass" style={{ padding: '3rem 2rem', textAlign: 'center', borderRadius: '24px', margin: '2rem 0' }}>
+          <p>{isAlbanian ? 'Po ngarkohen notat...' : 'Loading course grades...'}</p>
+        </section>
+      ) : filteredRankings.length === 0 ? (
         <section className="empty-leaderboard glass" style={{ padding: '3rem 2rem', textAlign: 'center', borderRadius: '24px', margin: '2rem 0' }}>
           <Trophy size={48} style={{ color: 'hsl(var(--muted-foreground))', margin: '0 auto 1rem auto' }} />
-          <h3>No Leaderboard Rankings Yet</h3>
+          <h3>{isAlbanian ? 'Ende nuk ka renditje' : 'No rankings yet'}</h3>
           <p style={{ color: 'hsl(var(--muted-foreground))', maxWidth: '400px', margin: '0 auto' }}>
-            Academic points and distinctions will appear here once students are enrolled and evaluated.
+            {isAlbanian ? 'Renditja shfaqet pasi nxënësit e regjistruar marrin vlerësime në lëndë.' : 'Rankings appear after enrolled students receive course grades.'}
           </p>
         </section>
       ) : (
         <>
           {/* Top 3 Podium */}
           <section className="podium-section">
-            {top2 && <PodiumStep student={top2} rank={2} height={200} color="hsl(var(--accent))" delay={0.15} onSelect={handleStudentClick} />}
-            {top1 && <PodiumStep student={top1} rank={1} height={260} color="hsl(var(--mood-neutral))" delay={0.3} onSelect={handleStudentClick} />}
-            {top3 && <PodiumStep student={top3} rank={3} height={160} color="hsl(var(--mood-sad))" delay={0.05} onSelect={handleStudentClick} />}
+            {top2 && <PodiumStep student={top2} rank={2} height={200} color="hsl(var(--accent))" delay={0.15} onSelect={handleStudentClick} isAlbanian={isAlbanian} />}
+            {top1 && <PodiumStep student={top1} rank={1} height={260} color="hsl(var(--mood-neutral))" delay={0.3} onSelect={handleStudentClick} isAlbanian={isAlbanian} />}
+            {top3 && <PodiumStep student={top3} rank={3} height={160} color="hsl(var(--mood-sad))" delay={0.05} onSelect={handleStudentClick} isAlbanian={isAlbanian} />}
           </section>
 
           {/* Rankings List */}
           <section className="rankings-list glass">
             <div className="list-header">
               <span>{t('leaderboard.rank', 'Rank')}</span>
-              <span>{t('leaderboard.distinction', 'Student & Distinction')}</span>
+              <span>{isAlbanian ? 'Nxënësi' : 'Student'}</span>
               <span>{t('leaderboard.class', 'Class')}</span>
-              <span>{t('leaderboard.trend', 'Trend')}</span>
-              <span>{t('leaderboard.points', 'Points')}</span>
+              <span>{isAlbanian ? 'Lëndë' : 'Courses'}</span>
+              <span>{isAlbanian ? 'Mesatarja' : 'Average'}</span>
             </div>
             <div className="list-body">
               <AnimatePresence mode="wait">
                 {rest.length === 0 && filteredRankings.length <= 3 ? (
                   <div className="empty-rankings-note">
-                    <span>{t('leaderboard.allTopNote', 'All top enrolled students are featured on the podium above! Click any student to view their profile. 🌟')}</span>
+                    <span>{isAlbanian ? 'Nxënësit me nota janë paraqitur në podium.' : 'All students with grades are shown on the podium above.'}</span>
                   </div>
                 ) : (
                   rest.map((student, index) => {
-                    const isCurrentUser = isStudent && (student.id === currentUser?.uid || (student.name && currentUser?.name && student.name.toLowerCase() === currentUser.name.toLowerCase()));
+                    const isCurrentUser = isStudent && student.id === currentUser?.uid;
                     return (
                       <motion.div 
                         key={`${activeFilter}-${student.id}`} 
@@ -400,19 +307,17 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                               {isCurrentUser && <span className="you-pill-badge">{t('leaderboard.you', 'You')}</span>}
                               {!isStudent && <ArrowUpRight size={13} className="student-view-icon" />}
                             </div>
-                            {student.badge && <span className="student-badge-pill">{student.badge}</span>}
+                            <span className="student-badge-pill">{student.gradedCourses} {isAlbanian ? 'lëndë me nota' : student.gradedCourses === 1 ? 'graded course' : 'graded courses'}</span>
                           </div>
                         </div>
                       <div className="class-col muted">
-                        {student.className ? student.className.split(' ').slice(0, 2).join(' ') : 'Class'}
+                        {student.grade ? `${isAlbanian ? 'Klasa' : 'Class'} ${student.grade}` : '—'}
                       </div>
                       <div className="trend-col">
-                        {student.trend === 'up' && <TrendingUp size={17} color="hsl(var(--mood-happy))" />}
-                        {student.trend === 'down' && <TrendingUp size={17} color="hsl(var(--destructive))" style={{ transform: 'scaleY(-1)' }} />}
-                        {student.trend === 'same' && <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}
+                        {student.gradedCourses}
                       </div>
                       <div className="points-col font-bold">
-                        {student.points} pts
+                        {student.average}%
                       </div>
                     </motion.div>
                   ); })

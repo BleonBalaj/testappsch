@@ -13,6 +13,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { calcStudentGradeData, INITIAL_WEIGHTS } from '../features/gradebook/grading';
 import { Avatar } from '../components/Avatar';
+import { displayCourse, enrolledCoursesForStudent } from '../features/enrollment';
 import './StudentOverview.css';
 
 /* ─── Grade helpers ────────────────────────────────────── */
@@ -46,15 +47,12 @@ const TABS = [
 /* ─── Component ─────────────────────────────────────────── */
 const StudentOverview = ({ student, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const { studentsList, classesList, toggleArchiveStudent } = useSchoolData();
+  const { studentsList, classesList, classesLoaded, toggleArchiveStudent } = useSchoolData();
   const { activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
   const liveStudent = studentsList.find(s => s.id === student?.id) || student;
   const studentId = liveStudent?.id;
-  const enrolledClasses = useMemo(() => classesList.filter(course => (liveStudent?.assignedClasses || []).some(entry => {
-    const value = typeof entry === 'string' ? entry : entry?.id || entry?.name;
-    return value === course.id || value === course.name || value === course.code;
-  })), [classesList, liveStudent]);
+  const enrolledClasses = useMemo(() => enrolledCoursesForStudent(liveStudent, classesList), [classesList, liveStudent]);
   const [courseRecords, setCourseRecords] = useState({});
 
   useEffect(() => {
@@ -121,7 +119,7 @@ const StudentOverview = ({ student, onBack }) => {
 
   // Retrieve freshest student record if present in Context
   const isArchived = liveStudent.status === 'archived';
-  const isUnassigned = !isArchived && (!liveStudent.assignedClasses || liveStudent.assignedClasses.length === 0);
+  const isUnassigned = classesLoaded && !isArchived && enrolledClasses.length === 0;
 
   const data = { ...buildStudentData(liveStudent), ...courseSummary };
 
@@ -193,14 +191,16 @@ const StudentOverview = ({ student, onBack }) => {
           <div className="sov-identity-info">
             <div className="sov-name-row">
               <h2 className="sov-name">{liveStudent.name}</h2>
-              <span className="sov-id-tag">{liveStudent.studentId || `STU-${1000 + liveStudent.id}`}</span>
+              <span className="sov-id-tag">{liveStudent.studentId || liveStudent.id}</span>
             </div>
-            <p className="sov-sub">Grade {liveStudent.grade} • {liveStudent.assignedClasses?.length || 0} {t('student.classesAssigned', 'Classes Assigned')}</p>
+            <p className="sov-sub">Grade {liveStudent.grade} • {classesLoaded ? enrolledClasses.length : '…'} {t('student.classesAssigned', 'Classes Assigned')}</p>
             <div className="sov-classes-pills">
-              {liveStudent.assignedClasses && liveStudent.assignedClasses.length > 0 ? (
-                liveStudent.assignedClasses.map(cls => (
-                  <span key={cls} className="sov-class-pill">
-                    <BookOpen size={12} /> {cls}
+              {!classesLoaded ? (
+                <span className="sov-class-pill">{isAlbanian ? 'Po ngarkohen lëndët…' : 'Loading courses…'}</span>
+              ) : enrolledClasses.length > 0 ? (
+                enrolledClasses.map(course => (
+                  <span key={course.id} className="sov-class-pill">
+                    <BookOpen size={12} /> {displayCourse(course)}
                   </span>
                 ))
               ) : (
@@ -226,7 +226,7 @@ const StudentOverview = ({ student, onBack }) => {
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--accent)/0.35)', background: 'hsl(var(--accent)/0.12)' }}>
             <BookOpen size={16} color="hsl(var(--accent))" />
             <span>{t('student.enrolled', 'Enrolled')}</span>
-            <strong style={{ color: 'hsl(var(--accent))' }}>{liveStudent.assignedClasses?.length || 0} {isAlbanian ? 'Lëndë' : 'Classes'}</strong>
+            <strong style={{ color: 'hsl(var(--accent))' }}>{classesLoaded ? enrolledClasses.length : '…'} {isAlbanian ? 'Lëndë' : 'Classes'}</strong>
           </div>
         </div>
       </div>
@@ -283,7 +283,7 @@ const StudentOverview = ({ student, onBack }) => {
                 <div className="sov-contact-card-info">
                   <div className="sov-detail-row">
                     <span className="sov-detail-label">{t('student.officialId', 'Official Student ID:')}</span>
-                    <strong>{liveStudent.studentId || `STU-${1000 + liveStudent.id}`}</strong>
+                    <strong>{liveStudent.studentId || liveStudent.id}</strong>
                   </div>
                   <div className="sov-detail-row">
                     <span className="sov-detail-label">{t('student.guardian', 'Guardian:')}</span>
@@ -310,7 +310,11 @@ const StudentOverview = ({ student, onBack }) => {
               <div className="sov-widget glass">
                 <h4 className="widget-title">{t('student.gradeSnapshot', 'Grade Snapshot')}</h4>
                 <div className="grade-snap-list">
-                  {data.classes.length === 0 ? (
+                  {!classesLoaded ? (
+                    <p style={{ padding: '1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem', textAlign: 'center' }}>
+                      {isAlbanian ? 'Po ngarkohen lëndët…' : 'Loading courses…'}
+                    </p>
+                  ) : data.classes.length === 0 ? (
                     <p style={{ padding: '1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem', textAlign: 'center' }}>
                       {t('student.noClassesEnrolled', 'No classes enrolled yet.')}
                     </p>
@@ -347,7 +351,9 @@ const StudentOverview = ({ student, onBack }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.classes.length === 0 ? (
+                  {!classesLoaded ? (
+                    <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>{isAlbanian ? 'Po ngarkohen lëndët…' : 'Loading courses…'}</td></tr>
+                  ) : data.classes.length === 0 ? (
                     <tr>
                       <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
                         {t('student.noEnrolledGrades', 'No enrolled classes or course grades recorded.')}

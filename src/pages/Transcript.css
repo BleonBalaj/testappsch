@@ -7,6 +7,17 @@
   margin: 0 auto;
 }
 
+.transcript-report-note {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+@media print {
+  .transcript-report-note { color: #475569 !important; }
+}
+
 /* Guarded notice for non-students */
 .student-only-notice {
   text-align: center;

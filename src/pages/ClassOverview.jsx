@@ -14,6 +14,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import { CURRICULUM_STAGES } from './Classes';
 import { INITIAL_WEIGHTS, getCategoryDisplayName, validateCategoryWeights, calcStudentGradeData } from '../features/gradebook/grading';
+import { courseMatchesReference, isStudentEnrolledInCourse, normalizeAssignedCourseIds } from '../features/enrollment';
 import './ClassOverview.css';
 
 /* ─── Production Data State ──────────────────────────────── */
@@ -543,11 +544,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   // Filter students enrolled in this class
   const students = useMemo(() => {
     if (!classData) return [];
-    return studentsList.filter(s =>
-      s.assignedClasses && s.assignedClasses.some(c =>
-        c === classData.name || c === classData.code || (classData.code && c.includes(classData.code))
-      )
-    );
+    return studentsList.filter(student => isStudentEnrolledInCourse(student, classData));
   }, [studentsList, classData]);
 
   const gradebookStudents = useMemo(() => {
@@ -558,7 +555,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
   // Students available to be enrolled
   const availableStudentsToEnroll = useMemo(() => {
-    return studentsList.filter(s => !students.some(es => es.id === s.id));
+    return studentsList.filter(s => s.status !== 'archived' && !students.some(es => es.id === s.id));
   }, [studentsList, students]);
 
   // 1. Real-time listener for assignments
@@ -737,10 +734,10 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
   const enrollStudent = async (student) => {
     if (!student?.id) return;
-    const currentClasses = student.assignedClasses || [];
-    if (!currentClasses.includes(classData.name)) {
+    const currentClasses = normalizeAssignedCourseIds(student.assignedClasses, [classData]);
+    if (!isStudentEnrolledInCourse(student, classData) || !currentClasses.includes(String(classData.id))) {
       await updateStudent(student.id, {
-        assignedClasses: [...currentClasses, classData.name]
+        assignedClasses: [...new Set([...currentClasses, String(classData.id)])]
       });
     }
   };
@@ -748,7 +745,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const removeStudent = async (studentId) => {
     const student = studentsList.find(s => s.id === studentId);
     if (!student) return;
-    const nextClasses = (student.assignedClasses || []).filter(c => c !== classData.name && c !== classData.code);
+    const nextClasses = normalizeAssignedCourseIds(student.assignedClasses, [classData])
+      .filter(reference => !courseMatchesReference(classData, reference));
     await updateStudent(student.id, {
       assignedClasses: nextClasses
     });
@@ -957,7 +955,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                       return (
                         <motion.tr key={s.id} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} layout
                           style={{ cursor: 'pointer' }}
-                          onClick={() => onStudentSelect && onStudentSelect({ ...s, grade: 'Roster', tags: [], points: 0, badge: '' })}
+                          onClick={() => onStudentSelect && onStudentSelect(s)}
                         >
                           <td>
                             <div className="student-cell">

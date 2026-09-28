@@ -8,6 +8,8 @@ import {
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { isStudentEnrolledInCourse } from '../features/enrollment';
+import { parseWeeklySchedule } from '../features/courseSchedule';
 import './Classes.css';
 
 export const INITIAL_CLASSES = [];
@@ -56,6 +58,7 @@ const ClassCard = ({
   isTaughtByMe, 
   isEnrolled, 
   isAlbanian,
+  studentCount,
   canManage,
   onEdit,
   onDelete
@@ -90,7 +93,7 @@ const ClassCard = ({
                 </span>
               )
             )}
-            {userRole === 'teacher' && isLead && (
+            {(userRole === 'teacher' || userRole === 'dept_head') && isLead && (
               <span className="class-enroll-badge instructor" title={isAlbanian ? "Ju jeni mësimdhënësi për këtë kurs" : "You are the lead instructor for this course"}>
                 {isAlbanian ? 'Lënda Ime' : 'My Class'}
               </span>
@@ -130,12 +133,9 @@ const ClassCard = ({
       </div>
 
       <div className="class-meta-row">
-        <span className="class-room-badge">
-          <MapPin size={12} /> {classInfo.room || (isAlbanian ? 'Salla Kryesore' : 'Main Hall')}
-        </span>
-        <span className="class-schedule-badge">
-          <Clock size={12} /> {classInfo.schedule || (isAlbanian ? 'E Rregullt' : 'Regular')}
-        </span>
+        {classInfo.room && <span className="class-room-badge"><MapPin size={12} /> {classInfo.room}</span>}
+        {classInfo.schedule && <span className="class-schedule-badge"><Clock size={12} /> {classInfo.schedule}</span>}
+        {Number(classInfo.credits) > 0 && <span className="class-stage-badge">{classInfo.credits} {isAlbanian ? 'kredi' : 'credits'}</span>}
         {classInfo.curriculumStage && (
           <span className="class-stage-badge" title={isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}>
             🏷️ {classInfo.curriculumStage}
@@ -148,14 +148,6 @@ const ClassCard = ({
         )}
       </div>
 
-      {userRole === 'student' && enrolled && classInfo.myGrade && (
-        <div className="student-card-standing glass">
-          <span className="sc-label">{isAlbanian ? 'Përparimi:' : 'Standing:'}</span>
-          <span className="sc-val">{classInfo.myGrade} ({classInfo.letterGrade})</span>
-          <span className="sc-credit">• {classInfo.credits || 4} {isAlbanian ? 'Kredi' : 'Credits'}</span>
-        </div>
-      )}
-
       <div className="class-card-stats">
         <div className="stat">
           <CheckSquare size={16} />
@@ -163,7 +155,7 @@ const ClassCard = ({
         </div>
         <div className="stat">
           <Users size={16} />
-          <span>{classInfo.students || 0} {isAlbanian ? 'Nxënës' : 'Students'}</span>
+          <span>{studentCount} {isAlbanian ? 'Nxënës' : 'Students'}</span>
         </div>
       </div>
     </motion.div>
@@ -208,9 +200,10 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
   const [newClassName, setNewClassName] = useState('');
   const [newClassCode, setNewClassCode] = useState('');
   const [newClassDept, setNewClassDept] = useState('Science');
-  const [newClassTeacher, setNewClassTeacher] = useState(staffList[0]?.name || 'Staff Member');
-  const [newClassRoom, setNewClassRoom] = useState('Room 301');
-  const [newClassSchedule, setNewClassSchedule] = useState('Mon, Wed 10:00 AM');
+  const [newClassTeacher, setNewClassTeacher] = useState('');
+  const [newClassRoom, setNewClassRoom] = useState('');
+  const [newClassSchedule, setNewClassSchedule] = useState('');
+  const [newClassCredits, setNewClassCredits] = useState('');
   const [newClassColor, setNewClassColor] = useState('--primary');
   const [newClassCurriculumStage, setNewClassCurriculumStage] = useState('Shkalla III');
   const [formError, setFormError] = useState('');
@@ -226,7 +219,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
     schedule: '',
     color: '--primary',
     curriculumStage: 'Shkalla III',
-    credits: 4,
+    credits: '',
     description: ''
   });
   const [editFormError, setEditFormError] = useState('');
@@ -246,7 +239,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       schedule: cls.schedule || '',
       color: cls.color || '--primary',
       curriculumStage: cls.curriculumStage || 'Shkalla III',
-      credits: cls.credits || 4,
+      credits: cls.credits ?? '',
       description: cls.description || ''
     });
     setEditFormError('');
@@ -263,6 +256,16 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       setEditFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm.' : 'Course code is required.');
       return;
     }
+    if (editForm.credits !== '' && (!Number.isFinite(Number(editForm.credits)) || Number(editForm.credits) <= 0)) {
+      setEditFormError(isAlbanian ? 'Kreditë duhet të jenë numër pozitiv.' : 'Credits must be a positive number.');
+      return;
+    }
+    const scheduleChanged = editForm.schedule.trim() !== (editingClass.schedule || '').trim();
+    const parsedSchedule = parseWeeklySchedule(editForm.schedule.trim());
+    if (scheduleChanged && editForm.schedule.trim() && parsedSchedule.length === 0) {
+      setEditFormError(isAlbanian ? 'Përdorni ditët dhe orën, p.sh. E Hënë, E Mërkurë 09:00.' : 'Enter weekday and time, for example Mon, Wed 09:00.');
+      return;
+    }
 
     const teacherName = editForm.teacher.trim();
     const matchedStaff = staffList.find(s => s.name === teacherName);
@@ -276,11 +279,12 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       teacher: teacherName,
       teacherId,
       teacherEmail,
-      room: editForm.room.trim() || 'Room 101',
-      schedule: editForm.schedule.trim() || 'Mon, Wed 10:00 AM',
+      room: editForm.room.trim(),
+      schedule: editForm.schedule.trim(),
+      ...(scheduleChanged ? { weeklySchedule: parsedSchedule } : {}),
       color: editForm.color || '--primary',
       curriculumStage: editForm.curriculumStage || 'Shkalla III',
-      credits: Number(editForm.credits) || 4,
+      credits: editForm.credits === '' ? null : Number(editForm.credits),
       description: (editForm.description || '').trim()
     };
 
@@ -385,56 +389,27 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
 
   // Robust student enrollment matching
   const isClassEnrolledByMe = useCallback((c) => {
-    if (!c) return false;
-
-    // 1. Direct enrolled IDs
-    const uid = currentUser?.uid;
-    const sId = currentStudent?.id;
-    const customId = currentStudent?.studentId;
-
-    if (Array.isArray(c.enrolledStudentIds)) {
-      if (uid && c.enrolledStudentIds.includes(uid)) return true;
-      if (sId && c.enrolledStudentIds.includes(sId)) return true;
-      if (customId && c.enrolledStudentIds.includes(customId)) return true;
-    }
-
-    // 2. Match student's assignedClasses array
-    const assigned = currentStudent?.assignedClasses || [];
-    if (Array.isArray(assigned) && assigned.length > 0) {
-      const code = (c.code || '').toLowerCase().trim();
-      const name = (c.name || '').toLowerCase().trim();
-      const isAssigned = assigned.some(a => {
-        const aLower = (a || '').toLowerCase().trim();
-        if (!aLower) return false;
-        if (code && (aLower.includes(code) || code.includes(aLower))) return true;
-        if (name && (aLower.includes(name) || name.includes(aLower))) return true;
-        return false;
-      });
-      if (isAssigned) return true;
-    }
-
-    // 3. Fallback for demo mock seed data
-    return Boolean(c.enrolled);
-  }, [currentUser, currentStudent]);
+    return isStudentEnrolledInCourse(currentStudent, c);
+  }, [currentStudent]);
 
   // Calculate my classes count based on role
   const myClassesCount = useMemo(() => {
-    if (userRole === 'teacher') {
+    if (isTeacher) {
       return classesList.filter(isClassTaughtByMe).length;
     }
     return classesList.filter(isClassEnrolledByMe).length;
-  }, [classesList, userRole, isClassTaughtByMe, isClassEnrolledByMe]);
+  }, [classesList, isTeacher, isClassTaughtByMe, isClassEnrolledByMe]);
 
   // Classes filtered by tab first
   const tabFilteredClasses = useMemo(() => {
     if (effectiveTab === 'my-classes') {
-      if (userRole === 'teacher') {
+      if (isTeacher) {
         return classesList.filter(isClassTaughtByMe);
       }
       return classesList.filter(isClassEnrolledByMe);
     }
     return classesList;
-  }, [classesList, effectiveTab, userRole, isClassTaughtByMe, isClassEnrolledByMe]);
+  }, [classesList, effectiveTab, isTeacher, isClassTaughtByMe, isClassEnrolledByMe]);
 
   // Classes filtered by search & department
   const filteredClasses = useMemo(() => {
@@ -458,20 +433,32 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       setFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm (p.sh. CS-101, CHEM-302).' : 'Course code is required (e.g. CS-101, CHEM-302).');
       return;
     }
+    if (newClassCredits !== '' && (!Number.isFinite(Number(newClassCredits)) || Number(newClassCredits) <= 0)) {
+      setFormError(isAlbanian ? 'Kreditë duhet të jenë numër pozitiv.' : 'Credits must be a positive number.');
+      return;
+    }
+    const weeklySchedule = parseWeeklySchedule(newClassSchedule.trim());
+    if (newClassSchedule.trim() && weeklySchedule.length === 0) {
+      setFormError(isAlbanian ? 'Përdorni ditët dhe orën, p.sh. E Hënë, E Mërkurë 09:00.' : 'Enter weekday and time, for example Mon, Wed 09:00.');
+      return;
+    }
 
     setFormError('');
 
-    const teacherName = newClassTeacher || currentStaff?.name || currentUser?.displayName || 'Lead Instructor';
+    const teacherName = newClassTeacher || staffList[0]?.name || currentStaff?.name || currentUser?.displayName || '';
+    const selectedStaff = staffList.find(staff => staff.name === teacherName);
     const newClass = {
       name: newClassName.trim(),
       code: newClassCode.trim().toUpperCase(),
       department: newClassDept,
       teacher: teacherName,
-      teacherId: currentUser?.uid || '',
-      teacherEmail: currentUser?.email || '',
+      teacherId: selectedStaff?.id || (teacherName === currentUser?.displayName ? currentUser?.uid : ''),
+      teacherEmail: selectedStaff?.email || (teacherName === currentUser?.displayName ? currentUser?.email : ''),
       createdByUid: currentUser?.uid || '',
-      room: newClassRoom.trim() || 'Room 101',
-      schedule: newClassSchedule.trim() || 'Mon, Wed 10:00 AM',
+      room: newClassRoom.trim(),
+      schedule: newClassSchedule.trim(),
+      weeklySchedule,
+      credits: newClassCredits === '' ? null : Number(newClassCredits),
       color: newClassColor || '--primary',
       curriculumStage: newClassCurriculumStage || 'Shkalla III',
       weights: { Homework: 20, Engagement: 15, Quiz: 20, Exam: 30, Project: 15 },
@@ -479,23 +466,29 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       students: 0,
       progress: 0,
       enrolled: true,
-      taughtByMe: userRole === 'teacher' || (!staffList.length && currentUser?.role !== 'student')
+      taughtByMe: isTeacher || (!staffList.length && currentUser?.role !== 'student')
     };
 
-    if (addClass) {
+    try {
+      if (!addClass) throw new Error('Course saving is unavailable.');
       await addClass(newClass);
+      setIsAddModalOpen(false);
+      setNewClassName('');
+      setNewClassCode('');
+      setNewClassCredits('');
+      setNewClassRoom('');
+      setNewClassSchedule('');
+      setNewClassCurriculumStage('Shkalla III');
+    } catch (error) {
+      setFormError(error.message || (isAlbanian ? 'Kursi nuk u ruajt.' : 'Course could not be saved.'));
     }
-    setIsAddModalOpen(false);
-    setNewClassName('');
-    setNewClassCode('');
-    setNewClassCurriculumStage('Shkalla III');
   };
 
   const handleExportClasses = () => {
     const listToExport = effectiveTab === 'my-classes' ? tabFilteredClasses : classesList;
-    const headers = 'ID,Course Name,Code,Department,Teacher,Room,Schedule,Students,Progress,Status\n';
+    const headers = 'ID,Course Name,Code,Department,Teacher,Room,Schedule,Credits,Students,Progress,Status\n';
     const rows = listToExport.map(c => 
-      `"${c.id}","${c.name}","${c.code}","${c.department}","${c.teacher}","${c.room}","${c.schedule}",${c.students},${c.progress}%,"${c.enrolled ? 'Enrolled' : 'Open'}"`
+      `"${c.id}","${c.name}","${c.code}","${c.department}","${c.teacher}","${c.room || ''}","${c.schedule || ''}","${c.credits ?? ''}",${studentsList.filter(student => isStudentEnrolledInCourse(student, c)).length},${c.progress}%,"${c.enrolled ? 'Enrolled' : 'Open'}"`
     ).join('\n');
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -550,7 +543,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               onClick={() => setActiveTab('my-classes')}
             >
               <BookOpen size={16} />
-              <span>{userRole === 'teacher' ? (isAlbanian ? 'Kurset e Mia Mësimdhënëse' : 'My Teaching Classes') : (isAlbanian ? 'Lëndët e Mia të Regjistruara' : 'My Classes')}</span>
+              <span>{isTeacher ? (isAlbanian ? 'Kurset e Mia Mësimdhënëse' : 'My Teaching Classes') : (isAlbanian ? 'Lëndët e Mia të Regjistruara' : 'My Classes')}</span>
               <span className="tab-pill-counter">{myClassesCount}</span>
             </button>
             <button
@@ -568,7 +561,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
           <div className="classes-tabs-hint">
             {effectiveTab === 'my-classes' ? (
               <span>
-                {userRole === 'teacher'
+                {isTeacher
                   ? (isAlbanian ? 'Po shfaqen kurset që ligjëroni ju' : 'Showing classes you teach')
                   : (isAlbanian ? 'Po shfaqen lëndët ku jeni të regjistruar' : 'Showing courses you are enrolled in')}
               </span>
@@ -601,7 +594,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       )}
 
       {/* Teacher Banner when in My Classes */}
-      {userRole === 'teacher' && effectiveTab === 'my-classes' && (
+      {isTeacher && effectiveTab === 'my-classes' && (
         <motion.div className="student-classes-summary-strip glass" variants={cardItemVariants}>
           <div className="strip-info">
             <div className="strip-avatar-badge" style={{ background: 'hsla(var(--primary), 0.18)', color: 'hsl(var(--primary))' }}>
@@ -665,6 +658,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 isTaughtByMe={isClassTaughtByMe(classItem)}
                 isEnrolled={isClassEnrolledByMe(classItem)}
                 isAlbanian={isAlbanian}
+                studentCount={studentsList.filter(student => isStudentEnrolledInCourse(student, classItem)).length}
                 canManage={canManageClass}
                 onEdit={handleOpenEdit}
                 onDelete={(cls) => setClassToDelete(cls)}
@@ -801,7 +795,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                       {isAlbanian ? 'Mësimdhënësi Udhëheqës' : 'Lead Instructor'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                     </label>
                     <select 
-                      value={newClassTeacher}
+                      value={newClassTeacher || staffList[0]?.name || currentUser?.displayName || ''}
                       onChange={(e) => setNewClassTeacher(e.target.value)}
                       className="custom-form-select"
                     >
@@ -837,7 +831,21 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                       value={newClassSchedule}
                       onChange={(e) => setNewClassSchedule(e.target.value)}
                     />
+                    <small>{isAlbanian ? 'P.sh. E Hënë, E Mërkurë 09:00 - 10:00. Shfaqet automatikisht në orar.' : 'For example: Mon, Wed 09:00 - 10:00. Appears automatically in Schedule.'}</small>
                   </div>
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="new-course-credits">{isAlbanian ? 'Kredite të Kursit' : 'Course Credits'}</label>
+                  <input
+                    id="new-course-credits"
+                    type="number"
+                    min="0.1"
+                    step="any"
+                    placeholder={isAlbanian ? 'Shëno numrin e krediteve' : 'Enter credit amount'}
+                    value={newClassCredits}
+                    onChange={(e) => setNewClassCredits(e.target.value)}
+                  />
                 </div>
 
                 <div className="input-group">
@@ -1017,6 +1025,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                       value={editForm.schedule}
                       onChange={(e) => setEditForm({ ...editForm, schedule: e.target.value })}
                     />
+                    <small>{isAlbanian ? 'P.sh. E Hënë, E Mërkurë 09:00 - 10:00. Ndryshimet shfaqen në orar.' : 'For example: Mon, Wed 09:00 - 10:00. Changes appear in Schedule.'}</small>
                   </div>
                 </div>
 
@@ -1040,8 +1049,8 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                     <label>{isAlbanian ? 'Kredite të Kursit' : 'Course Credits'}</label>
                     <input 
                       type="number" 
-                      min="1"
-                      max="12"
+                      min="0.1"
+                      step="any"
                       value={editForm.credits}
                       onChange={(e) => setEditForm({ ...editForm, credits: e.target.value })}
                     />

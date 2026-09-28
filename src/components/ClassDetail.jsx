@@ -8,10 +8,11 @@ import {
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from './Avatar';
+import { courseMatchesReference, isStudentEnrolledInCourse } from '../features/enrollment';
 import './ClassDetail.css';
 
 const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreateLessonPlan, lessonLanguage = 'en' }) => {
-  const { studentsList } = useSchoolData();
+  const { studentsList, classesList } = useSchoolData();
   const { isAlbanian } = useLanguage();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'materials'
   const isStudent = userRole === 'student';
@@ -24,14 +25,14 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
 
   // Real enrolled students or filtered by class
   const classMaterials = classInfo.materials || [];
-  const enrolledStudents = studentsList.filter(s => {
-    if (!classInfo.classLabel && !classInfo.subject) return true;
-    return (
-      (classInfo.classLabel && (s.grade === classInfo.classLabel || s.class === classInfo.classLabel)) ||
-      (classInfo.name && s.classes?.includes(classInfo.name))
-    );
-  });
-  const displayStudents = enrolledStudents.length > 0 ? enrolledStudents : (!classInfo.classLabel ? studentsList : []);
+  const relatedCourse = classesList.find(course =>
+    [classInfo.courseId, classInfo.classId, classInfo.subject, classInfo.curriculumSubject]
+      .some(reference => courseMatchesReference(course, reference))
+  );
+  const displayStudents = relatedCourse
+    ? studentsList.filter(student => isStudentEnrolledInCourse(student, relatedCourse))
+    : studentsList.filter(student => classInfo.classLabel &&
+        (student.grade === classInfo.classLabel || student.class === classInfo.classLabel));
 
   const handleStatusChange = (studentId, status) => {
     setAttendanceRecords(prev => ({ ...prev, [studentId]: status }));
@@ -82,7 +83,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
               </div>
               <div className="class-title-info">
                 <h2>{classInfo.subject}</h2>
-                <p>{classInfo.classLabel ? (isAlbanian ? `Klasa ${classInfo.classLabel} · Ora ${classInfo.period} · ` : `Class ${classInfo.classLabel} · Period ${classInfo.period} · `) : ''}{classInfo.room} • {classInfo.time}</p>
+                <p>{[classInfo.classLabel ? `${isAlbanian ? 'Klasa' : 'Class'} ${classInfo.classLabel}${classInfo.period ? ` · ${isAlbanian ? 'Ora' : 'Period'} ${classInfo.period}` : ''}` : '', classInfo.room, classInfo.time].filter(Boolean).join(' · ')}</p>
                 {classInfo.scheduledDate && <p>{new Date(`${classInfo.scheduledDate}T12:00:00`).toLocaleDateString(isAlbanian || lessonLanguage === 'sq' ? 'sq-AL' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>}
               </div>
               <button className="icon-btn-close" onClick={onClose}>

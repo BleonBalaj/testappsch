@@ -11,7 +11,7 @@ export const LanguageProvider = ({ children }) => {
     try {
       const stored = localStorage.getItem('lumi-language') || localStorage.getItem('lumi-lesson-language');
       if (stored === 'sq' || stored === 'en') return stored;
-    } catch {}
+    } catch { /* Storage may be unavailable; keep the default language. */ }
     return 'en';
   });
 
@@ -23,7 +23,7 @@ export const LanguageProvider = ({ children }) => {
         try {
           localStorage.setItem('lumi-language', globalPreferences.language);
           localStorage.setItem('lumi-lesson-language', globalPreferences.language);
-        } catch {}
+        } catch { /* Cloud preference remains authoritative for this session. */ }
       }
     }
   }, [globalPreferences?.language]);
@@ -34,7 +34,7 @@ export const LanguageProvider = ({ children }) => {
     try {
       localStorage.setItem('lumi-language', lang);
       localStorage.setItem('lumi-lesson-language', lang);
-    } catch {}
+    } catch { /* Language still changes in memory when storage is unavailable. */ }
 
     // Dispatch global custom event for legacy / external listeners
     if (typeof window !== 'undefined') {

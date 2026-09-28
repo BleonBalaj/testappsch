@@ -9,6 +9,7 @@ import {
 import { useSchoolData, DEFAULT_ROLE_PERMISSIONS } from '../context/SchoolDataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
+import { courseMatchesReference, displayCourse, enrolledCoursesForStudent, normalizeAssignedCourseIds } from '../features/enrollment';
 import './Students.css';
 
 const containerVariants = {
@@ -63,11 +64,11 @@ const SearchableCourseSelector = ({
     );
   }, [classesList, search]);
 
-  const handleToggle = (courseString) => {
-    if (selectedClasses.includes(courseString)) {
-      onChange(selectedClasses.filter(c => c !== courseString));
+  const handleToggle = (course) => {
+    if (selectedClasses.some(reference => courseMatchesReference(course, reference))) {
+      onChange(selectedClasses.filter(reference => !courseMatchesReference(course, reference)));
     } else {
-      onChange([...selectedClasses, courseString]);
+      onChange([...selectedClasses, String(course.id)]);
     }
   };
 
@@ -81,10 +82,11 @@ const SearchableCourseSelector = ({
       {/* Selected Tags Chips */}
       {selectedClasses.length > 0 && (
         <div className="selected-course-tags-row">
-          {selectedClasses.map(clsStr => (
-            <span key={clsStr} className="selected-course-tag">
+          {selectedClasses.map(clsStr => {
+            const course = classesList.find(item => courseMatchesReference(item, clsStr));
+            return <span key={clsStr} className="selected-course-tag">
               <BookOpen size={12} />
-              <span>{clsStr}</span>
+              <span>{course ? displayCourse(course) : clsStr}</span>
               <button 
                 type="button" 
                 className="selected-course-tag-remove" 
@@ -93,8 +95,8 @@ const SearchableCourseSelector = ({
               >
                 <X size={12} />
               </button>
-            </span>
-          ))}
+            </span>;
+          })}
         </div>
       )}
 
@@ -143,14 +145,13 @@ const SearchableCourseSelector = ({
               </div>
             ) : (
               filteredCourses.map(course => {
-                const courseIdentifier = `${course.name} (${course.code || 'CLS'})`;
-                const isSelected = selectedClasses.includes(courseIdentifier);
+                const isSelected = selectedClasses.some(reference => courseMatchesReference(course, reference));
                 return (
                   <button
                     key={course.id || course.code}
                     type="button"
                     className={`dropdown-course-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleToggle(courseIdentifier)}
+                    onClick={() => handleToggle(course)}
                   >
                     <div className="dropdown-course-item-info">
                       <span className="dropdown-course-item-title">
@@ -172,9 +173,10 @@ const SearchableCourseSelector = ({
   );
 };
 
-const StudentCard = ({ student, index, onSelect, onEdit, onRequestDelete, onToggleArchive, canManage, isAlbanian }) => {
+const StudentCard = ({ student, classesList, classesLoaded, index, onSelect, onEdit, onRequestDelete, onToggleArchive, canManage, isAlbanian }) => {
   const isArchived = student.status === 'archived';
-  const isUnassigned = !isArchived && (!student.assignedClasses || student.assignedClasses.length === 0);
+  const enrolledCourses = enrolledCoursesForStudent(student, classesList);
+  const isUnassigned = classesLoaded && !isArchived && enrolledCourses.length === 0;
 
   return (
     <motion.div 
@@ -240,16 +242,18 @@ const StudentCard = ({ student, index, onSelect, onEdit, onRequestDelete, onTogg
       <div className="student-card-body">
         <div className="student-card-title-row">
           <h3>{student.name}</h3>
-          <span className="student-id-badge">{student.studentId || `STU-${1000 + student.id}`}</span>
+          <span className="student-id-badge">{student.studentId || student.id}</span>
         </div>
         <p className="student-grade">Grade {student.grade}{student.gpa != null && student.gpa !== '' ? ` • GPA ${student.gpa}` : ''}</p>
         
         {/* Enrolled Classes Badges */}
         <div className="student-classes-list">
-          {student.assignedClasses && student.assignedClasses.length > 0 ? (
-            student.assignedClasses.map(cls => (
-              <span key={cls} className="student-class-pill">
-                <BookOpen size={11} /> {cls}
+          {!classesLoaded ? (
+            <span className="student-class-pill">{isAlbanian ? 'Po ngarkohen lëndët…' : 'Loading courses…'}</span>
+          ) : enrolledCourses.length > 0 ? (
+            enrolledCourses.map(course => (
+              <span key={course.id} className="student-class-pill">
+                <BookOpen size={11} /> {displayCourse(course)}
               </span>
             ))
           ) : (
@@ -277,6 +281,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   const { 
     studentsList, 
     classesList = [], 
+    classesLoaded,
     addStudent, 
     updateStudent, 
     deleteStudent, 
@@ -336,10 +341,13 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       phone: s.phone || '',
       guardian: s.guardian || '',
       gpa: s.gpa ?? '',
-      assignedClasses: Array.isArray(s.assignedClasses) ? [...s.assignedClasses] : (s.assignedClasses ? [s.assignedClasses] : []),
+      assignedClasses: normalizeAssignedCourseIds(
+        s.assignedClasses != null ? s.assignedClasses : enrolledCoursesForStudent(s, classesList).map(course => course.id),
+        classesList
+      ),
       status: s.status || 'active'
     });
-  }, []);
+  }, [classesList]);
 
   const handleSaveEditStudent = async (e) => {
     e.preventDefault();
@@ -357,7 +365,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
           phone: editStudentForm.phone.trim(),
           guardian: editStudentForm.guardian.trim(),
           ...(editStudentForm.gpa !== '' ? { gpa: Number(editStudentForm.gpa) } : {}),
-          assignedClasses: editStudentForm.assignedClasses || [],
+          assignedClasses: normalizeAssignedCourseIds(editStudentForm.assignedClasses, classesList),
           status: editStudentForm.status || 'active'
         });
       }
@@ -385,9 +393,9 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   const statusCounts = useMemo(() => {
     const active = studentsList.filter(s => s.status !== 'archived').length;
     const archived = studentsList.filter(s => s.status === 'archived').length;
-    const unassigned = studentsList.filter(s => s.status !== 'archived' && (!s.assignedClasses || s.assignedClasses.length === 0)).length;
+    const unassigned = classesLoaded ? studentsList.filter(s => s.status !== 'archived' && enrolledCoursesForStudent(s, classesList).length === 0).length : 0;
     return { all: studentsList.length, active, archived, unassigned };
-  }, [studentsList]);
+  }, [studentsList, classesList, classesLoaded]);
 
   const filteredStudents = useMemo(() => {
     return studentsList.filter(s => {
@@ -398,7 +406,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
         (s.studentId && s.studentId.toLowerCase().includes(query)) ||
         s.grade.toLowerCase().includes(query) ||
         s.email.toLowerCase().includes(query) ||
-        (s.assignedClasses && s.assignedClasses.some(c => c.toLowerCase().includes(query)));
+        enrolledCoursesForStudent(s, classesList).some(course => displayCourse(course).toLowerCase().includes(query));
 
       // 2. Grade Filter
       const matchesGrade = selectedGrade === 'all' || s.grade === selectedGrade;
@@ -410,12 +418,12 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       } else if (statusFilter === 'archived') {
         matchesStatus = s.status === 'archived';
       } else if (statusFilter === 'unassigned') {
-        matchesStatus = s.status !== 'archived' && (!s.assignedClasses || s.assignedClasses.length === 0);
+        matchesStatus = classesLoaded && s.status !== 'archived' && enrolledCoursesForStudent(s, classesList).length === 0;
       }
 
       return matchesSearch && matchesGrade && matchesStatus;
     });
-  }, [studentsList, searchTerm, selectedGrade, statusFilter]);
+  }, [studentsList, classesList, classesLoaded, searchTerm, selectedGrade, statusFilter]);
 
   const handleAddStudentSubmit = async (e) => {
     e.preventDefault();
@@ -427,9 +435,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       return;
     }
 
-    const classesArray = Array.isArray(studentForm.assignedClasses)
-      ? studentForm.assignedClasses
-      : (studentForm.assignedClassInput ? [studentForm.assignedClassInput] : []);
+    const classesArray = normalizeAssignedCourseIds(studentForm.assignedClasses, classesList);
 
     const customId = studentForm.studentId.trim() || `STU-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -445,7 +451,9 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
       if (addNotification) {
         addNotification('success', result?.alreadyMember
-          ? `${studentForm.name} already belongs to this school.`
+          ? result?.updatedEnrollment
+            ? `${studentForm.name}'s selected courses were added to their existing school profile.`
+            : `${studentForm.name} already belongs to this school.`
           : result?.isExisting
             ? `${studentForm.name}'s existing account was linked to this school.`
             : `Student ${studentForm.name} registered as a Firebase user! ✨`);
@@ -497,7 +505,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   const handleExportStudents = () => {
     const csvContent = "data:text/csv;charset=utf-8," + 
       ["Name,Grade,Status,ClassesEnrolled,Email,Phone,GPA,Guardian,Tags"].join(",") + "\n" +
-      filteredStudents.map(s => `"${s.name}","${s.grade}","${s.status || 'active'}","${s.assignedClasses?.length || 0}","${s.email}","${s.phone}","${s.gpa || ''}","${s.guardian || ''}","${(s.tags || []).join('; ')}"`).join("\n");
+      filteredStudents.map(s => `"${s.name}","${s.grade}","${s.status || 'active'}","${enrolledCoursesForStudent(s, classesList).length}","${s.email}","${s.phone}","${s.gpa || ''}","${s.guardian || ''}","${(s.tags || []).join('; ')}"`).join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -618,6 +626,8 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
               <StudentCard 
                 key={student.id} 
                 student={student} 
+                classesList={classesList}
+                classesLoaded={classesLoaded}
                 index={index} 
                 onSelect={onStudentSelect}
                 onEdit={handleOpenEditStudent}

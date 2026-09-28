@@ -238,8 +238,8 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
     {
       id: 3,
       icon: BarChart3,
-      title: 'Gradebook & Transcripts',
-      desc: 'Track GPA trends, review course credits, and generate printable official transcripts.',
+      title: 'Gradebook & Grade Reports',
+      desc: 'Review live course grades and print current grade reports.',
     },
     {
       id: 4,

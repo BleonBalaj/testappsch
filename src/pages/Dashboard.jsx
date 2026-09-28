@@ -16,6 +16,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import { db } from '../services/firebase';
 import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { isStudentEnrolledInCourse } from '../features/enrollment';
+import { courseResult } from '../features/gradebook/schoolResults';
+import { useCourseRecords } from '../features/gradebook/useCourseRecords';
 import './Dashboard.css';
 
 const StatCard = ({ icon: IconComponent, label, value, color, delay, subtext }) => (
@@ -33,8 +36,7 @@ const StatCard = ({ icon: IconComponent, label, value, color, delay, subtext }) 
       <p>{label}</p>
     </div>
     <div className="stat-trend">
-      <TrendingUp size={16} />
-      <span>{subtext || '+5%'}</span>
+      {subtext && <span>{subtext}</span>}
     </div>
   </motion.div>
 );
@@ -57,7 +59,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const [note, setNote] = useState('');
   const { moodHistory, addMoodEntry, getTodayMood } = useMood();
   const { staffList = [], studentsList = [], classesList = [], eventsList = [] } = useSchoolData();
-  const { currentUser, activeSchool } = useAuth();
+  const { currentUser, activeSchool, activeSchoolId } = useAuth();
   const { language, isAlbanian, t } = useLanguage();
   const todayEntry = getTodayMood();
   
@@ -257,16 +259,20 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
 
   // Academic Calendar Milestones dynamically derived from school events
   const academicCalendarEvents = useMemo(() => {
-    return eventsList.map((e, idx) => ({
-      id: e.id || idx,
-      month: new Date(e.date || Date.now()).toLocaleString('default', { month: 'short' }).toUpperCase(),
-      day: String(new Date(e.date || Date.now()).getDate()),
-      title: e.title,
-      time: e.time || '10:00 AM',
-      location: e.location || 'Campus',
-      tag: e.type || 'Academic',
-      color: e.color || '--primary'
-    }));
+    return eventsList.map((e, idx) => {
+      const eventDate = e.date ? new Date(e.date) : null;
+      const validDate = eventDate && !Number.isNaN(eventDate.getTime());
+      return {
+        id: e.id || idx,
+        month: validDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : '—',
+        day: validDate ? String(eventDate.getDate()) : '—',
+        title: e.title,
+        time: e.time || '',
+        location: e.location || '',
+        tag: e.type || 'Academic',
+        color: e.color || '--primary'
+      };
+    });
   }, [eventsList]);
 
   // Resolve current staff and student for accurate matching
@@ -304,53 +310,35 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   }, [currentUser, currentStaff]);
 
   const isClassEnrolledByMe = useCallback((c) => {
-    if (!c) return false;
-    const uid = currentUser?.uid;
-    const sId = currentStudent?.id;
-    const customId = currentStudent?.studentId;
-    if (Array.isArray(c.enrolledStudentIds)) {
-      if (uid && c.enrolledStudentIds.includes(uid)) return true;
-      if (sId && c.enrolledStudentIds.includes(sId)) return true;
-      if (customId && c.enrolledStudentIds.includes(customId)) return true;
-    }
-    const assigned = currentStudent?.assignedClasses || [];
-    if (Array.isArray(assigned) && assigned.length > 0) {
-      const code = (c.code || '').toLowerCase().trim();
-      const name = (c.name || '').toLowerCase().trim();
-      const isAssigned = assigned.some(a => {
-        const aLower = (a || '').toLowerCase().trim();
-        if (!aLower) return false;
-        if (code && (aLower.includes(code) || code.includes(aLower))) return true;
-        if (name && (aLower.includes(name) || name.includes(aLower))) return true;
-        return false;
-      });
-      if (isAssigned) return true;
-    }
-    return Boolean(c.enrolled);
-  }, [currentUser, currentStudent]);
+    return isStudentEnrolledInCourse(currentStudent, c);
+  }, [currentStudent]);
 
   const teacherClasses = useMemo(() => {
     return classesList.filter(isClassTaughtByMe).map(c => ({
       id: c.id,
       name: c.name,
-      time: c.schedule || 'Scheduled',
-      room: c.room || 'Room 301',
-      students: c.students || 0,
-      status: 'Upcoming'
+      time: c.schedule || '',
+      room: c.room || '',
+      students: studentsList.filter(student => isStudentEnrolledInCourse(student, c)).length,
     }));
-  }, [classesList, isClassTaughtByMe]);
+  }, [classesList, studentsList, isClassTaughtByMe]);
 
   const studentScheduleToday = useMemo(() => {
     return classesList.filter(isClassEnrolledByMe).map((c, idx) => ({
       id: c.id || idx,
-      period: c.period || `Period ${idx + 1}`,
-      time: c.schedule || 'Scheduled',
+      period: c.period || c.code || '',
+      time: c.schedule || '',
       name: c.name,
-      teacher: c.teacher || 'Instructor',
-      room: c.room || 'Main Hall',
-      status: 'upcoming'
+      teacher: c.teacher || '',
+      room: c.room || ''
     }));
   }, [classesList, isClassEnrolledByMe]);
+  const studentCourses = useMemo(() => classesList.filter(isClassEnrolledByMe), [classesList, isClassEnrolledByMe]);
+  const { records: studentGradeRecords, loading: studentGradesLoading, error: studentGradesError } = useCourseRecords(isStudent ? activeSchoolId : null, studentCourses);
+  const studentCourseGrades = studentGradesLoading || studentGradesError || !currentStudent ? [] : studentCourses
+    .map(course => courseResult(currentStudent.id, course, studentGradeRecords[String(course.id)]))
+    .filter(Number.isFinite);
+  const studentGradeAverage = studentCourseGrades.length ? Math.round(studentCourseGrades.reduce((sum, grade) => sum + grade, 0) / studentCourseGrades.length * 10) / 10 : null;
 
   const completedStudentTasksCount = studentTasks.filter(t => t.completed).length;
   const pendingStudentTasksCount = studentTasks.filter(t => !t.completed).length;
@@ -383,8 +371,8 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           <p>
             {isStudent 
               ? (isAlbanian 
-                ? `${activeSchool?.name || 'Shkolla'} • Portali i Nxënësit • ${studentScheduleToday.length} ${studentScheduleToday.length === 1 ? 'lëndë' : 'lëndë'} të regjistruara`
-                : `${activeSchool?.name || 'School'} ${t('nav.student')} Portal • ${studentScheduleToday.length} ${studentScheduleToday.length === 1 ? 'class' : 'classes'} enrolled`)
+                ? `${activeSchool?.name || 'Shkolla'} • Portali i Nxënësit • ${studentCourses.length} lëndë të regjistruara`
+                : `${activeSchool?.name || 'School'} ${t('nav.student')} Portal • ${studentCourses.length} ${studentCourses.length === 1 ? 'class' : 'classes'} enrolled`)
               : isAdmin 
               ? (isAlbanian 
                 ? `Ja çfarë po ndodh sot në ${activeSchool?.name || 'shkollë'}.`
@@ -472,8 +460,8 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       <section className="stats-grid">
         {isStudent ? (
           <>
-            <StatCard icon={Star} label={t('dashboard.academicStanding')} value={t('dashboard.goodStanding')} color="--primary" delay={0.1} subtext={t('dashboard.activeEnrollment')} />
-            <StatCard icon={BookOpen} label={t('dashboard.enrolledClasses')} value={`${studentScheduleToday.length} ${isAlbanian ? 'Kurse' : 'Courses'}`} color="--accent" delay={0.2} subtext={studentScheduleToday[0] ? `${isAlbanian ? 'Radhës:' : 'Next:'} ${studentScheduleToday[0].name}` : (isAlbanian ? 'Sot nuk ka mësim' : 'No classes today')} />
+            <StatCard icon={Star} label={isAlbanian ? 'Mesatarja aktuale' : 'Current grade average'} value={studentGradesLoading ? '…' : studentGradeAverage === null ? '—' : `${studentGradeAverage}%`} color="--primary" delay={0.1} subtext={studentGradesError ? (isAlbanian ? 'Notat nuk mund të ngarkohen' : 'Grades unavailable') : `${studentCourseGrades.length} ${isAlbanian ? 'lëndë me nota' : 'graded courses'}`} />
+            <StatCard icon={BookOpen} label={t('dashboard.enrolledClasses')} value={`${studentCourses.length} ${isAlbanian ? 'Kurse' : 'Courses'}`} color="--accent" delay={0.2} subtext={studentCourses.length ? (isAlbanian ? 'Lëndët ku jeni regjistruar' : 'Your enrolled courses') : (isAlbanian ? 'Nuk ka lëndë të regjistruara' : 'No enrolled courses')} />
             <StatCard icon={CheckCircle2} label={t('dashboard.personalTasks')} value={`${pendingStudentTasksCount} ${t('common.pending')}`} color="--chart-1" delay={0.3} subtext={`${completedStudentTasksCount} ${t('common.completed')}`} />
             <StatCard icon={Target} label={t('dashboard.academicEvents')} value={`${eventsList.length} ${isAlbanian ? 'Të Planifikuara' : 'Scheduled'}`} color="--chart-2" delay={0.4} subtext={t('dashboard.campusCalendar')} />
           </>
@@ -643,9 +631,9 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           >
             <div className="card-header">
               <div>
-                <h3>{t('dashboard.todaysEnrolledClasses')}</h3>
+                <h3>{isAlbanian ? 'Lëndët e mia' : 'My enrolled courses'}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
-                  {studentScheduleToday.length} {studentScheduleToday.length === 1 ? 'Period' : 'Periods'} Scheduled
+                  {studentScheduleToday.length} {isAlbanian ? 'lëndë' : studentScheduleToday.length === 1 ? 'course' : 'courses'}
                 </span>
               </div>
               <button className="text-btn" onClick={() => onNavigate('schedule')}>{t('dashboard.fullTimetable')}</button>
@@ -665,18 +653,15 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
                   >
                     <div className="student-class-time-block">
                       <span className="student-class-period">{cls.period}</span>
-                      <span className="student-class-time">{(cls.time || '').split(' - ')[0]}</span>
+                      {cls.time && <span className="student-class-time">{cls.time}</span>}
                     </div>
                     <div className="student-class-main">
                       <h4 className="student-class-title">{cls.name}</h4>
                       <div className="student-class-sub">
-                        <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{cls.room}</span>
-                        <span>•</span>
-                        <span>{cls.teacher}</span>
+                        {cls.room && <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{cls.room}</span>}
+                        {cls.room && cls.teacher && <span>•</span>}
+                        {cls.teacher && <span>{cls.teacher}</span>}
                       </div>
-                    </div>
-                    <div className="student-class-badge upcoming">
-                      {t('common.upcoming')}
                     </div>
                   </div>
                 ))
@@ -692,7 +677,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             transition={{ delay: 0.6 }}
           >
             <div className="card-header">
-              <h3>{t('dashboard.myClassesToday')}</h3>
+              <h3>{isAlbanian ? 'Lëndët e mia' : 'My courses'}</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button className="text-btn" onClick={() => onNavigate('lesson-plans')}>{t('dashboard.lessonPlanning')}</button>
                 <button className="text-btn" onClick={() => onNavigate('schedule')}>{t('dashboard.fullTimetable')}</button>
@@ -705,13 +690,12 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
                 </div>
               ) : (
                 teacherClasses.map(cls => (
-                  <div key={cls.id} className={`class-row glass bouncy ${(cls.status || '').toLowerCase()}`}>
-                    <div className="class-time">{cls.time}</div>
+                  <div key={cls.id} className="class-row glass bouncy">
+                    {cls.time && <div className="class-time">{cls.time}</div>}
                     <div className="class-info">
                       <h4>{cls.name}</h4>
-                      <span>Room {cls.room} • {cls.students} Students</span>
+                      <span>{cls.room ? `${cls.room} • ` : ''}{cls.students} {isAlbanian ? 'nxënës' : cls.students === 1 ? 'student' : 'students'}</span>
                     </div>
-                    <div className="class-status-badge">{cls.status}</div>
                   </div>
                 ))
               )}
@@ -859,9 +843,9 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
                   <div className="academic-event-body">
                     <h4>{event.title}</h4>
                     <div className="academic-event-meta">
-                      <span><Clock size={13} style={{ display: 'inline', marginRight: 3 }} />{event.time}</span>
-                      <span>•</span>
-                      <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{event.location}</span>
+                      {event.time && <span><Clock size={13} style={{ display: 'inline', marginRight: 3 }} />{event.time}</span>}
+                      {event.time && event.location && <span>•</span>}
+                      {event.location && <span><MapPin size={13} style={{ display: 'inline', marginRight: 3 }} />{event.location}</span>}
                     </div>
                   </div>
                   <span 

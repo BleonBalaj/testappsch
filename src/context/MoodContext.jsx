@@ -28,7 +28,7 @@ export const MoodProvider = ({ children }) => {
       if (cached) {
         setMoodHistory(JSON.parse(cached));
       }
-    } catch {}
+    } catch { /* Ignore an invalid local cache and use the cloud snapshot. */ }
 
     const moodsCol = collection(db, 'users', currentUser.uid, 'moods');
     const unsubscribe = onSnapshot(moodsCol, (snapshot) => {
@@ -40,7 +40,7 @@ export const MoodProvider = ({ children }) => {
       setMoodHistory(moods);
       try {
         localStorage.setItem(`lumi-cached-moods-${currentUser.uid}`, JSON.stringify(moods));
-      } catch {}
+      } catch { /* Ignore an invalid local cache and use the cloud snapshot. */ }
     }, (err) => {
       console.warn('Notice listening to moods:', err.message);
     });
@@ -66,7 +66,7 @@ export const MoodProvider = ({ children }) => {
       if (currentUser?.uid) {
         try {
           localStorage.setItem(`lumi-cached-moods-${currentUser.uid}`, JSON.stringify(updated));
-        } catch {}
+        } catch { /* Storage is optional; Firestore remains the source of truth. */ }
       }
       return updated;
     });
