@@ -23,7 +23,9 @@ import QuickAction from './components/QuickAction';
 import Login from './pages/Login';
 import SchoolSwitcher from './components/SchoolSwitcher';
 import PlatformAdminRoute from './pages/PlatformAdminRoute';
+import NotFound from './pages/NotFound';
 import { parseAdminPath } from './features/platformAdmin/route';
+import { detailParent, pageFromLocation, pathForPage } from './features/navigation/pageRoutes';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MoodProvider } from './context/MoodContext';
@@ -33,21 +35,15 @@ import { Calendar, Sparkles, School, Plus, LogOut } from 'lucide-react';
 import './App.css';
 
 function AppContent() {
-  const { currentUser, currentRole, activeSchoolId, activeSchool, authLoading, schoolLinks, schoolLinksLoaded, createNewSchool, logoutUser } = useAuth();
+  const { currentUser, currentRole, roleReady, activeSchoolId, activeSchool, authLoading, schoolLinks, schoolLinksLoaded, createNewSchool, logoutUser } = useAuth();
   const { language, t } = useLanguage();
-  const { classesList = [], classesLoaded, eventsList = [], rolePermissions } = useSchoolData();
+  const { classesList = [], classesLoaded, studentsList = [], loading: schoolDataLoading, eventsList = [], rolePermissions } = useSchoolData();
 
-  const getInitialPath = () => {
-    if (typeof window !== 'undefined') {
-      const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
-      if (pathname === 'login' || window.location.hash === '#/login' || window.location.hash === '#login') {
-        return 'login';
-      }
-    }
-    return 'dashboard';
-  };
-
-  const [currentPath, setCurrentPath] = useState(getInitialPath);
+  // The page in the address bar when the app opened (see features/navigation/pageRoutes).
+  const [initialRoute] = useState(() => pageFromLocation(window.location.pathname, window.location.hash) || { page: 'not-found' });
+  const [currentPath, setCurrentPath] = useState(() => detailParent(initialRoute.page) || initialRoute.page);
+  // A /classes/<id> or /students/<id> link waiting for its record to load.
+  const [pendingDetail, setPendingDetail] = useState(() => (initialRoute.id !== undefined ? initialRoute : null));
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [pendingScheduledLesson, setPendingScheduledLesson] = useState(null);
@@ -83,9 +79,11 @@ function AppContent() {
 
   // The active role strictly tracks currentRole attached to active school membership
   const userRole = currentRole || 'student';
+  // Until the membership loads the role reads as 'student'; don't redirect on it.
+  const roleSettled = Boolean(schoolLinksLoaded && roleReady);
 
   const canAccessPath = useCallback((path) => {
-    if (path === 'login' || path === 'settings') return true;
+    if (path === 'login' || path === 'settings' || path === 'not-found') return true;
     if (path === 'lesson-plans-settings') return userRole === 'admin';
     if (path === 'transcript') return userRole === 'student' && Boolean(rolePermissions?.student?.transcript ?? DEFAULT_ROLE_PERMISSIONS.student.transcript);
     const moduleByPath = { 'class-overview': 'classes', 'student-overview': 'students', teachers: 'staff' };
@@ -96,43 +94,118 @@ function AppContent() {
     return Boolean(rolePermissions?.[permissionRole]?.[moduleId] ?? DEFAULT_ROLE_PERMISSIONS[permissionRole]?.[moduleId]);
   }, [userRole, rolePermissions]);
 
+  // Redirects (sign-in, role guard, first load) replace the address instead of
+  // adding a history entry, so Back never lands on a page that bounces again.
+  const replaceUrlRef = useRef(true);
+  // Page to open after signing in when the app was opened on a link while signed out.
+  const deepLinkRef = useRef(['login', 'dashboard', 'not-found'].includes(initialRoute.page) ? null : initialRoute);
+  const authResolvedRef = useRef(false);
+
   // Route protection based on role
   useEffect(() => {
+    if (!roleSettled) return;
     if (!canAccessPath(currentPath)) {
       setPendingScheduledLesson(null);
+      replaceUrlRef.current = true;
       setCurrentPath(canAccessPath('dashboard') ? 'dashboard' : 'settings');
     }
-  }, [currentPath, canAccessPath]);
+  }, [currentPath, canAccessPath, roleSettled]);
 
   const handleNavigate = (path) => {
     if (path !== 'lesson-plans') setPendingScheduledLesson(null);
+    setPendingDetail(null);
     setCurrentPath(path);
-    if (typeof window !== 'undefined') {
-      if (path === 'login') {
-        window.history.pushState({}, '', '/login');
-      } else if (window.location.pathname.replace(/^\/+|\/+$/g, '') === 'login') {
-        window.history.pushState({}, '', '/');
-      }
-    }
   };
+
+  const [studentReturnPath, setStudentReturnPath] = useState('students');
+
+  const openRoute = useCallback((route) => {
+    if (route.id !== undefined) {
+      setCurrentPath(detailParent(route.page));
+      setPendingDetail(route);
+    } else {
+      setPendingDetail(null);
+      setCurrentPath(route.page);
+    }
+  }, []);
+
+  // After signing in: the link the app was opened on, otherwise the dashboard.
+  // Only acts while still on the sign-in page, so a second call is harmless.
+  const openAfterLogin = useCallback(() => {
+    const route = deepLinkRef.current;
+    deepLinkRef.current = null;
+    replaceUrlRef.current = true;
+    setPendingScheduledLesson(null);
+    if (route?.id !== undefined) {
+      setCurrentPath(prev => (prev === 'login' ? detailParent(route.page) : prev));
+      setPendingDetail(route);
+    } else {
+      setCurrentPath(prev => (prev === 'login' ? route?.page || 'dashboard' : prev));
+    }
+  }, []);
 
   // Handle redirect if not logged in
   useEffect(() => {
-    if (!authLoading && !currentUser && currentPath !== 'login') {
-      handleNavigate('login');
-    } else if (!authLoading && currentUser && currentPath === 'login') {
-      handleNavigate('dashboard');
+    if (authLoading) return;
+    if (!authResolvedRef.current) {
+      authResolvedRef.current = true;
+      // Already signed in: the link is open now, nothing to restore later.
+      if (currentUser) deepLinkRef.current = null;
     }
-  }, [currentUser, authLoading, currentPath]);
+    if (!currentUser && currentPath !== 'login') {
+      replaceUrlRef.current = true;
+      handleNavigate('login');
+    } else if (currentUser && currentPath === 'login') {
+      openAfterLogin();
+    }
+  }, [currentUser, authLoading, currentPath, openAfterLogin]);
 
+  // Open /classes/<id> and /students/<id> once their records have loaded.
+  useEffect(() => {
+    if (!pendingDetail || !currentUser) return;
+    if (pendingDetail.page === 'class-overview') {
+      if (!classesLoaded) return;
+      const course = classesList.find(item => String(item.id) === String(pendingDetail.id));
+      setPendingDetail(null);
+      if (course) {
+        setSelectedClass(course);
+        setCurrentPath('class-overview');
+      } else {
+        replaceUrlRef.current = true;
+      }
+    } else if (pendingDetail.page === 'student-overview') {
+      if (schoolDataLoading) return;
+      const student = studentsList.find(item => String(item.id) === String(pendingDetail.id));
+      setPendingDetail(null);
+      if (student) {
+        setSelectedStudent(student);
+        setStudentReturnPath('students');
+        setCurrentPath('student-overview');
+      } else {
+        replaceUrlRef.current = true;
+      }
+    }
+  }, [pendingDetail, currentUser, classesLoaded, classesList, schoolDataLoading, studentsList]);
+
+  // Keep the address bar in step with the page being shown.
+  useEffect(() => {
+    if (authLoading || pendingDetail || currentPath === 'not-found') return;
+    // Wait while a redirect is about to happen.
+    if (!currentUser ? currentPath !== 'login' : currentPath === 'login') return;
+    if (roleSettled && !canAccessPath(currentPath)) return;
+    const recordId = currentPath === 'class-overview' ? selectedClass?.id
+      : currentPath === 'student-overview' ? selectedStudent?.id : undefined;
+    const target = pathForPage(currentPath, recordId);
+    if (target && window.location.pathname !== target) {
+      window.history[replaceUrlRef.current ? 'replaceState' : 'pushState']({}, '', target);
+    }
+    replaceUrlRef.current = false;
+  }, [authLoading, pendingDetail, currentPath, currentUser, roleSettled, canAccessPath, selectedClass?.id, selectedStudent?.id]);
+
+  // Back / Forward buttons.
   useEffect(() => {
     const handleUrlChange = () => {
-      const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
-      if (pathname === 'login' || window.location.hash === '#/login' || window.location.hash === '#login') {
-        setCurrentPath('login');
-      } else if (currentPath === 'login') {
-        setCurrentPath('dashboard');
-      }
+      openRoute(pageFromLocation(window.location.pathname, window.location.hash) || { page: 'not-found' });
     };
     window.addEventListener('popstate', handleUrlChange);
     window.addEventListener('hashchange', handleUrlChange);
@@ -140,9 +213,7 @@ function AppContent() {
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('hashchange', handleUrlChange);
     };
-  }, [currentPath]);
-
-  const [studentReturnPath, setStudentReturnPath] = useState('students');
+  }, [openRoute]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('lumi-theme');
@@ -191,7 +262,7 @@ function AppContent() {
 
   // 2. Unauthenticated user
   if (!currentUser) {
-    return <Login onLogin={() => handleNavigate('dashboard')} onNavigate={handleNavigate} addNotification={addNotification} />;
+    return <Login onLogin={openAfterLogin} onNavigate={handleNavigate} addNotification={addNotification} />;
   }
 
   // 3. No-school screen: user is logged in, school links definitively verified loaded, and strictly 0 schools
@@ -277,8 +348,14 @@ function AppContent() {
     );
   }
 
+  // An address that matches no page.
+  if (currentPath === 'not-found') {
+    return <NotFound onGoHome={() => handleNavigate('dashboard')} />;
+  }
+
   const renderPage = () => {
-    if (!canAccessPath(currentPath)) return <Settings addNotification={addNotification} lessonLanguage={lessonLanguage} onNavigate={handleNavigate} onLogout={logoutUser} />;
+    // While the role is still loading, render nothing rather than a wrong fallback.
+    if (!canAccessPath(currentPath)) return roleSettled ? <Settings addNotification={addNotification} lessonLanguage={lessonLanguage} onNavigate={handleNavigate} onLogout={logoutUser} /> : null;
 
     switch (currentPath) {
       case 'dashboard':
@@ -379,7 +456,7 @@ function AppContent() {
       case 'login':
         return (
           <Login 
-            onLogin={() => handleNavigate('dashboard')}
+            onLogin={openAfterLogin}
             onNavigate={handleNavigate}
             addNotification={addNotification}
           />
@@ -393,7 +470,7 @@ function AppContent() {
     return (
       <div className="login-root-container">
         <Login 
-          onLogin={() => handleNavigate('dashboard')}
+          onLogin={openAfterLogin}
           onNavigate={handleNavigate}
           addNotification={addNotification}
         />

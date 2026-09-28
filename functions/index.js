@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
+import { reportErrors } from './callableErrors.js';
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const permittedRoles = new Set(['admin', 'teacher', 'dept_head']);
@@ -15,18 +16,24 @@ export const getLessonAiUsage = onCall({ region: 'us-central1', invoker: 'public
 });
 
 export const provisionSchoolUser = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 60 }, async (request) => {
-  const { provisionUser } = await import('./provisionSchoolUser.js');
-  return provisionUser(request);
+  return reportErrors('provisionSchoolUser', request, async () => {
+    const { provisionUser } = await import('./provisionSchoolUser.js');
+    return provisionUser(request);
+  });
 });
 
 export const removeSchoolStudent = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 60 }, async (request) => {
-  const { removeStudent } = await import('./provisionSchoolUser.js');
-  return removeStudent(request);
+  return reportErrors('removeSchoolStudent', request, async () => {
+    const { removeStudent } = await import('./provisionSchoolUser.js');
+    return removeStudent(request);
+  });
 });
 
 export const updateSchoolStaff = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 60 }, async (request) => {
-  const { updateStaffMember } = await import('./provisionSchoolUser.js');
-  return updateStaffMember(request);
+  return reportErrors('updateSchoolStaff', request, async () => {
+    const { updateStaffMember } = await import('./provisionSchoolUser.js');
+    return updateStaffMember(request);
+  });
 });
 
 export const listMyInvitations = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 30 }, async (request) => {
