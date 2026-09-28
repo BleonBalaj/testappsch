@@ -29,6 +29,37 @@ export const updateSchoolStaff = onCall({ region: 'us-central1', invoker: 'publi
   return updateStaffMember(request);
 });
 
+export const listMyInvitations = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 30 }, async (request) => {
+  const { listMyInvitations: list } = await import('./invitations.js');
+  return list(request);
+});
+
+export const acceptSchoolInvitation = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 60 }, async (request) => {
+  const { acceptInvitation } = await import('./invitations.js');
+  return acceptInvitation(request);
+});
+
+export const declineSchoolInvitation = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 30 }, async (request) => {
+  const { declineInvitation } = await import('./invitations.js');
+  return declineInvitation(request);
+});
+
+// Platform owner dashboard. Access is checked inside against the hardcoded
+// admin email; everyone else gets the same answer as a missing endpoint.
+export const getPlatformAdminOverview = onCall({
+  region: 'us-central1', invoker: 'public', timeoutSeconds: 120, memory: '512MiB', maxInstances: 2,
+}, async (request) => {
+  const { getPlatformOverview } = await import('./platformAdmin.js');
+  return getPlatformOverview(request);
+});
+
+export const runPlatformAdminRepair = onCall({
+  region: 'us-central1', invoker: 'public', timeoutSeconds: 540, memory: '512MiB', maxInstances: 1,
+}, async (request) => {
+  const { runPlatformRepair } = await import('./platformAdmin.js');
+  return runPlatformRepair(request);
+});
+
 export const generateLessonPlan = onCall({
   region: 'us-central1',
   invoker: 'public',

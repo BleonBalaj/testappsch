@@ -12,8 +12,9 @@ import {
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, query, where, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { conversationMemberIds, isPersistedConversation, viewerConversation } from '../features/messaging/conversationAccess';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import './Messages.css';
@@ -65,6 +66,8 @@ const Messages = ({ userRole = 'admin' }) => {
   const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
 
   const messagesEndRef = useRef(null);
+  // Conversation ids the server has confirmed; see isPersistedConversation.
+  const syncedConversationIdsRef = useRef(new Set());
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -76,11 +79,20 @@ const Messages = ({ userRole = 'admin' }) => {
 
   // 1. Listen to real conversations from Firestore and merge with school members
   useEffect(() => {
-    if (!activeSchoolId) return;
-    const colRef = collection(db, 'schools', activeSchoolId, 'conversations');
-    const unsub = onSnapshot(colRef, (snapshot) => {
+    if (!activeSchoolId || !currentUser?.uid) return;
+    // Only conversations this user belongs to; rules reject any wider read.
+    const colRef = query(
+      collection(db, 'schools', activeSchoolId, 'conversations'),
+      where('memberIds', 'array-contains', currentUser.uid)
+    );
+    syncedConversationIdsRef.current = new Set();
+    // Metadata changes report when a locally created chat reaches the server.
+    const unsub = onSnapshot(colRef, { includeMetadataChanges: true }, (snapshot) => {
       const convs = [];
-      snapshot.forEach(docSnap => convs.push({ id: docSnap.id, ...docSnap.data() }));
+      snapshot.forEach(docSnap => {
+        if (!docSnap.metadata.hasPendingWrites) syncedConversationIdsRef.current.add(docSnap.id);
+        convs.push({ id: docSnap.id, ...docSnap.data(), syncedToServer: syncedConversationIdsRef.current.has(docSnap.id) });
+      });
 
       // Directory contacts
       const dirContacts = [
@@ -123,8 +135,7 @@ const Messages = ({ userRole = 'admin' }) => {
       const mergedMap = new Map();
       dirContacts.forEach(c => mergedMap.set(c.id, c));
       convs.forEach(c => {
-        const existing = mergedMap.get(c.id);
-        mergedMap.set(c.id, { ...(existing || {}), ...c });
+        mergedMap.set(c.id, viewerConversation(c, mergedMap.get(c.id), currentUser?.uid));
       });
 
       const finalChats = Array.from(mergedMap.values());
@@ -143,9 +154,10 @@ const Messages = ({ userRole = 'admin' }) => {
     return () => unsub();
   }, [activeSchoolId, staffList, studentsList, currentUser?.uid]);
 
-  // 2. Listen to real messages in activeChat
+  // 2. Listen to real messages in activeChat once its conversation document exists
+  const activeChatPersisted = isPersistedConversation(activeChat, currentUser?.uid);
   useEffect(() => {
-    if (!activeSchoolId || !activeChat?.id) return;
+    if (!activeSchoolId || !activeChat?.id || !activeChatPersisted) return;
     const msgsCol = collection(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id), 'messages');
     const msgsQuery = query(msgsCol, orderBy('createdAt', 'asc'));
     const unsub = onSnapshot(msgsQuery, (snapshot) => {
@@ -166,7 +178,7 @@ const Messages = ({ userRole = 'admin' }) => {
     }, (err) => console.warn('Messages sync notice:', err.message));
 
     return () => unsub();
-  }, [activeSchoolId, activeChat?.id, currentUser?.uid]);
+  }, [activeSchoolId, activeChat?.id, activeChatPersisted, currentUser?.uid]);
 
   const currentMessages = useMemo(() => {
     if (!activeChat) return [];
@@ -273,12 +285,17 @@ const Messages = ({ userRole = 'admin' }) => {
 
     if (activeSchoolId && activeChat?.id) {
       try {
+        const memberIds = conversationMemberIds(activeChat);
+        if (!currentUser?.uid || !memberIds.includes(currentUser.uid)) {
+          throw new Error('You are not a member of this conversation.');
+        }
         const msgRef = doc(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id), 'messages', msgId);
-        await setDoc(msgRef, newMsg);
-
         const convRef = doc(db, 'schools', activeSchoolId, 'conversations', String(activeChat.id));
-        await setDoc(convRef, {
+        // One batch: the first message of a new chat creates its conversation too.
+        const batch = writeBatch(db);
+        batch.set(convRef, {
           id: String(activeChat.id),
+          memberIds,
           name: activeChat.name,
           role: activeChat.role || 'Member',
           roleType: activeChat.roleType || 'direct',
@@ -289,6 +306,8 @@ const Messages = ({ userRole = 'admin' }) => {
           lastMessageAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         }, { merge: true });
+        batch.set(msgRef, newMsg);
+        await batch.commit();
       } catch (err) {
         console.warn('Error saving message to Firestore:', err.message);
       }
@@ -358,6 +377,7 @@ const Messages = ({ userRole = 'admin' }) => {
       name: user.name,
       role: type === 'staff' ? (user.roleName || user.department || 'Faculty') : `Student (${user.grade || 'General'})`,
       roleType: type,
+      memberIds: conversationMemberIds({ id: dmId }),
       lastMessage: 'Direct conversation',
       time: 'Active',
       unread: 0,
@@ -412,6 +432,7 @@ const Messages = ({ userRole = 'admin' }) => {
         { id: currentUser?.uid, name: currentUser?.displayName || 'You (Host)', role: 'Moderator', isModerator: true, muted: false },
         ...groupMembers
       ],
+      memberIds: [...new Set([currentUser?.uid, ...groupMembers.map(m => m.id)].filter(Boolean))],
       sharedFiles: [],
       starred: true,
       createdAt: serverTimestamp()

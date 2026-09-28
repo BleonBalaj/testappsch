@@ -9,12 +9,5 @@ export default defineConfig({
     port: 3000,
     allowedHosts: true,
     cors: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5001',
-        changeOrigin: true,
-        secure: false,
-      }
-    }
   },
 });

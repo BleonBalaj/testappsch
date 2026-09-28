@@ -19,7 +19,13 @@ import {
   updateDoc,
   serverTimestamp 
 } from 'firebase/firestore';
-import { auth, db } from '../services/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '../services/firebase';
+import { buildProfileBackfill } from '../features/userProfile';
+
+const listMyInvitationsCallable = httpsCallable(functions, 'listMyInvitations');
+const acceptInvitationCallable = httpsCallable(functions, 'acceptSchoolInvitation');
+const declineInvitationCallable = httpsCallable(functions, 'declineSchoolInvitation');
 
 const AuthContext = createContext(null);
 
@@ -223,9 +229,21 @@ export const AuthProvider = ({ children }) => {
     }
 
     const userDocRef = doc(db, 'users', currentUser.uid);
+    let profileChecked = false;
     const unsubscribe = onSnapshot(userDocRef, (snap) => {
       if (snap.exists()) {
         setUserDocData(snap.data());
+      }
+      // Every account gets a users/{uid} profile. Decide only on a server
+      // snapshot so an empty offline cache never looks like a missing profile.
+      if (profileChecked || snap.metadata.fromCache || auth.currentUser?.uid !== userDocRef.id) return;
+      profileChecked = true;
+      const backfill = buildProfileBackfill(auth.currentUser, snap.exists() ? snap.data() : null);
+      if (backfill) {
+        const payload = { ...backfill.fields, updatedAt: serverTimestamp() };
+        if (backfill.needsCreatedAt) payload.createdAt = serverTimestamp();
+        setDoc(userDocRef, payload, { merge: true })
+          .catch(err => console.warn('Could not complete user profile:', err.message));
       }
     }, (err) => {
       console.warn('Notice listening to user doc:', err.message);
@@ -290,22 +308,14 @@ export const AuthProvider = ({ children }) => {
     if (!currentUser) return;
     try {
       setInvitationsLoading(true);
-      const token = await getIdTokenSafe();
-      const res = await fetch('/api/invitations/my-invitations', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPendingInvitations(data.invitations || []);
-      }
+      const result = await listMyInvitationsCallable();
+      setPendingInvitations(result.data?.invitations || []);
     } catch (e) {
       console.warn('Error fetching pending invitations:', e);
     } finally {
       setInvitationsLoading(false);
     }
-  }, [currentUser, getIdTokenSafe]);
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser?.email) {
@@ -320,21 +330,6 @@ export const AuthProvider = ({ children }) => {
     return activeMembership?.schoolId === activeSchoolId && activeMembership.status === 'active'
       ? activeMembership.role : 'student';
   }, [activeSchoolId, activeSchoolDoc, activeMembership, currentUser?.uid]);
-
-  // Email existence pre-check (Strict email-first signup flow)
-  const checkEmailExists = async (email) => {
-    const res = await fetch('/api/auth/check-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim() })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to check email status');
-    }
-    const data = await res.json();
-    return data.exists;
-  };
 
   // Sign in existing user
   const loginUser = async (email, password) => {
@@ -363,6 +358,15 @@ const DEFAULT_SCHOOL_ROLES = [
     const now = serverTimestamp();
     const cleanSchoolName = schoolName.trim();
     const userName = fullName?.trim() || email.trim().split('@')[0];
+
+    // 0. Profile doc. uid and createdAt are filled in once by the profile
+    // check in the users/{uid} listener, which may run before or after this.
+    await setDoc(doc(db, 'users', user.uid), {
+      email: (user.email || email).trim().toLowerCase(),
+      displayName: userName,
+      name: userName,
+      updatedAt: now
+    }, { merge: true });
 
     // 1. School doc
     await setDoc(doc(db, 'schools', schoolId), {
@@ -569,22 +573,12 @@ const DEFAULT_SCHOOL_ROLES = [
 
   // Accept school invitation
   const acceptInvitation = async (schoolId, invitationId) => {
-    const token = await getIdTokenSafe();
-    const res = await fetch('/api/invitations/accept', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ schoolId, invitationId })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to accept invitation');
+    let data;
+    try {
+      data = (await acceptInvitationCallable({ schoolId, invitationId })).data;
+    } catch (err) {
+      throw new Error(err?.message || 'Failed to accept invitation');
     }
-
-    const data = await res.json();
     await refreshPendingInvitations();
     setActiveSchoolId(schoolId);
     localStorage.setItem('lumi-active-school-id', schoolId);
@@ -593,21 +587,11 @@ const DEFAULT_SCHOOL_ROLES = [
 
   // Decline school invitation
   const declineInvitation = async (schoolId, invitationId) => {
-    const token = await getIdTokenSafe();
-    const res = await fetch('/api/invitations/decline', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ schoolId, invitationId })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to decline invitation');
+    try {
+      await declineInvitationCallable({ schoolId, invitationId });
+    } catch (err) {
+      throw new Error(err?.message || 'Failed to decline invitation');
     }
-
     await refreshPendingInvitations();
   };
 
@@ -793,7 +777,6 @@ const DEFAULT_SCHOOL_ROLES = [
     schoolPreferences,
     pendingInvitations,
     invitationsLoading,
-    checkEmailExists,
     loginUser,
     registerNewUserAndSchool,
     createNewSchool,

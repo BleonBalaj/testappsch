@@ -24,10 +24,19 @@ const app = initializeApp({
 });
 
 const auth = getAuth(app);
+
+// Credentials come from the environment so no password lives in the repo:
+//   SCRIPT_EMAIL=you@example.com SCRIPT_PASSWORD=... node scripts/<name>.js
+const scriptEmail = process.env.SCRIPT_EMAIL || env.SCRIPT_EMAIL;
+const scriptPassword = process.env.SCRIPT_PASSWORD || env.SCRIPT_PASSWORD;
+if (!scriptEmail || !scriptPassword) {
+  console.error('Set SCRIPT_EMAIL and SCRIPT_PASSWORD before running this script.');
+  process.exit(1);
+}
 const db = getFirestore(app);
 
 async function purge() {
-  const cred = await signInWithEmailAndPassword(auth, 'admin@bleon.com', 'admin123');
+  const cred = await signInWithEmailAndPassword(auth, scriptEmail, scriptPassword);
   const uid = cred.user.uid;
   console.log('Logged in as:', cred.user.email, uid);
 
