@@ -38,10 +38,10 @@ export function evaluateInvitation(invite, email, now = Date.now()) {
 }
 
 async function services() {
-  const [{ getApps, initializeApp }, { getFirestore, FieldValue }] = await Promise.all([
-    import('firebase-admin/app'), import('firebase-admin/firestore'),
+  const [{ ensureDefaultApp }, { getFirestore, FieldValue }] = await Promise.all([
+    import('./adminApp.js'), import('firebase-admin/firestore'),
   ]);
-  if (!getApps().length) initializeApp();
+  ensureDefaultApp();
   return { db: getFirestore(), FieldValue };
 }
 
