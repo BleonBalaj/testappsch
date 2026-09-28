@@ -53,6 +53,8 @@ export const AuthProvider = ({ children }) => {
     }
   });
   const [activeMembership, setActiveMembership] = useState(null);
+  // School whose membership snapshot has arrived, so the role is known for it.
+  const [membershipSchoolId, setMembershipSchoolId] = useState(null);
   const [globalPreferences, setGlobalPreferences] = useState({ theme: 'dark', language: 'en' });
   const [schoolPreferences, setSchoolPreferences] = useState({});
   const [pendingInvitations, setPendingInvitations] = useState([]);
@@ -215,9 +217,11 @@ export const AuthProvider = ({ children }) => {
     const memberRef = doc(db, 'schools', activeSchoolId, 'members', currentUser.uid);
     return onSnapshot(memberRef, snapshot => {
       setActiveMembership(snapshot.exists() ? { schoolId: activeSchoolId, ...snapshot.data() } : null);
+      setMembershipSchoolId(activeSchoolId);
     }, error => {
       console.warn('Could not load active school membership:', error);
       setActiveMembership(null);
+      setMembershipSchoolId(activeSchoolId);
     });
   }, [activeSchoolId, currentUser?.uid]);
 
@@ -330,6 +334,10 @@ export const AuthProvider = ({ children }) => {
     return activeMembership?.schoolId === activeSchoolId && activeMembership.status === 'active'
       ? activeMembership.role : 'student';
   }, [activeSchoolId, activeSchoolDoc, activeMembership, currentUser?.uid]);
+
+  // False only while the active school's membership (and so the role) is still loading.
+  const roleReady = !currentUser?.uid || !activeSchoolId || membershipSchoolId === activeSchoolId ||
+    (activeSchoolDoc?.id === activeSchoolId && activeSchoolDoc.creatorUid === currentUser.uid);
 
   // Sign in existing user
   const loginUser = async (email, password) => {
@@ -773,6 +781,7 @@ const DEFAULT_SCHOOL_ROLES = [
     activeSchoolId,
     activeSchool: activeSchoolDoc,
     currentRole,
+    roleReady,
     globalPreferences,
     schoolPreferences,
     pendingInvitations,
