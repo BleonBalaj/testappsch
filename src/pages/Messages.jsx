@@ -18,7 +18,7 @@ import { conversationMemberIds, isPersistedConversation, viewerConversation } fr
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import { classGroupsById, studentClassLabel } from '../features/classGroups';
-import { useClassRoster, useStudentCounts, useStudentSearch } from '../features/students/studentData';
+import { fetchStudentsByIds, useClassRoster, useStudentCounts, useStudentSearch } from '../features/students/studentData';
 import './Messages.css';
 
 const STUDENT_TOTAL_SPEC = [{ kind: 'all' }];
@@ -83,6 +83,14 @@ const Messages = ({ userRole = 'admin' }) => {
   const messagesEndRef = useRef(null);
   // Conversation ids the server has confirmed; see isPersistedConversation.
   const syncedConversationIdsRef = useRef(new Set());
+  // Names of direct-message partners that are not in the loaded directory
+  // (students), read by id when a conversation does not carry them.
+  const peerNamesRef = useRef({});
+  const applyPeerName = useCallback((chat) => {
+    if (!chat?.nameUnresolved || !chat.peerUid) return chat;
+    const name = peerNamesRef.current[chat.peerUid];
+    return name ? { ...chat, name, nameUnresolved: false } : chat;
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -124,7 +132,7 @@ const Messages = ({ userRole = 'admin' }) => {
           starred: false,
           isGroup: false,
           members: [
-            { id: currentUser?.uid, name: currentUser?.displayName || 'You', role: 'Member' },
+            { id: currentUser?.uid, name: currentUser?.displayName || currentUser?.email || '', role: 'Member' },
             { id: s.id, name: s.name, role: 'Faculty' }
           ]
         })),
@@ -141,7 +149,7 @@ const Messages = ({ userRole = 'admin' }) => {
           starred: false,
           isGroup: false,
           members: [
-            { id: currentUser?.uid, name: currentUser?.displayName || 'You', role: 'Member' },
+            { id: currentUser?.uid, name: currentUser?.displayName || currentUser?.email || '', role: 'Member' },
             { id: st.id, name: st.name, role: 'Student' }
           ]
         }))
@@ -150,7 +158,16 @@ const Messages = ({ userRole = 'admin' }) => {
       const mergedMap = new Map();
       dirContacts.forEach(c => mergedMap.set(c.id, c));
       convs.forEach(c => {
-        mergedMap.set(c.id, viewerConversation(c, mergedMap.get(c.id), currentUser?.uid));
+        const directoryEntry = mergedMap.get(c.id);
+        let viewed = viewerConversation(c, directoryEntry, currentUser?.uid);
+        // A direct message from someone outside the loaded directory: its stored
+        // name is the sender's view, so resolve the other person's name by id.
+        if (!directoryEntry && !c.isGroup && typeof c.id === 'string' && c.id.startsWith('dm_')) {
+          const peerUid = c.id.slice(3).split('_').find(id => id && id !== currentUser?.uid);
+          const storedPeer = Array.isArray(c.members) ? c.members.find(member => member?.id === peerUid) : null;
+          if (peerUid && (!storedPeer?.name || storedPeer.name === 'You')) viewed = applyPeerName({ ...viewed, peerUid, nameUnresolved: true, name: '…' });
+        }
+        mergedMap.set(c.id, viewed);
       });
 
       const finalChats = Array.from(mergedMap.values());
@@ -167,7 +184,19 @@ const Messages = ({ userRole = 'admin' }) => {
     }, (err) => console.warn('Conversations sync notice:', err.message));
 
     return () => unsub();
-  }, [activeSchoolId, staffList, classmates.students, studentLabel, currentUser?.uid]);
+  }, [activeSchoolId, staffList, classmates.students, studentLabel, currentUser?.uid, applyPeerName]);
+
+  useEffect(() => {
+    if (!activeSchoolId) return;
+    const ids = [...new Set(chats.filter(chat => chat.nameUnresolved && chat.peerUid && !(chat.peerUid in peerNamesRef.current)).map(chat => chat.peerUid))];
+    if (!ids.length) return;
+    ids.forEach(id => { peerNamesRef.current[id] = ''; });
+    fetchStudentsByIds(activeSchoolId, ids).then((students) => {
+      students.forEach(student => { peerNamesRef.current[student.id] = student.name || ''; });
+      setChats(previous => previous.map(applyPeerName));
+      setActiveChat(previous => applyPeerName(previous));
+    }).catch(error => console.warn('Could not load conversation names:', error.message));
+  }, [chats, activeSchoolId, applyPeerName]);
 
   // 2. Listen to real messages in activeChat once its conversation document exists
   const activeChatPersisted = isPersistedConversation(activeChat, currentUser?.uid);
@@ -313,6 +342,14 @@ const Messages = ({ userRole = 'admin' }) => {
         batch.set(convRef, {
           id: String(activeChat.id),
           memberIds,
+          // Both participants' names, so each side can title the chat correctly.
+          ...(!activeChat.isGroup && Array.isArray(activeChat.members) && activeChat.members.length
+            ? { members: activeChat.members.filter(member => member?.id).map(member => ({
+              id: String(member.id),
+              name: member.id === currentUser?.uid ? (currentUser?.displayName || currentUser?.email || '') : String(member.name || ''),
+              role: member.role || 'Member',
+            })) }
+            : {}),
           name: activeChat.name,
           role: activeChat.role || 'Member',
           roleType: activeChat.roleType || 'direct',
@@ -402,7 +439,7 @@ const Messages = ({ userRole = 'admin' }) => {
       starred: false,
       isGroup: false,
       members: [
-        { id: currentUser?.uid, name: currentUser?.displayName || 'You', role: 'Member' },
+        { id: currentUser?.uid, name: currentUser?.displayName || currentUser?.email || '', role: 'Member' },
         { id: user.id, name: user.name, role: type }
       ]
     };
