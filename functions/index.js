@@ -10,8 +10,8 @@ export const getLessonAiUsage = onCall({ region: 'us-central1', invoker: 'public
   const [{ getFirestore }, { getLessonAiQuota }] = await Promise.all([
     import('firebase-admin/firestore'), import('./lessonAiQuota.js'),
   ]);
-  const { getApps, initializeApp } = await import('firebase-admin/app');
-  if (!getApps().length) initializeApp();
+  const { ensureDefaultApp } = await import('./adminApp.js');
+  ensureDefaultApp();
   return getLessonAiQuota(getFirestore(), request.auth.uid);
 });
 
@@ -84,10 +84,10 @@ export const generateLessonPlan = onCall({
   }
 
   const [adminApp, { getFirestore }, quota, lessonCore, crypto] = await Promise.all([
-    import('firebase-admin/app'), import('firebase-admin/firestore'),
+    import('./adminApp.js'), import('firebase-admin/firestore'),
     import('./lessonAiQuota.js'), import('./lessonAiCore.js'), import('node:crypto'),
   ]);
-  if (!adminApp.getApps().length) adminApp.initializeApp();
+  adminApp.ensureDefaultApp();
   const { LessonAiQuotaError, reserveLessonAiQuota, completeLessonAiQuota, releaseLessonAiQuota } = quota;
   const { buildLessonGenerationContext, generateLessonPlanCore } = lessonCore;
   const { createHash, randomUUID } = crypto;

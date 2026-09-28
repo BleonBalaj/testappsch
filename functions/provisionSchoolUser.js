@@ -1,4 +1,4 @@
-import { getApps, initializeApp } from 'firebase-admin/app';
+import { ensureDefaultApp } from './adminApp.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
@@ -57,7 +57,7 @@ export async function provisionUser(request) {
   if (!BUILTIN_ROLES.has(role) && !/^custom_[A-Za-z0-9_-]{1,72}$/.test(role)) {
     throw new HttpsError('invalid-argument', 'Choose a valid school role.');
   }
-  if (!getApps().length) initializeApp();
+  ensureDefaultApp();
   const db = getFirestore();
   const auth = getAuth();
   const schoolRef = db.doc(`schools/${schoolId}`);
@@ -152,7 +152,7 @@ export async function removeStudent(request) {
   if (!schoolId || schoolId.includes('/') || !studentUid || studentUid.includes('/') || callerUid === studentUid) {
     throw new HttpsError('invalid-argument', 'Choose a valid student and school.');
   }
-  if (!getApps().length) initializeApp();
+  ensureDefaultApp();
   const db = getFirestore();
   const schoolRef = db.doc(`schools/${schoolId}`);
   const [schoolSnap, callerSnap, studentSnap, targetMemberSnap] = await Promise.all([
@@ -184,7 +184,7 @@ export async function updateStaffMember(request) {
   if (!schoolId || schoolId.includes('/') || !staffUid || staffUid.includes('/') || !updates || typeof updates !== 'object' || Array.isArray(updates)) {
     throw new HttpsError('invalid-argument', 'Choose a valid staff member and school.');
   }
-  if (!getApps().length) initializeApp();
+  ensureDefaultApp();
   const db = getFirestore();
   const schoolRef = db.doc(`schools/${schoolId}`);
   const [schoolSnap, callerSnap, staffSnap, targetSnap] = await Promise.all([

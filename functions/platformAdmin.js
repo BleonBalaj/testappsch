@@ -300,10 +300,10 @@ async function loadPlatformData(db, auth) {
 }
 
 async function adminServices() {
-  const [{ getApps, initializeApp }, { getAuth }, { getFirestore, FieldValue, Timestamp }, logger] = await Promise.all([
-    import('firebase-admin/app'), import('firebase-admin/auth'), import('firebase-admin/firestore'), import('firebase-functions/logger'),
+  const [{ ensureDefaultApp }, { getAuth }, { getFirestore, FieldValue, Timestamp }, logger] = await Promise.all([
+    import('./adminApp.js'), import('firebase-admin/auth'), import('firebase-admin/firestore'), import('firebase-functions/logger'),
   ]);
-  if (!getApps().length) initializeApp();
+  ensureDefaultApp();
   return { auth: getAuth(), db: getFirestore(), FieldValue, Timestamp, logger };
 }
 
