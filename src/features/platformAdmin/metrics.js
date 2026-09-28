@@ -67,23 +67,43 @@ export function buildSchoolActivity(users, windowStart) {
 export function computeKpis(snapshot, range, now = Date.now()) {
   const users = snapshot.users || [];
   const schools = snapshot.schools || [];
-  const activeUsers = users.filter(user => since(user.lastSeenAt, range.start)).length;
-  const newSignups = users.filter(user => since(user.createdAt, range.start)).length;
-  const previousSignups = users.filter(user => between(user.createdAt, range.previousStart, range.start)).length;
-  const dau = users.filter(user => since(user.lastSeenAt, now - DAY_MS)).length;
-  const mau = users.filter(user => since(user.lastSeenAt, now - 30 * DAY_MS)).length;
+  // One pass, parsing each timestamp once, so this stays fast with 50,000 accounts.
+  let activeUsers = 0;
+  let newSignups = 0;
+  let previousSignups = 0;
+  let dau = 0;
+  let wau = 0;
+  let mau = 0;
+  let disabledUsers = 0;
+  let neverSignedIn = 0;
+  for (const user of users) {
+    if (user.disabled) disabledUsers += 1;
+    if (!user.lastSeenAt) neverSignedIn += 1;
+    const seen = toMs(user.lastSeenAt);
+    if (Number.isFinite(seen)) {
+      if (seen >= range.start) activeUsers += 1;
+      if (seen >= now - DAY_MS) dau += 1;
+      if (seen >= now - 7 * DAY_MS) wau += 1;
+      if (seen >= now - 30 * DAY_MS) mau += 1;
+    }
+    const created = toMs(user.createdAt);
+    if (Number.isFinite(created)) {
+      if (created >= range.start) newSignups += 1;
+      else if (created >= range.previousStart) previousSignups += 1;
+    }
+  }
   const schoolActivity = buildSchoolActivity(users, range.start);
   const totalUsers = snapshot.totals?.users ?? users.length;
   return {
     totalUsers,
-    disabledUsers: users.filter(user => user.disabled).length,
-    neverSignedIn: users.filter(user => !user.lastSeenAt).length,
+    disabledUsers,
+    neverSignedIn,
     activeUsers,
     activeShare: totalUsers ? activeUsers / totalUsers : 0,
     newSignups,
     previousSignups,
     dau,
-    wau: users.filter(user => since(user.lastSeenAt, now - 7 * DAY_MS)).length,
+    wau,
     mau,
     // Share of monthly actives who also came back in the last day.
     stickiness: mau ? dau / mau : null,
@@ -94,11 +114,25 @@ export function computeKpis(snapshot, range, now = Date.now()) {
   };
 }
 
+/** Sign-ups per chart bucket; each account is placed with a binary search. */
 export function buildSignupSeries(users, range) {
-  return range.buckets.map(bucket => ({
-    ...bucket,
-    signups: users.filter(user => between(user.createdAt, bucket.start, bucket.end)).length,
-  }));
+  const { buckets } = range;
+  const counts = new Array(buckets.length).fill(0);
+  if (!buckets.length) return [];
+  const first = buckets[0].start;
+  const last = buckets[buckets.length - 1].end;
+  for (const user of users) {
+    const created = toMs(user.createdAt);
+    if (!Number.isFinite(created) || created < first || created >= last) continue;
+    let low = 0;
+    let high = buckets.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (buckets[mid].start <= created) low = mid; else high = mid - 1;
+    }
+    if (created < buckets[low].end) counts[low] += 1;
+  }
+  return buckets.map((bucket, index) => ({ ...bucket, signups: counts[index] }));
 }
 
 export const RECENCY_BUCKETS = Object.freeze([
@@ -156,13 +190,25 @@ export const USER_SORTS = Object.freeze([
   { id: 'ai', label: 'AI generations' },
 ]);
 
-const byIsoDesc = key => (a, b) => (b[key] || '').localeCompare(a[key] || '');
+// ISO-8601 timestamps sort correctly as plain strings, much faster than localeCompare.
+export const compareIsoDesc = (a, b) => {
+  const x = a || '';
+  const y = b || '';
+  return x < y ? 1 : x > y ? -1 : 0;
+};
+const byIsoDesc = key => (a, b) => compareIsoDesc(a[key], b[key]);
+const nameCollator = new Intl.Collator(undefined, { sensitivity: 'base' });
 
 export function sortUsers(users, sortId) {
+  if (sortId === 'schools') {
+    // Count each account's schools once instead of inside the comparator.
+    return users.map(user => ({ user, schools: userSchoolIds(user).size }))
+      .sort((a, b) => b.schools - a.schools || byIsoDesc('lastSeenAt')(a.user, b.user))
+      .map(item => item.user);
+  }
   const sorted = [...users];
   if (sortId === 'joined') sorted.sort(byIsoDesc('createdAt'));
-  else if (sortId === 'name') sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
-  else if (sortId === 'schools') sorted.sort((a, b) => userSchoolIds(b).size - userSchoolIds(a).size || byIsoDesc('lastSeenAt')(a, b));
+  else if (sortId === 'name') sorted.sort((a, b) => nameCollator.compare(a.name || '', b.name || ''));
   else if (sortId === 'ai') sorted.sort((a, b) => (b.aiGenerations || 0) - (a.aiGenerations || 0) || byIsoDesc('lastSeenAt')(a, b));
   else sorted.sort((a, b) => byIsoDesc('lastSeenAt')(a, b) || byIsoDesc('createdAt')(a, b));
   return sorted;

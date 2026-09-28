@@ -25,7 +25,7 @@ export function studentSearchWords({ name, email, studentId } = {}) {
   const normalizedId = normalizeSearchText(studentId).replace(/\s/g, '');
   return [...new Set([
     ...words(name, /[\s\-'’.]+/),
-    ...(normalizedEmail ? [normalizedEmail, ...words(normalizedEmail.split('@')[0], /[._+\-]+/)] : []),
+    ...(normalizedEmail ? [normalizedEmail, ...words(normalizedEmail.split('@')[0], /[._+-]+/)] : []),
     ...(normalizedId ? [normalizedId, ...words(normalizedId, /[-_/]+/)] : []),
   ])];
 }

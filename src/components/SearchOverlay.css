@@ -196,3 +196,46 @@
     padding: 1rem 0.5rem;
   }
 }
+
+/* Results and shortcuts are buttons for keyboard access. */
+button.result-item {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+}
+
+.result-info {
+  min-width: 0;
+}
+
+.result-info .name,
+.result-info .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-more {
+  align-self: flex-start;
+  margin: 0.25rem 1rem 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+.search-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+button.shortcut-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: hsl(var(--foreground));
+  font-family: inherit;
+}

@@ -29,26 +29,6 @@
 .schedule-event-toggle { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; }
 .schedule-event-toggle input { width: 18px; height: 18px; }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.title-group {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  flex-wrap: wrap;
-}
 
 .header-title-badge {
   display: inline-flex;
@@ -64,14 +44,6 @@
   flex-shrink: 0;
 }
 
-.count-pill {
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.3rem 0.8rem;
-  border-radius: 20px;
-  color: hsl(var(--primary));
-  border: 1px solid hsla(var(--primary), 0.3);
-}
 
 .header-actions {
   display: flex;
@@ -489,7 +461,8 @@
   align-items: center;
 }
 
-.header-left {
+/* Scoped: a bare .header-left rule here used to restyle every page title. */
+.schedule-header .header-left {
   display: flex;
   align-items: center;
   gap: 0.6rem;

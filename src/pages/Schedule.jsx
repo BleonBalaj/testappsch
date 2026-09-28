@@ -16,6 +16,8 @@ import { Avatar } from '../components/Avatar';
 import { SUBJECTS } from '../features/lessonPlans/catalog';
 import { translateCatalogValue } from '../features/lessonPlans/i18n';
 import { courseMatchesReference, isStudentEnrolledInCourse } from '../features/enrollment';
+import { classGroupForItem, classGroupsById } from '../features/classGroups';
+import { normalizeSearchText } from '../features/students/studentSearch';
 import { mergeCourseSchedule, scheduleStartMinutes, weeklyScheduleForCourse } from '../features/courseSchedule';
 import './Schedule.css';
 
@@ -107,6 +109,31 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot,
 };
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const LEGACY_LABEL_PREFIX = 'label:';
+
+// A course named like a curriculum subject ("Matematikë") can start a lesson plan directly.
+function catalogSubjectFor(name) {
+  const needle = normalizeSearchText(name);
+  if (!needle) return '';
+  const match = SUBJECTS.find(subject => [subject.name, ...subject.aliases].some(value => normalizeSearchText(value) === needle));
+  return match?.name || '';
+}
+
+const EMPTY_SLOT_FORM = {
+  day: 'Monday',
+  time: '',
+  courseId: '',
+  subject: '',
+  curriculumSubject: '',
+  classGroupId: '',
+  classLabel: '',
+  period: '',
+  subjectCategory: 'Academic',
+  room: '',
+  teacher: '',
+  isEvent: false,
+  color: '--primary'
+};
 
 function mondayForWeek(weekOffset) {
   const today = new Date();
@@ -121,12 +148,24 @@ function dateForDay(monday, day) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonPlan, onOpenCourses }) => {
-  const { staffList = [], classesList = [], classesLoaded, classesError, studentsList = [] } = useSchoolData();
+const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonPlan, onOpenCourses, initialFilter = null, onInitialFilterConsumed }) => {
+  const { staffList = [], classesList = [], classesLoaded, classesError, classGroups = [], myStudentRecord } = useSchoolData();
   const { activeSchoolId, currentUser } = useAuth();
-  const { language, t, isAlbanian } = useLanguage();
+  const { t, isAlbanian } = useLanguage();
   const [savedSchedule, setSavedSchedule] = useState({ schoolId: null, entries: [], error: null, loaded: false });
-  const scheduleState = useMemo(() => mergeCourseSchedule(classesLoaded ? classesList : [], savedSchedule.schoolId === activeSchoolId ? savedSchedule.entries : []), [classesLoaded, classesList, savedSchedule, activeSchoolId]);
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
+  // Every lesson carries its class: the course's linked class, the slot's own
+  // link, or an older free-text label matched to a class by grade and section.
+  const scheduleState = useMemo(() => {
+    const merged = mergeCourseSchedule(classesLoaded ? classesList : [], savedSchedule.schoolId === activeSchoolId ? savedSchedule.entries : []);
+    const coursesById = new Map(classesList.map(course => [String(course.id), course]));
+    return Object.fromEntries(Object.entries(merged).map(([day, items]) => [day, items.map(item => {
+      if (item.isEvent) return item;
+      const course = item.courseId ? coursesById.get(String(item.courseId)) : null;
+      const group = classGroupForItem(course?.classGroupId ? { classGroupId: course.classGroupId, classLabel: item.classLabel } : item, classGroups, groupsById);
+      return { ...item, classGroupId: group?.id || '', classLabel: group?.label || item.classLabel || course?.classLabel || '' };
+    })]));
+  }, [classesLoaded, classesList, savedSchedule, activeSchoolId, classGroups, groupsById]);
   const scheduleError = savedSchedule.schoolId === activeSchoolId ? savedSchedule.error : null;
   const scheduleLoading = !classesLoaded || (activeSchoolId && (savedSchedule.schoolId !== activeSchoolId || !savedSchedule.loaded));
 
@@ -147,6 +186,11 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     return () => { active = false; unsubscribe(); };
   }, [activeSchoolId]);
 
+  // The filter a page opened this timetable with is applied once at mount.
+  useEffect(() => {
+    if (initialFilter) onInitialFilterConsumed?.();
+  }, [initialFilter, onInitialFilterConsumed]);
+
   const handleDeleteSlot = async (slotId) => {
     if (!activeSchoolId || String(slotId).startsWith('course:')) return;
     try {
@@ -162,8 +206,9 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   const [isAddSlotOpen, setIsAddSlotOpen] = useState(false);
   const [slotError, setSlotError] = useState('');
 
-  // Default tab for student and teacher is 'my-schedule', for admin is 'all-schedule'
-  const [activeTab, setActiveTab] = useState(() => (userRole === 'admin' ? 'all-schedule' : 'my-schedule'));
+  // Default tab for student and teacher is 'my-schedule', for admin is 'all-schedule'.
+  // Opening a class's timetable from Courses & Classes starts on the whole school.
+  const [activeTab, setActiveTab] = useState(() => (userRole === 'admin' || initialFilter ? 'all-schedule' : 'my-schedule'));
   const [prevRole, setPrevRole] = useState(userRole);
 
   if (prevRole !== userRole) {
@@ -182,13 +227,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     );
   }, [staffList, currentUser]);
 
-  const currentStudent = useMemo(() => {
-    return studentsList.find(s => 
-      s.id === currentUser?.uid || 
-      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-      (s.studentId && s.studentId === currentUser?.uid)
-    );
-  }, [studentsList, currentUser]);
+  const currentStudent = myStudentRecord;
 
   const defaultTeacherName = useMemo(() => {
     return currentStaff?.name || currentUser?.displayName || currentUser?.name || (staffList[0]?.name || 'Teacher');
@@ -202,22 +241,11 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   const [teacherFilter, setTeacherFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all'); // 'all', 'classes', 'events'
+  const [classFilter, setClassFilter] = useState(() => initialFilter?.classGroupId ? String(initialFilter.classGroupId) : 'all');
+  const [courseFilter, setCourseFilter] = useState(() => initialFilter?.courseId ? String(initialFilter.courseId) : 'all');
 
   // Add Slot Form State
-  const [newSlotForm, setNewSlotForm] = useState({
-    day: 'Monday',
-    time: '',
-    courseId: '',
-    subject: '',
-    curriculumSubject: '',
-    classLabel: '',
-    period: '',
-    subjectCategory: 'Academic',
-    room: '',
-    teacher: '',
-    isEvent: false,
-    color: '--primary'
-  });
+  const [newSlotForm, setNewSlotForm] = useState(EMPTY_SLOT_FORM);
 
   const days = DAYS;
 
@@ -306,6 +334,8 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         .some(reference => courseMatchesReference(candidate, reference))
     );
     if (course) return isStudentEnrolledInCourse(currentStudent, course);
+    // A period set for the student's class belongs to their timetable.
+    if (item.classGroupId && currentStudent?.classGroupId && String(item.classGroupId) === String(currentStudent.classGroupId)) return true;
 
     // Older schedule entries can carry direct student IDs without a course link.
     const studentIds = [currentUser?.uid, currentStudent?.id, currentStudent?.studentId].filter(Boolean);
@@ -350,6 +380,26 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     return ['all', ...Array.from(list)];
   }, [scheduleState]);
 
+  // Older periods may carry a class label that matches no class yet.
+  const legacyClassLabels = useMemo(() => {
+    const labels = new Set();
+    Object.values(scheduleState).forEach(dayItems => dayItems.forEach(item => {
+      if (!item.isEvent && !item.classGroupId && item.classLabel) labels.add(item.classLabel);
+    }));
+    return [...labels].sort((a, b) => a.localeCompare(b, 'sq', { numeric: true }));
+  }, [scheduleState]);
+
+  const matchesClassAndCourse = useCallback((item) => {
+    if (classFilter === 'all' && courseFilter === 'all') return true;
+    // A class or course timetable lists lessons only.
+    if (item.isEvent) return false;
+    if (courseFilter !== 'all' && String(item.courseId || '') !== courseFilter) return false;
+    if (classFilter === 'all') return true;
+    if (classFilter.startsWith(LEGACY_LABEL_PREFIX)) return !item.classGroupId && item.classLabel === classFilter.slice(LEGACY_LABEL_PREFIX.length);
+    return String(item.classGroupId || '') === classFilter;
+  }, [classFilter, courseFilter]);
+  const selectedFilterClass = classFilter !== 'all' && !classFilter.startsWith(LEGACY_LABEL_PREFIX) ? groupsById.get(classFilter) : null;
+
   // Filter current schedule for the selected day and active tab
   const currentSchedule = useMemo(() => {
     const dayItems = scheduleState[selectedDay] || [];
@@ -358,11 +408,14 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
       if (effectiveTab === 'my-schedule' && !isItemInMySchedule(item)) {
         return false;
       }
+      if (!matchesClassAndCourse(item)) return false;
 
+      const query = searchTerm.toLowerCase();
       const matchesSearch = 
-        (item.subject || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.room && item.room.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.teacher && item.teacher.toLowerCase().includes(searchTerm.toLowerCase()));
+        (item.subject || '').toLowerCase().includes(query) ||
+        (item.room && item.room.toLowerCase().includes(query)) ||
+        (item.teacher && item.teacher.toLowerCase().includes(query)) ||
+        (item.classLabel && item.classLabel.toLowerCase().includes(query));
 
       const matchesTeacher = teacherFilter === 'all' || item.teacher === teacherFilter;
       const matchesCategory = categoryFilter === 'all' || item.subjectCategory === categoryFilter;
@@ -373,7 +426,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
 
       return matchesSearch && matchesTeacher && matchesCategory && matchesType;
     }).sort((a, b) => scheduleStartMinutes(a.time) - scheduleStartMinutes(b.time) || String(a.subject || '').localeCompare(String(b.subject || '')));
-  }, [scheduleState, selectedDay, effectiveTab, isItemInMySchedule, searchTerm, teacherFilter, categoryFilter, typeFilter]);
+  }, [scheduleState, selectedDay, effectiveTab, isItemInMySchedule, matchesClassAndCourse, searchTerm, teacherFilter, categoryFilter, typeFilter]);
 
   const handleClassClick = (item) => {
     if (item.isEvent) return;
@@ -381,12 +434,14 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     setIsDetailOpen(true);
   };
 
+  const lessonSubjectFor = item => item?.curriculumSubject || catalogSubjectFor(item?.subject) || String(item?.subject || '').trim();
   const handleCreateLessonPlan = () => {
-    if (!selectedClass?.classLabel || !selectedClass?.curriculumSubject || !onCreateLessonPlan) return;
+    const subject = lessonSubjectFor(selectedClass);
+    if (!selectedClass?.classLabel || !subject || !onCreateLessonPlan) return;
     onCreateLessonPlan({
       date: selectedClass.scheduledDate,
       classLabel: selectedClass.classLabel,
-      subject: selectedClass.curriculumSubject,
+      subject,
       period: selectedClass.period,
     });
     setIsDetailOpen(false);
@@ -395,7 +450,9 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   const handleAddSlotSubmit = async (e) => {
     e.preventDefault();
     if (!activeSchoolId) { setSlotError(isAlbanian ? 'Zgjidhni një shkollë së pari.' : 'Select a school first.'); return; }
-    if (!newSlotForm.subject.trim() || !newSlotForm.time.trim() || (!newSlotForm.isEvent && (!newSlotForm.classLabel.trim() || !newSlotForm.curriculumSubject || !newSlotForm.period))) {
+    const slotGroup = newSlotForm.classGroupId ? groupsById.get(newSlotForm.classGroupId) : null;
+    const slotClassLabel = slotGroup?.label || newSlotForm.classLabel.trim();
+    if (!newSlotForm.subject.trim() || !newSlotForm.time.trim() || (!newSlotForm.isEvent && (!slotClassLabel || !newSlotForm.curriculumSubject || !newSlotForm.period))) {
       setSlotError(isAlbanian ? 'Plotësoni fushat e kërkuara të orës.' : 'Complete the required schedule fields.');
       return;
     }
@@ -405,6 +462,8 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     const selectedTeacher = staffList.find(staff => staff.name === newSlotForm.teacher);
     const newItem = {
       ...newSlotForm,
+      classGroupId: newSlotForm.isEvent ? '' : slotGroup?.id || '',
+      classLabel: newSlotForm.isEvent ? '' : slotClassLabel,
       id: slotId,
       teacher: newSlotForm.teacher.trim() || linkedCourse?.teacher || defaultTeacherName,
       teacherId: linkedCourse?.teacherId || selectedTeacher?.id || (newSlotForm.teacher === currentUser?.displayName ? currentUser?.uid : ''),
@@ -422,54 +481,51 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
 
     setIsAddSlotOpen(false);
     setSlotError('');
-    setNewSlotForm({
-      day: selectedDay,
-      time: '',
-      courseId: '',
-      subject: '',
-      curriculumSubject: '',
-      classLabel: '',
-      period: '',
-      subjectCategory: 'Academic',
-      room: '',
-      teacher: '',
-      isEvent: false,
-      color: '--primary'
-    });
+    setNewSlotForm({ ...EMPTY_SLOT_FORM, day: selectedDay });
   };
 
   // Export Timetable
   const handleExportTimetable = () => {
     const isMy = effectiveTab === 'my-schedule';
-    const rows = [["Day", "Time", "Subject", "Teacher", "Room", "Type", "Source"]];
+    const rows = [["Day", "Time", "Subject", "Class", "Teacher", "Room", "Type", "Source"]];
     days.forEach(day => {
       const dayItems = scheduleState[day] || [];
-      const filtered = isMy ? dayItems.filter(isItemInMySchedule) : dayItems;
+      const filtered = dayItems.filter(item => (!isMy || isItemInMySchedule(item)) && matchesClassAndCourse(item));
       filtered.forEach(item => {
         rows.push([
           day,
           item.time,
           item.subject,
-          item.teacher || 'N/A',
-          item.room,
-          item.isEvent ? 'Campus Event' : (item.subjectCategory || 'Class'),
+          item.isEvent ? '' : item.classLabel || '',
+          item.teacher || '',
+          item.room || '',
+          item.isEvent ? 'Campus Event' : (item.subjectCategory || 'Lesson'),
           item.source === 'course' ? 'Course timetable' : 'Schedule entry'
         ]);
       });
     });
 
-    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.map(val => `"${val}"`).join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csv = rows.map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    const prefix = isMy ? 'My_Schedule' : 'Master_Campus_Schedule';
-    link.setAttribute("download", `NoesisHorizon_${prefix}_${weekDateString.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+    link.setAttribute("href", url);
+    const prefix = selectedFilterClass ? `Class_${selectedFilterClass.label}` : isMy ? 'My_Schedule' : 'School_Schedule';
+    link.setAttribute("download", `${prefix.replace(/[^a-zA-Z0-9_]/g, '_')}_${weekDateString.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  const hasActiveFilters = searchTerm !== '' || teacherFilter !== 'all' || categoryFilter !== 'all' || typeFilter !== 'all';
+  const hasActiveFilters = searchTerm !== '' || teacherFilter !== 'all' || categoryFilter !== 'all' || typeFilter !== 'all' || classFilter !== 'all' || courseFilter !== 'all';
+  const resetFilters = () => {
+    setSearchTerm('');
+    setTeacherFilter('all');
+    setCategoryFilter('all');
+    setTypeFilter('all');
+    setClassFilter('all');
+    setCourseFilter('all');
+  };
 
   return (
     <motion.div 
@@ -482,15 +538,17 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
       <motion.header className="page-header" variants={itemVariants}>
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 className="gradient-text">
               {t('schedule.title')}
-              <Calendar size={32} style={{ color: 'hsl(var(--primary))' }} />
+              <Calendar size={30} className="page-title-icon" aria-hidden="true" />
             </h1>
             <span className="count-pill glass">
               {`${currentSchedule.length} ${t('common.total')}`}
             </span>
           </div>
-          <p>{t('schedule.subtitle')}</p>
+          <p>{selectedFilterClass
+            ? (isAlbanian ? `Orari i klasës ${selectedFilterClass.label}` : `Timetable for class ${selectedFilterClass.label}`)
+            : t('schedule.subtitle')}</p>
         </div>
 
         <div className="header-actions">
@@ -562,7 +620,12 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
           </button>
           
           {['admin', 'teacher', 'dept_head'].includes(userRole) && (
-            <button className="btn-primary" onClick={() => { setSlotError(''); setIsAddSlotOpen(true); }}>
+            <button className="btn-primary" onClick={() => {
+              setSlotError('');
+              // Start from the day and class being viewed.
+              setNewSlotForm(previous => ({ ...previous, day: selectedDay, ...(selectedFilterClass && !previous.isEvent ? { classGroupId: selectedFilterClass.id, classLabel: selectedFilterClass.label } : {}) }));
+              setIsAddSlotOpen(true);
+            }}>
               <Plus size={16} />
               <span>{t('schedule.addEntry')}</span>
             </button>
@@ -648,6 +711,31 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             </select>
           </div>
 
+          <div className="filter-group-item">
+            <label htmlFor="schedule-class-filter"><GraduationCap size={13} /> {isAlbanian ? 'KLASA:' : 'Class:'}</label>
+            <select id="schedule-class-filter" value={classFilter} onChange={(e) => setClassFilter(e.target.value)} className="schedule-filter-select glass">
+              <option value="all">{isAlbanian ? 'Të gjitha klasat' : 'All classes'}</option>
+              {classGroups.map(group => <option key={group.id} value={group.id}>{isAlbanian ? 'Klasa' : 'Class'} {group.label}</option>)}
+              {legacyClassLabels.length > 0 && (
+                <optgroup label={isAlbanian ? 'Etiketa pa klasë të krijuar' : 'Labels without a class'}>
+                  {legacyClassLabels.map(label => <option key={label} value={`${LEGACY_LABEL_PREFIX}${label}`}>{label}</option>)}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
+          <div className="filter-group-item">
+            <label htmlFor="schedule-course-filter"><BookOpen size={13} /> {isAlbanian ? 'KURSI:' : 'Course:'}</label>
+            <select id="schedule-course-filter" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="schedule-filter-select glass">
+              <option value="all">{isAlbanian ? 'Të gjitha kurset' : 'All courses'}</option>
+              {classesList.map(course => (
+                <option key={course.id} value={String(course.id)}>
+                  {course.name}{course.classGroupId && groupsById.get(String(course.classGroupId)) ? ` · ${groupsById.get(String(course.classGroupId)).label}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="type-toggle-pills glass">
             <button 
               className={`type-pill ${typeFilter === 'all' ? 'active' : ''}`}
@@ -659,7 +747,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               className={`type-pill ${typeFilter === 'classes' ? 'active' : ''}`}
               onClick={() => setTypeFilter('classes')}
             >
-              {isAlbanian ? 'Lëndët' : 'Classes'}
+              {isAlbanian ? 'Orët' : 'Lessons'}
             </button>
             <button 
               className={`type-pill ${typeFilter === 'events' ? 'active' : ''}`}
@@ -672,12 +760,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
           {hasActiveFilters && (
             <button 
               className="reset-filters-btn glass"
-              onClick={() => {
-                setSearchTerm('');
-                setTeacherFilter('all');
-                setCategoryFilter('all');
-                setTypeFilter('all');
-              }}
+              onClick={resetFilters}
             >
               <RotateCcw size={13} /> {isAlbanian ? 'Pastro Filtrat' : 'Clear Filters'}
             </button>
@@ -738,7 +821,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               ) : hasActiveFilters ? (
                 <button 
                   className="btn-secondary glass btn-small"
-                  onClick={() => { setSearchTerm(''); setTeacherFilter('all'); setCategoryFilter('all'); setTypeFilter('all'); }}
+                  onClick={resetFilters}
                 >
                   {isAlbanian ? 'Rivendos Filtrat' : 'Reset Active Filters'}
                 </button>
@@ -787,7 +870,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               <form onSubmit={handleAddSlotSubmit} className="modal-form">
                 {slotError && <div role="alert" className="schedule-form-error">{slotError}</div>}
                 <label className="schedule-event-toggle">
-                  <input type="checkbox" checked={newSlotForm.isEvent} onChange={e => setNewSlotForm(previous => ({ ...previous, isEvent: e.target.checked, courseId: e.target.checked ? '' : previous.courseId, classLabel: e.target.checked ? '' : previous.classLabel, period: e.target.checked ? '' : previous.period, curriculumSubject: e.target.checked ? '' : previous.curriculumSubject, subjectCategory: e.target.checked ? 'Event' : 'Academic' }))} />
+                  <input type="checkbox" checked={newSlotForm.isEvent} onChange={e => setNewSlotForm(previous => ({ ...previous, isEvent: e.target.checked, courseId: e.target.checked ? '' : previous.courseId, classGroupId: e.target.checked ? '' : previous.classGroupId, classLabel: e.target.checked ? '' : previous.classLabel, period: e.target.checked ? '' : previous.period, curriculumSubject: e.target.checked ? '' : previous.curriculumSubject, subjectCategory: e.target.checked ? 'Event' : 'Academic' }))} />
                   {isAlbanian ? 'Ngjarje e shkollës' : 'School event'}
                 </label>
                 <div className="form-grid-2">
@@ -820,7 +903,8 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                   <label htmlFor="schedule-course-link">{isAlbanian ? 'Lidhe me lëndën ekzistuese' : 'Link to an existing course'}</label>
                   <select id="schedule-course-link" className="custom-form-select" value={newSlotForm.courseId} onChange={event => {
                     const course = classesList.find(item => String(item.id) === event.target.value);
-                    setNewSlotForm(previous => ({ ...previous, courseId: event.target.value, subject: course?.name || previous.subject, teacher: course?.teacher || previous.teacher, room: course?.room || previous.room, subjectCategory: course?.department || previous.subjectCategory, color: course?.color || previous.color, classLabel: course?.classLabel || previous.classLabel }));
+                    const courseGroup = course?.classGroupId ? groupsById.get(String(course.classGroupId)) : null;
+                    setNewSlotForm(previous => ({ ...previous, courseId: event.target.value, subject: course?.name || previous.subject, teacher: course?.teacher || previous.teacher, room: course?.room || previous.room, subjectCategory: course?.department || previous.subjectCategory, color: course?.color || previous.color, classGroupId: courseGroup?.id || previous.classGroupId, classLabel: courseGroup?.label || previous.classLabel, curriculumSubject: previous.curriculumSubject || catalogSubjectFor(course?.name) }));
                   }}>
                     <option value="">{isAlbanian ? 'Ora e pavarur' : 'Independent period'}</option>
                     {classesList.map(course => <option key={course.id} value={course.id}>{course.name}{course.code ? ` (${course.code})` : ''}</option>)}
@@ -841,14 +925,27 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                 {!newSlotForm.isEvent && <div className="form-grid-2">
                   <div className="input-group">
                     <label htmlFor="schedule-class-label">{isAlbanian ? 'Klasa' : 'Class'}</label>
-                    <input
-                      id="schedule-class-label"
-                      type="text"
-                      required
-                      placeholder="e.g. VII/1"
-                      value={newSlotForm.classLabel}
-                      onChange={e => setNewSlotForm({ ...newSlotForm, classLabel: e.target.value })}
-                    />
+                    {classGroups.length > 0 ? (
+                      <select
+                        id="schedule-class-label"
+                        className="custom-form-select"
+                        required
+                        value={newSlotForm.classGroupId}
+                        onChange={e => setNewSlotForm({ ...newSlotForm, classGroupId: e.target.value, classLabel: groupsById.get(e.target.value)?.label || '' })}
+                      >
+                        <option value="">{isAlbanian ? 'Zgjidhni klasën' : 'Choose a class'}</option>
+                        {classGroups.map(group => <option key={group.id} value={group.id}>{isAlbanian ? 'Klasa' : 'Class'} {group.label}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        id="schedule-class-label"
+                        type="text"
+                        required
+                        placeholder="e.g. VII/1"
+                        value={newSlotForm.classLabel}
+                        onChange={e => setNewSlotForm({ ...newSlotForm, classLabel: e.target.value })}
+                      />
+                    )}
                   </div>
                   <div className="input-group">
                     <label htmlFor="schedule-period">{isAlbanian ? 'Ora Mësimore' : 'Period'}</label>
@@ -958,7 +1055,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         onClose={() => setIsDetailOpen(false)} 
         classInfo={selectedClass} 
         userRole={userRole}
-        onCreateLessonPlan={selectedClass && (userRole === 'admin' || (['teacher', 'dept_head'].includes(userRole) && isItemInMySchedule(selectedClass))) ? handleCreateLessonPlan : undefined}
+        onCreateLessonPlan={selectedClass && selectedClass.classLabel && lessonSubjectFor(selectedClass) && (userRole === 'admin' || (['teacher', 'dept_head'].includes(userRole) && isItemInMySchedule(selectedClass))) ? handleCreateLessonPlan : undefined}
         lessonLanguage={lessonLanguage}
       />
     </motion.div>

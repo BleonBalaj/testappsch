@@ -30,6 +30,29 @@
   --padm-info: 210 70% 45%;
 }
 
+/* Top and bottom fades over the scrolling content, matching the main app. */
+.padm::before,
+.padm::after {
+  content: '';
+  position: fixed;
+  left: 248px;
+  right: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.padm::before {
+  top: 0;
+  height: 52px;
+  background: linear-gradient(to bottom, hsl(var(--background) / 0.52), transparent);
+}
+
+.padm::after {
+  bottom: 0;
+  height: 70px;
+  background: linear-gradient(to bottom, transparent, hsl(var(--background) / 0.95));
+}
+
 /* ── Navigation ───────────────────────────────────────────── */
 .padm-nav {
   position: sticky;
@@ -1081,6 +1104,13 @@
 @media (max-width: 900px) {
   .padm {
     flex-direction: column;
+  }
+  /* The navigation bar sits on top here, so only the bottom fade is needed. */
+  .padm::before {
+    display: none;
+  }
+  .padm::after {
+    left: 0;
   }
   .padm-nav {
     position: sticky;

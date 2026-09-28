@@ -134,3 +134,34 @@ test('relative times read naturally', () => {
   assert.equal(relativeTime(iso(NOW - 30 * 3_600_000), NOW), 'Yesterday');
   assert.equal(relativeTime(iso(NOW - 4 * DAY), NOW), '4 days ago');
 });
+
+test('fast KPIs and chart buckets match the straightforward definitions on random data', () => {
+  let seed = 7;
+  const random = () => { seed = (seed * 48271) % 2147483647; return seed / 2147483647; };
+  const maybeIso = () => (random() < 0.15 ? null : iso(NOW - Math.floor(random() * 500 * DAY) + Math.floor(random() * 2 * DAY)));
+  const users = Array.from({ length: 3000 }, (_, index) => ({
+    uid: `u${index}`, createdAt: maybeIso(), lastSeenAt: maybeIso(), disabled: random() < 0.05, memberships: [],
+  }));
+  const parsed = value => (value ? Date.parse(value) : NaN);
+  const since = (value, start) => Number.isFinite(parsed(value)) && parsed(value) >= start;
+  const between = (value, start, end) => Number.isFinite(parsed(value)) && parsed(value) >= start && parsed(value) < end;
+  for (const rangeId of ['7d', '30d', '90d', '12m']) {
+    const range = rangeWindow(rangeId, NOW);
+    const kpis = computeKpis({ users, schools: [], totals: { users: users.length, schools: 0 } }, range, NOW);
+    assert.equal(kpis.activeUsers, users.filter(user => since(user.lastSeenAt, range.start)).length);
+    assert.equal(kpis.newSignups, users.filter(user => since(user.createdAt, range.start)).length);
+    assert.equal(kpis.previousSignups, users.filter(user => between(user.createdAt, range.previousStart, range.start)).length);
+    assert.equal(kpis.dau, users.filter(user => since(user.lastSeenAt, NOW - DAY)).length);
+    assert.equal(kpis.wau, users.filter(user => since(user.lastSeenAt, NOW - 7 * DAY)).length);
+    assert.equal(kpis.mau, users.filter(user => since(user.lastSeenAt, NOW - 30 * DAY)).length);
+    assert.equal(kpis.neverSignedIn, users.filter(user => !user.lastSeenAt).length);
+    assert.equal(kpis.disabledUsers, users.filter(user => user.disabled).length);
+    const series = buildSignupSeries(users, range);
+    assert.deepEqual(series.map(bucket => bucket.signups),
+      range.buckets.map(bucket => users.filter(user => between(user.createdAt, bucket.start, bucket.end)).length));
+  }
+  const byName = sortUsers(users.map((user, index) => ({ ...user, name: `Name ${(index * 7919) % 3000}` })), 'name');
+  for (let index = 1; index < byName.length; index += 1) {
+    assert.ok(byName[index - 1].name.localeCompare(byName[index].name, undefined, { sensitivity: 'base' }) <= 0);
+  }
+});

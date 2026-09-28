@@ -149,7 +149,9 @@ export function buildPlatformSnapshot({
       isPlatformAdmin: isPlatformAdminEmail(email),
     };
   });
-  users.sort((a, b) => (b.lastSeenAt || '').localeCompare(a.lastSeenAt || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
+  // ISO strings compare correctly as plain strings, which is much faster than localeCompare at scale.
+  const isoDesc = (x, y) => ((x || '') < (y || '') ? 1 : (x || '') > (y || '') ? -1 : 0);
+  users.sort((a, b) => isoDesc(a.lastSeenAt, b.lastSeenAt) || isoDesc(a.createdAt, b.createdAt));
 
   const schoolRows = schools.map(school => {
     const stats = memberStats.get(school.id);

@@ -19,6 +19,7 @@ import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimest
 import { isStudentEnrolledInCourse } from '../features/enrollment';
 import { courseResult } from '../features/gradebook/schoolResults';
 import { useCourseRecords } from '../features/gradebook/useCourseRecords';
+import { useStudentCounts } from '../features/students/studentData';
 import './Dashboard.css';
 
 const StatCard = ({ icon: IconComponent, label, value, color, delay, subtext }) => (
@@ -58,7 +59,7 @@ const QUOTES_SQ = [
 const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const [note, setNote] = useState('');
   const { moodHistory, addMoodEntry, getTodayMood } = useMood();
-  const { staffList = [], studentsList = [], classesList = [], eventsList = [] } = useSchoolData();
+  const { staffList = [], classesList = [], classGroups = [], eventsList = [], myStudentRecord, studentsVersion } = useSchoolData();
   const { currentUser, activeSchool, activeSchoolId } = useAuth();
   const { language, isAlbanian, t } = useLanguage();
   const todayEntry = getTodayMood();
@@ -204,8 +205,8 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   };
 
   const submitMoodNote = () => {
-    const activeVibe = pendingMood || vibe || 'happy';
-    addMoodEntry(activeVibe, moodNote);
+    const activeVibe = pendingMood || vibe;
+    if (activeVibe) addMoodEntry(activeVibe, moodNote);
     setIsMoodModalOpen(false);
   };
 
@@ -283,13 +284,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
     );
   }, [staffList, currentUser]);
 
-  const currentStudent = useMemo(() => {
-    return studentsList.find(s => 
-      s.id === currentUser?.uid || 
-      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-      (s.studentId && s.studentId === currentUser?.uid)
-    );
-  }, [studentsList, currentUser]);
+  const currentStudent = myStudentRecord;
 
   const isClassTaughtByMe = useCallback((c) => {
     if (!c) return false;
@@ -313,15 +308,23 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
     return isStudentEnrolledInCourse(currentStudent, c);
   }, [currentStudent]);
 
-  const teacherClasses = useMemo(() => {
-    return classesList.filter(isClassTaughtByMe).map(c => ({
-      id: c.id,
-      name: c.name,
-      time: c.schedule || '',
-      room: c.room || '',
-      students: studentsList.filter(student => isStudentEnrolledInCourse(student, c)).length,
-    }));
-  }, [classesList, studentsList, isClassTaughtByMe]);
+  const taughtCourses = useMemo(() => (isStudent ? [] : classesList.filter(isClassTaughtByMe)), [classesList, isClassTaughtByMe, isStudent]);
+  // Counts come from the server; the dashboard never loads the student list.
+  const countSpecs = useMemo(() => [
+    ...(isStudent ? [] : [{ kind: 'all' }]),
+    ...taughtCourses.map(course => ({ kind: 'course', value: String(course.id), classGroupId: course.classGroupId ? String(course.classGroupId) : '' })),
+  ], [isStudent, taughtCourses]);
+  const studentCounts = useStudentCounts(activeSchoolId, countSpecs, studentsVersion);
+  const totalStudents = isStudent ? undefined : studentCounts.get({ kind: 'all' });
+  const teacherClasses = useMemo(() => taughtCourses.map(c => ({
+    id: c.id,
+    name: c.name,
+    time: c.schedule || '',
+    room: c.room || '',
+    classLabel: c.classGroupId ? classGroups.find(group => group.id === c.classGroupId)?.label || '' : '',
+    students: studentCounts.get({ kind: 'course', value: String(c.id), classGroupId: c.classGroupId ? String(c.classGroupId) : '' }),
+  })), [taughtCourses, classGroups, studentCounts]);
+  const myHomerooms = useMemo(() => classGroups.filter(group => group.homeroomTeacherId && String(group.homeroomTeacherId) === String(currentUser?.uid)), [classGroups, currentUser?.uid]);
 
   const studentScheduleToday = useMemo(() => {
     return classesList.filter(isClassEnrolledByMe).map((c, idx) => ({
@@ -467,15 +470,15 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           </>
         ) : isAdmin ? (
           <>
-            <StatCard icon={GraduationCap} label={t('dashboard.studentsEnrolled')} value={studentsList.length} color="--primary" delay={0.1} subtext={t('dashboard.activeStudents')} />
+            <StatCard icon={GraduationCap} label={t('dashboard.studentsEnrolled')} value={totalStudents === undefined ? '…' : totalStudents.toLocaleString()} color="--primary" delay={0.1} subtext={t('dashboard.activeStudents')} />
             <StatCard icon={Users} label={t('dashboard.staffFaculty')} value={staffList.length} color="--accent" delay={0.2} subtext={t('dashboard.facultyRoster')} />
             <StatCard icon={Star} label={t('dashboard.campusEvents')} value={eventsList.length} color="--chart-1" delay={0.3} subtext={isAlbanian ? 'E Planifikuar' : 'Scheduled'} />
-            <StatCard icon={Coffee} label={t('dashboard.activeClasses')} value={classesList.length} color="--chart-2" delay={0.4} subtext={t('dashboard.curriculumCatalog')} />
+            <StatCard icon={Coffee} label={t('dashboard.activeClasses')} value={classesList.length} color="--chart-2" delay={0.4} subtext={isAlbanian ? `${classGroups.length} klasa` : `${classGroups.length} ${classGroups.length === 1 ? 'class' : 'classes'}`} />
           </>
         ) : (
           <>
-            <StatCard icon={BookOpen} label={t('dashboard.myClasses')} value={teacherClasses.length} color="--primary" delay={0.1} subtext={t('dashboard.taughtByYou')} />
-            <StatCard icon={Users} label={t('dashboard.totalStudents')} value={studentsList.length} color="--accent" delay={0.2} subtext={t('dashboard.enrolledRoster')} />
+            <StatCard icon={BookOpen} label={t('dashboard.myClasses')} value={teacherClasses.length} color="--primary" delay={0.1} subtext={myHomerooms.length ? `${isAlbanian ? 'Kujdestar i' : 'Homeroom'} ${myHomerooms.map(group => group.label).join(', ')}` : t('dashboard.taughtByYou')} />
+            <StatCard icon={Users} label={t('dashboard.totalStudents')} value={totalStudents === undefined ? '…' : totalStudents.toLocaleString()} color="--accent" delay={0.2} subtext={t('dashboard.enrolledRoster')} />
             <StatCard icon={Presentation} label={t('dashboard.curriculumCourses')} value={classesList.length} color="--chart-1" delay={0.3} subtext={t('dashboard.fullDepartment')} />
             <StatCard icon={CheckCircle2} label={t('dashboard.upcomingEvents')} value={eventsList.length} color="--mood-happy" delay={0.4} subtext={t('dashboard.schoolCalendar')} />
           </>
@@ -694,7 +697,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
                     {cls.time && <div className="class-time">{cls.time}</div>}
                     <div className="class-info">
                       <h4>{cls.name}</h4>
-                      <span>{cls.room ? `${cls.room} • ` : ''}{cls.students} {isAlbanian ? 'nxënës' : cls.students === 1 ? 'student' : 'students'}</span>
+                      <span>{[cls.classLabel && `${isAlbanian ? 'Klasa' : 'Class'} ${cls.classLabel}`, cls.room].filter(Boolean).join(' • ')}{(cls.classLabel || cls.room) ? ' • ' : ''}{cls.students === undefined ? '…' : cls.students} {isAlbanian ? 'nxënës' : cls.students === 1 ? 'student' : 'students'}</span>
                     </div>
                   </div>
                 ))

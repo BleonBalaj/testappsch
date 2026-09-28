@@ -1,17 +1,11 @@
 .events-page {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-.title-group {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  flex-wrap: wrap;
-}
 
 .header-title-badge {
   display: inline-flex;

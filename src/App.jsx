@@ -32,12 +32,14 @@ import { MoodProvider } from './context/MoodContext';
 import { SchoolDataProvider, useSchoolData, DEFAULT_ROLE_PERMISSIONS } from './context/SchoolDataContext';
 import { TasksProvider } from './context/TasksContext';
 import { Calendar, Sparkles, School, Plus, LogOut } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from './services/firebase';
 import './App.css';
 
 function AppContent() {
   const { currentUser, currentRole, roleReady, activeSchoolId, activeSchool, authLoading, schoolLinks, schoolLinksLoaded, createNewSchool, logoutUser } = useAuth();
   const { language, t } = useLanguage();
-  const { classesList = [], classesLoaded, studentsList = [], loading: schoolDataLoading, eventsList = [], rolePermissions } = useSchoolData();
+  const { classesList = [], classesLoaded, eventsList = [], rolePermissions } = useSchoolData();
 
   // The page in the address bar when the app opened (see features/navigation/pageRoutes).
   const [initialRoute] = useState(() => pageFromLocation(window.location.pathname, window.location.hash) || { page: 'not-found' });
@@ -47,6 +49,10 @@ function AppContent() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [pendingScheduledLesson, setPendingScheduledLesson] = useState(null);
+  // A class timetable opened from Courses & Classes; Schedule reads it once.
+  const [scheduleFocus, setScheduleFocus] = useState(null);
+  // Asks Courses & Classes to show a view; a new object each request.
+  const [classesViewRequest, setClassesViewRequest] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [lessonLanguage, setLessonLanguage] = useState(() => localStorage.getItem('lumi-lesson-language') === 'sq' ? 'sq' : 'en');
@@ -174,18 +180,30 @@ function AppContent() {
         replaceUrlRef.current = true;
       }
     } else if (pendingDetail.page === 'student-overview') {
-      if (schoolDataLoading) return;
-      const student = studentsList.find(item => String(item.id) === String(pendingDetail.id));
-      setPendingDetail(null);
-      if (student) {
-        setSelectedStudent(student);
-        setStudentReturnPath('students');
-        setCurrentPath('student-overview');
-      } else {
-        replaceUrlRef.current = true;
-      }
+      // Read just this record; the app never loads the whole student list.
+      if (!activeSchoolId) return;
+      const target = pendingDetail;
+      let active = true;
+      getDoc(doc(db, 'schools', activeSchoolId, 'students', String(target.id)))
+        .then((snapshot) => {
+          if (!active) return;
+          setPendingDetail(current => (current === target ? null : current));
+          if (snapshot.exists()) {
+            setSelectedStudent({ id: snapshot.id, ...snapshot.data() });
+            setStudentReturnPath('students');
+            setCurrentPath('student-overview');
+          } else {
+            replaceUrlRef.current = true;
+          }
+        })
+        .catch(() => {
+          if (!active) return;
+          setPendingDetail(current => (current === target ? null : current));
+          replaceUrlRef.current = true;
+        });
+      return () => { active = false; };
     }
-  }, [pendingDetail, currentUser, classesLoaded, classesList, schoolDataLoading, studentsList]);
+  }, [pendingDetail, currentUser, classesLoaded, classesList, activeSchoolId]);
 
   // Keep the address bar in step with the page being shown.
   useEffect(() => {
@@ -379,10 +397,15 @@ function AppContent() {
         return <Classes 
           userRole={userRole}
           addNotification={addNotification}
+          viewRequest={classesViewRequest}
           onClassSelect={(classData) => {
             setSelectedClass(classData);
             setCurrentPath('class-overview');
           }} 
+          onOpenSchedule={canAccessPath('schedule') ? (filter) => {
+            setScheduleFocus(filter);
+            setCurrentPath('schedule');
+          } : undefined}
         />;
       case 'class-overview':
         return <ClassOverview 
@@ -436,7 +459,7 @@ function AppContent() {
       case 'events':
         return <Events userRole={userRole} />;
       case 'schedule':
-        return <Schedule userRole={userRole} lessonLanguage={language} onOpenCourses={() => setCurrentPath('classes')} onCreateLessonPlan={(scheduledLesson) => { setPendingScheduledLesson(scheduledLesson); setCurrentPath('lesson-plans'); }} />;
+        return <Schedule userRole={userRole} lessonLanguage={language} initialFilter={scheduleFocus} onInitialFilterConsumed={() => setScheduleFocus(null)} onOpenCourses={() => setCurrentPath('classes')} onCreateLessonPlan={(scheduledLesson) => { setPendingScheduledLesson(scheduledLesson); setCurrentPath('lesson-plans'); }} />;
       case 'messages':
         return <Messages userRole={userRole} />;
       case 'settings':
@@ -536,6 +559,22 @@ function AppContent() {
         classes={classesList}
         events={eventsList}
         onNavigate={handleNavigate}
+        onOpenStudent={canAccessPath('students') ? (student) => {
+          setSelectedStudent(student);
+          setStudentReturnPath('students');
+          setPendingDetail(null);
+          setCurrentPath('student-overview');
+        } : undefined}
+        onOpenCourse={canAccessPath('classes') ? (course) => {
+          setSelectedClass(course);
+          setPendingDetail(null);
+          setCurrentPath('class-overview');
+        } : undefined}
+        onOpenClassGroup={canAccessPath('classes') ? () => {
+          // Opens Courses & Classes on its Classes view, even if already open.
+          setClassesViewRequest({ view: 'groups' });
+          handleNavigate('classes');
+        } : undefined}
         userRole={userRole}
       />
 

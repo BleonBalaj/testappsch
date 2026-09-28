@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Users, BookOpen, Clock, MessageCircle, ClipboardCheck, 
@@ -6,13 +6,17 @@ import {
   Sparkles, CheckCircle2 
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from './Avatar';
-import { courseMatchesReference, isStudentEnrolledInCourse } from '../features/enrollment';
+import { courseMatchesReference } from '../features/enrollment';
+import { classGroupForItem, classGroupsById, studentClassLabel } from '../features/classGroups';
+import { useClassRoster, useCourseRoster } from '../features/students/studentData';
 import './ClassDetail.css';
 
 const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreateLessonPlan, lessonLanguage = 'en' }) => {
-  const { studentsList, classesList } = useSchoolData();
+  const { classesList = [], classGroups = [] } = useSchoolData();
+  const { activeSchoolId } = useAuth();
   const { isAlbanian } = useLanguage();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'materials'
   const isStudent = userRole === 'student';
@@ -21,18 +25,24 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
   const [attendanceRecords, setAttendanceRecords] = useState({});
   const [isRollCallSaved, setIsRollCallSaved] = useState(false);
 
-  if (!classInfo) return null;
-
-  // Real enrolled students or filtered by class
-  const classMaterials = classInfo.materials || [];
-  const relatedCourse = classesList.find(course =>
+  // The roster is the linked course's students, or the slot's class. Staff only,
+  // and only while the panel is open.
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
+  const relatedCourse = classInfo ? classesList.find(course =>
     [classInfo.courseId, classInfo.classId, classInfo.subject, classInfo.curriculumSubject]
       .some(reference => courseMatchesReference(course, reference))
-  );
-  const displayStudents = relatedCourse
-    ? studentsList.filter(student => isStudentEnrolledInCourse(student, relatedCourse))
-    : studentsList.filter(student => classInfo.classLabel &&
-        (student.grade === classInfo.classLabel || student.class === classInfo.classLabel));
+  ) : null;
+  const slotGroup = classInfo && !relatedCourse ? classGroupForItem(classInfo, classGroups, groupsById) : null;
+  const loadRoster = Boolean(isOpen && classInfo && !isStudent);
+  const courseRoster = useCourseRoster(activeSchoolId, loadRoster ? relatedCourse : null);
+  const classRoster = useClassRoster(activeSchoolId, loadRoster && slotGroup ? slotGroup.id : '');
+
+  if (!classInfo) return null;
+
+  const classMaterials = classInfo.materials || [];
+  const rosterSource = relatedCourse ? courseRoster : slotGroup ? classRoster : null;
+  const displayStudents = rosterSource ? rosterSource.students : [];
+  const rosterLoading = Boolean(rosterSource?.loading);
 
   const handleStatusChange = (studentId, status) => {
     setAttendanceRecords(prev => ({ ...prev, [studentId]: status }));
@@ -255,7 +265,11 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                       <div className="attendance-student-list">
                         {displayStudents.length === 0 ? (
                           <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                            {isAlbanian ? 'Nuk ka nxënës të regjistruar në këtë lëndë ende.' : 'No students enrolled in this class yet.'}
+                            {rosterLoading
+                              ? (isAlbanian ? 'Po ngarkohen nxënësit…' : 'Loading students…')
+                              : !rosterSource
+                                ? (isAlbanian ? 'Kjo orë nuk është e lidhur me një lëndë ose klasë.' : 'This period is not linked to a course or class.')
+                                : (isAlbanian ? 'Nuk ka nxënës të regjistruar në këtë lëndë ende.' : 'No students enrolled in this class yet.')}
                           </div>
                         ) : (
                           displayStudents.map((student) => {
@@ -267,7 +281,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                                 </div>
                                 <div className="att-name-col">
                                   <strong>{student.name}</strong>
-                                  <span>{isAlbanian ? 'Klasa' : 'Grade'} {student.grade || student.class || 'N/A'}</span>
+                                  <span>{studentClassLabel(student, groupsById) ? `${isAlbanian ? 'Klasa' : 'Class'} ${studentClassLabel(student, groupsById)}` : (isAlbanian ? 'Pa klasë' : 'No class')}</span>
                                 </div>
 
                                 <div className="att-btn-group">

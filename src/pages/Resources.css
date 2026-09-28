@@ -1,7 +1,7 @@
 .resources-page {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .view-toggle {
@@ -589,4 +589,37 @@
 .empty-resources h3 {
   font-size: 1.5rem;
   color: hsl(var(--foreground));
+}
+
+.res-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 12px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+}
+
+.res-notice.is-error {
+  color: hsl(var(--destructive));
+  background: hsla(var(--destructive), 0.12);
+  border-color: hsla(var(--destructive), 0.4);
+}
+
+.res-btn.is-disabled,
+.res-action-btn.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+a.res-btn,
+a.res-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: inherit;
 }

@@ -938,3 +938,28 @@ select.grade-input-field { cursor: pointer; }
 .gradebook-student-search { width: min(100%, 440px); margin: 0 0 1.25rem; }
 .gradebook-student-search input { min-width: 0; width: 100%; }
 @media (max-width: 520px) { .category-editor-row { grid-template-columns: minmax(0, 1fr) 86px auto; gap: 0.4rem; } }
+
+.co-roster-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.84rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
+}
+
+.co-roster-note.is-error {
+  color: hsl(var(--destructive));
+  font-weight: 600;
+}
+
+.co-via-class {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: hsl(var(--primary));
+  background: hsla(var(--primary), 0.1);
+  border: 1px solid hsla(var(--primary), 0.3);
+}

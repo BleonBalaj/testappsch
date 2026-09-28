@@ -14,7 +14,10 @@ import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import { CURRICULUM_STAGES } from './Classes';
 import { INITIAL_WEIGHTS, getCategoryDisplayName, validateCategoryWeights, calcStudentGradeData } from '../features/gradebook/grading';
-import { courseMatchesReference, isStudentEnrolledInCourse, normalizeAssignedCourseIds } from '../features/enrollment';
+import { courseMatchesReference, isEnrolledThroughClass, isStudentEnrolledInCourse, normalizeAssignedCourseIds } from '../features/enrollment';
+import { classGroupsById, studentClassLabel } from '../features/classGroups';
+import { useCourseRoster, useStudentSearch } from '../features/students/studentData';
+import { normalizeWebLink, safeWebLink } from '../features/links';
 import './ClassOverview.css';
 
 /* ─── Production Data State ──────────────────────────────── */
@@ -491,7 +494,7 @@ const TABS = [
 ];
 
 const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student' }) => {
-  const { studentsList = [], updateStudent, rolePermissions } = useSchoolData();
+  const { updateStudent, rolePermissions, classGroups = [] } = useSchoolData();
   const { activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
   const canEditClass = userRole === 'admin' || ((userRole === 'teacher' || userRole === 'dept_head') && (rolePermissions?.teacher?.classes ?? true));
@@ -522,6 +525,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const [catFilter, setCatFilter]         = useState('All');
   const [searchQ, setSearchQ]             = useState('');
   const [studentSearchQ, setStudentSearchQ] = useState('');
+  const [enrollSearch, setEnrollSearch] = useState('');
 
   // Sync props updates
   useEffect(() => {
@@ -541,11 +545,11 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     setCategoryLabels(classData?.categoryLabels || {});
   }, [classData]);
 
-  // Filter students enrolled in this class
-  const students = useMemo(() => {
-    if (!classData) return [];
-    return studentsList.filter(student => isStudentEnrolledInCourse(student, classData));
-  }, [studentsList, classData]);
+  // Students enrolled in this course: its linked class plus individually added students.
+  const roster = useCourseRoster(activeSchoolId, classData);
+  const students = roster.students;
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
+  const linkedClass = classData?.classGroupId ? groupsById.get(String(classData.classGroupId)) : null;
 
   const gradebookStudents = useMemo(() => {
     const query = studentSearchQ.trim().toLocaleLowerCase();
@@ -553,10 +557,9 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
     return students.filter(student => [student.name, student.studentId, student.email].some(value => String(value || '').toLocaleLowerCase().includes(query)));
   }, [students, studentSearchQ]);
 
-  // Students available to be enrolled
-  const availableStudentsToEnroll = useMemo(() => {
-    return studentsList.filter(s => s.status !== 'archived' && !students.some(es => es.id === s.id));
-  }, [studentsList, students]);
+  // Students to add come from a server-side search, never the whole school.
+  const enrollResults = useStudentSearch(activeSchoolId, enrollSearch, { max: 30, enabled: isEnrollModalOpen });
+  const availableStudentsToEnroll = enrollResults.results.filter(s => s.status !== 'archived' && !isStudentEnrolledInCourse(s, classData));
 
   // 1. Real-time listener for assignments
   useEffect(() => {
@@ -743,8 +746,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   };
 
   const removeStudent = async (studentId) => {
-    const student = studentsList.find(s => s.id === studentId);
-    if (!student) return;
+    const student = students.find(s => s.id === studentId);
+    if (!student || isEnrolledThroughClass(student, classData)) return;
     const nextClasses = normalizeAssignedCourseIds(student.assignedClasses, [classData])
       .filter(reference => !courseMatchesReference(classData, reference));
     await updateStudent(student.id, {
@@ -775,7 +778,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
         {/* Row 1: back + actions */}
         <div className="co-header-top">
           <button className="back-btn bouncy" onClick={onBack}>
-            <ArrowLeft size={16} /> {t('classes.allClasses', 'All Classes')}
+            <ArrowLeft size={16} /> {t('classes.allClasses', 'All Courses')}
           </button>
           {canManageEnrollment && (
             <button className="btn-primary btn-sm" onClick={() => setIsEnrollModalOpen(true)}>
@@ -939,8 +942,13 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
           <motion.div key="roster" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
             <div className="co-toolbar">
               <h3>{t('classes.roster', 'Student Roster')}</h3>
-              <button className="btn-primary btn-sm" onClick={() => setIsEnrollModalOpen(true)}><Plus size={16}/> {t('classes.enrollStudent', 'Add Student')}</button>
+              {canManageEnrollment && <button className="btn-primary btn-sm" onClick={() => setIsEnrollModalOpen(true)}><Plus size={16}/> {t('classes.enrollStudent', 'Add Student')}</button>}
             </div>
+            {linkedClass && (
+              <p className="co-roster-note">{isAlbanian
+                ? `Të gjithë nxënësit e klasës ${linkedClass.label} janë të regjistruar automatikisht. Mund të shtoni edhe nxënës nga klasa të tjera.`
+                : `Every student of class ${linkedClass.label} is enrolled automatically. You can also add students from other classes.`}</p>
+            )}
             <div className="co-table glass">
               <table>
                 <thead>
@@ -967,17 +975,24 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                           <td><strong style={{ color: gradeColor(pct) }}>{pct !== null ? `${pct}%` : '—'}</strong></td>
                           <td><span className="grade-badge" style={{ color: gradeColor(pct) }}>{gradeLabel(pct)}</span></td>
                           <td>
-                            <button 
-                              type="button"
-                              className="icon-btn-destructive" 
-                              title="Remove from class roster"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setStudentToRemove(s);
-                              }}
-                            >
-                              <UserMinus size={16}/>
-                            </button>
+                            {isEnrolledThroughClass(s, classData) ? (
+                              <span className="co-via-class" title={isAlbanian ? `Regjistruar përmes klasës ${linkedClass?.label || ''}. Ndryshoni klasën e nxënësit për ta hequr.` : `Enrolled through class ${linkedClass?.label || ''}. Change the student's class to remove them.`}>
+                                {isAlbanian ? 'Klasa' : 'Class'} {linkedClass?.label || ''}
+                              </span>
+                            ) : canManageEnrollment && (
+                              <button 
+                                type="button"
+                                className="icon-btn-destructive" 
+                                title={isAlbanian ? 'Hiq nga lista e lëndës' : 'Remove from course roster'}
+                                aria-label={isAlbanian ? `Hiq ${s.name} nga lënda` : `Remove ${s.name} from course`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setStudentToRemove(s);
+                                }}
+                              >
+                                <UserMinus size={16}/>
+                              </button>
+                            )}
                           </td>
                         </motion.tr>
                       );
@@ -985,7 +1000,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                   </AnimatePresence>
                 </tbody>
               </table>
-              {students.length === 0 && <div className="empty-state"><AlertCircle size={28}/><p>No students enrolled.</p></div>}
+              {students.length === 0 && <div className="empty-state"><AlertCircle size={28}/><p>{roster.loading ? (isAlbanian ? 'Po ngarkohen nxënësit…' : 'Loading students…') : roster.error ? (isAlbanian ? 'Nxënësit nuk mund të ngarkohen.' : 'Students could not be loaded.') : (isAlbanian ? 'Ende nuk ka nxënës të regjistruar.' : 'No students enrolled yet.')}</p></div>}
             </div>
           </motion.div>
         )}
@@ -1396,8 +1411,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     <span className="material-type">{m.type || 'PDF'}</span>
                     <p style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>{m.date || ''}</p>
                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', width: '100%', justifyContent: 'space-between' }}>
-                      {m.url ? (
-                        <a href={m.url} target="_blank" rel="noreferrer" className="btn-secondary glass btn-sm" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      {safeWebLink(m.url) ? (
+                        <a href={safeWebLink(m.url)} target="_blank" rel="noopener noreferrer" className="btn-secondary glass btn-sm" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                           <ExternalLink size={14} /> {isAlbanian ? 'Hap' : 'Open'}
                         </a>
                       ) : <span />}
@@ -1516,7 +1531,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
         {/* Enroll Student Modal */}
         {isEnrollModalOpen && (
-          <div className="modal-overlay" onClick={() => setIsEnrollModalOpen(false)}>
+          <div className="modal-overlay" onClick={() => { setIsEnrollModalOpen(false); setEnrollSearch(''); }}>
             <motion.div
               className="modal-content"
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -1532,8 +1547,24 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                   <X size={16} />
                 </button>
               </div>
-              <div className="modal-form" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                {availableStudentsToEnroll.length > 0 ? (
+              <div className="modal-form">
+                {linkedClass && (
+                  <p className="co-roster-note">{isAlbanian
+                    ? `Nxënësit e klasës ${linkedClass.label} janë tashmë të regjistruar. Kërkoni për të shtuar nxënës të tjerë.`
+                    : `Students of class ${linkedClass.label} are already enrolled. Search to add other students.`}</p>
+                )}
+                <div className="input-group">
+                  <label htmlFor="co-enroll-search">{isAlbanian ? 'Kërko nxënës' : 'Search students'}</label>
+                  <input id="co-enroll-search" type="text" autoFocus value={enrollSearch} onChange={e => setEnrollSearch(e.target.value)}
+                    placeholder={isAlbanian ? 'Emri, email-i ose ID e nxënësit…' : 'Student name, email or ID…'} />
+                </div>
+                {!enrollResults.active ? (
+                  <p className="co-roster-note">{isAlbanian ? 'Shkruani emrin, email-in ose ID-në për të gjetur nxënës.' : 'Type a name, email or ID to find students.'}</p>
+                ) : enrollResults.loading ? (
+                  <p className="co-roster-note">{isAlbanian ? 'Duke kërkuar…' : 'Searching…'}</p>
+                ) : enrollResults.error ? (
+                  <p className="co-roster-note is-error">{isAlbanian ? 'Kërkimi dështoi. Provoni sërish.' : 'Search failed. Try again.'}</p>
+                ) : availableStudentsToEnroll.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                     {availableStudentsToEnroll.map(student => (
                       <div 
@@ -1552,7 +1583,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                           <Avatar name={student.name} size={32} />
                           <div>
                             <strong style={{ fontSize: '0.9rem', display: 'block' }}>{student.name}</strong>
-                            <small style={{ color: 'hsl(var(--muted-foreground))' }}>{isAlbanian ? 'Klasa' : 'Grade'} {student.grade} · {student.email}</small>
+                            <small style={{ color: 'hsl(var(--muted-foreground))' }}>{[studentClassLabel(student, groupsById) && `${isAlbanian ? 'Klasa' : 'Class'} ${studentClassLabel(student, groupsById)}`, student.email].filter(Boolean).join(' · ')}</small>
                           </div>
                         </div>
                         <button
@@ -1571,9 +1602,10 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                 ) : (
                   <div className="empty-state">
                     <CheckCircle2 size={28} style={{ color: 'hsl(var(--mood-happy))' }} />
-                    <p>{isAlbanian ? 'Të gjithë nxënësit e regjistruar janë tashmë në këtë klasë!' : 'All registered students are already enrolled in this class!'}</p>
+                    <p>{isAlbanian ? 'Asnjë nxënës i paregjistruar nuk përputhet me kërkimin.' : 'No unenrolled students match this search.'}</p>
                   </div>
                 )}
+                {enrollResults.capped && <p className="co-roster-note">{isAlbanian ? "Po shfaqen rezultatet e para. Shkruani më shumë për t'i ngushtuar." : 'Showing the first matches. Type more to narrow them down.'}</p>}
               </div>
               <div className="modal-footer-actions">
                 <button type="button" className="btn-secondary" onClick={() => setIsEnrollModalOpen(false)}>
@@ -1609,7 +1641,13 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                   const form = e.target;
                   const title = form.matTitle.value.trim();
                   const type = form.matType.value;
-                  const url = form.matUrl.value.trim();
+                  const link = normalizeWebLink(form.matUrl.value);
+                  if (link.error) {
+                    form.matUrl.setCustomValidity(isAlbanian ? 'Shkruani një lidhje interneti, p.sh. https://drive.google.com/…' : 'Enter a web link, for example https://drive.google.com/…');
+                    form.matUrl.reportValidity();
+                    return;
+                  }
+                  const url = link.url;
                   if (!title || !activeSchoolId) return;
                   const matId = `mat_${Date.now()}`;
                   await setDoc(doc(db, 'schools', activeSchoolId, 'classes', String(classData.id), 'materials', matId), {
@@ -1639,7 +1677,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                   </div>
                   <div className="input-group">
                     <label>{isAlbanian ? 'Vegëz / URL e Materialit (Opsionale)' : 'Resource Link / URL (Optional)'}</label>
-                    <input name="matUrl" placeholder="https://example.com/material.pdf" />
+                    <input name="matUrl" placeholder="https://example.com/material.pdf" onInput={e => e.currentTarget.setCustomValidity('')} />
                   </div>
                 </div>
                 <div className="modal-footer-actions">

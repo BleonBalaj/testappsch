@@ -17,17 +17,31 @@ import { db } from '../services/firebase';
 import { conversationMemberIds, isPersistedConversation, viewerConversation } from '../features/messaging/conversationAccess';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
+import { classGroupsById, studentClassLabel } from '../features/classGroups';
+import { useClassRoster, useStudentCounts, useStudentSearch } from '../features/students/studentData';
 import './Messages.css';
+
+const STUDENT_TOTAL_SPEC = [{ kind: 'all' }];
 
 const INITIAL_CHATS = [];
 const INITIAL_THREAD = {};
 const EMOJI_REACTIONS = ['👍', '❤️', '🌟', '🎉', '🔥', '👏', '💡', '✅'];
 
 const Messages = ({ userRole = 'admin' }) => {
-  const { staffList, studentsList } = useSchoolData();
+  const { staffList = [], classGroups = [], myStudentRecord, studentsVersion } = useSchoolData();
   const { activeSchoolId, currentUser } = useAuth();
   const { t, isAlbanian } = useLanguage();
   const isAdminOrTeacher = userRole === 'admin' || userRole === 'teacher';
+  const isStudentRole = userRole === 'student';
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
+  // Students are never loaded in bulk: a student's classmates are a bounded
+  // list, everyone else is found through the server-side search.
+  const classmates = useClassRoster(activeSchoolId, isStudentRole ? myStudentRecord?.classGroupId || '' : '');
+  const studentTotal = useStudentCounts(activeSchoolId, STUDENT_TOTAL_SPEC, studentsVersion).get(STUDENT_TOTAL_SPEC[0]);
+  const studentLabel = useCallback(student => {
+    const label = studentClassLabel(student, groupsById);
+    return label ? `${isAlbanian ? 'Klasa' : 'Class'} ${label}` : (isAlbanian ? 'Nxënës' : 'Student');
+  }, [groupsById, isAlbanian]);
 
   const [chats, setChats] = useState(INITIAL_CHATS);
   const [activeChat, setActiveChat] = useState(null);
@@ -64,6 +78,7 @@ const Messages = ({ userRole = 'admin' }) => {
 
   // Add Member to existing channel
   const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
 
   const messagesEndRef = useRef(null);
   // Conversation ids the server has confirmed; see isPersistedConversation.
@@ -113,11 +128,11 @@ const Messages = ({ userRole = 'admin' }) => {
             { id: s.id, name: s.name, role: 'Faculty' }
           ]
         })),
-        ...studentsList.filter(st => st.id !== currentUser?.uid).map(st => ({
+        ...classmates.students.filter(st => st.id !== currentUser?.uid).map(st => ({
           id: `dm_${[currentUser?.uid || 'user', st.id].sort().join('_')}`,
           targetUid: st.id,
           name: st.name,
-          role: `Student (${st.grade || 'General'})`,
+          role: studentLabel(st),
           roleType: 'student',
           lastMessage: 'Direct Message',
           time: 'Active',
@@ -152,7 +167,7 @@ const Messages = ({ userRole = 'admin' }) => {
     }, (err) => console.warn('Conversations sync notice:', err.message));
 
     return () => unsub();
-  }, [activeSchoolId, staffList, studentsList, currentUser?.uid]);
+  }, [activeSchoolId, staffList, classmates.students, studentLabel, currentUser?.uid]);
 
   // 2. Listen to real messages in activeChat once its conversation document exists
   const activeChatPersisted = isPersistedConversation(activeChat, currentUser?.uid);
@@ -204,51 +219,53 @@ const Messages = ({ userRole = 'admin' }) => {
     });
   }, [chats, chatSearch, filterTab]);
 
+  // Staff are a short list searched locally; students come from the server.
+  const chatStudentSearch = useStudentSearch(activeSchoolId, newChatSearch, { max: 30, enabled: isNewChatOpen && (newChatTab === 'all' || newChatTab === 'students') });
+  const groupStudentSearch = useStudentSearch(activeSchoolId, groupSearchQuery, { max: 30, enabled: isNewChatOpen && newChatTab === 'create_group' && groupFilterTab !== 'staff' });
+  const memberStudentSearch = useStudentSearch(activeSchoolId, memberSearch, { max: 20, enabled: isChannelSettingsOpen });
+  const staffMatching = useCallback((text) => {
+    const lower = text.trim().toLowerCase();
+    return staffList.filter(member => member.id !== currentUser?.uid &&
+      (!lower || [member.name, member.staffId, member.department, member.subject, member.roleName, member.email].some(value => String(value || '').toLowerCase().includes(lower))));
+  }, [staffList, currentUser?.uid]);
+  const studentsFor = useCallback((text, search) => (text.trim() ? search.results : classmates.students)
+    .filter(student => student.id !== currentUser?.uid && student.status !== 'archived'), [classmates.students, currentUser?.uid]);
+
   // Filtered Directory in Direct Chat Tab
   const modalDirectoryUsers = useMemo(() => {
     let list = [];
     if (newChatTab === 'all' || newChatTab === 'staff') {
-      list = [...list, ...staffList.map(s => ({ ...s, userType: 'staff' }))];
+      list = [...list, ...staffMatching(newChatSearch).map(s => ({ ...s, userType: 'staff' }))];
     }
     if (newChatTab === 'all' || newChatTab === 'students') {
-      list = [...list, ...studentsList.map(st => ({ ...st, userType: 'student' }))];
+      list = [...list, ...studentsFor(newChatSearch, chatStudentSearch).map(st => ({ ...st, userType: 'student' }))];
     }
-
-    if (!newChatSearch.trim()) return list;
-    const lower = newChatSearch.toLowerCase();
-    return list.filter(u => 
-      u.name.toLowerCase().includes(lower) || 
-      (u.studentId && u.studentId.toLowerCase().includes(lower)) ||
-      (u.staffId && u.staffId.toLowerCase().includes(lower)) ||
-      (u.department && u.department.toLowerCase().includes(lower)) ||
-      (u.subject && u.subject.toLowerCase().includes(lower)) ||
-      (u.grade && u.grade.toLowerCase().includes(lower)) ||
-      (u.roleName && u.roleName.toLowerCase().includes(lower))
-    );
-  }, [newChatTab, newChatSearch, staffList, studentsList]);
+    return list;
+  }, [newChatTab, newChatSearch, staffMatching, studentsFor, chatStudentSearch]);
 
   // Filtered Directory in Group Channel Creation Tab
   const filteredGroupCandidates = useMemo(() => {
     let list = [];
     if (groupFilterTab === 'all' || groupFilterTab === 'staff') {
-      list = [...list, ...staffList.map(s => ({ ...s, userType: 'staff' }))];
+      list = [...list, ...staffMatching(groupSearchQuery).map(s => ({ ...s, userType: 'staff' }))];
     }
     if (groupFilterTab === 'all' || groupFilterTab === 'students') {
-      list = [...list, ...studentsList.map(st => ({ ...st, userType: 'student' }))];
+      list = [...list, ...studentsFor(groupSearchQuery, groupStudentSearch).map(st => ({ ...st, userType: 'student' }))];
     }
+    return list;
+  }, [groupFilterTab, groupSearchQuery, staffMatching, studentsFor, groupStudentSearch]);
 
-    if (!groupSearchQuery.trim()) return list;
-    const lower = groupSearchQuery.toLowerCase();
-    return list.filter(u => 
-      u.name.toLowerCase().includes(lower) || 
-      (u.studentId && u.studentId.toLowerCase().includes(lower)) ||
-      (u.staffId && u.staffId.toLowerCase().includes(lower)) ||
-      (u.department && u.department.toLowerCase().includes(lower)) ||
-      (u.subject && u.subject.toLowerCase().includes(lower)) ||
-      (u.grade && u.grade.toLowerCase().includes(lower)) ||
-      (u.roleName && u.roleName.toLowerCase().includes(lower))
-    );
-  }, [groupFilterTab, groupSearchQuery, staffList, studentsList]);
+  const memberCandidates = useMemo(() => [
+    ...staffMatching(memberSearch).map(member => ({ id: member.id, name: member.name, role: 'Faculty', detail: member.department || member.roleName || '' })),
+    ...studentsFor(memberSearch, memberStudentSearch).map(student => ({ id: student.id, name: student.name, role: 'Student', detail: studentLabel(student) })),
+  ], [memberSearch, staffMatching, studentsFor, memberStudentSearch, studentLabel]);
+
+  const studentsHint = (text, search) => {
+    if (text.trim()) return search.loading ? (isAlbanian ? 'Duke kërkuar nxënës…' : 'Searching students…') : '';
+    return isStudentRole
+      ? (isAlbanian ? 'Po shfaqen shokët e klasës. Shkruani për të kërkuar nxënës të tjerë.' : 'Showing your classmates. Type to find other students.')
+      : (isAlbanian ? 'Shkruani emrin, email-in ose ID-në për të gjetur nxënës.' : 'Type a name, email or ID to find students.');
+  };
 
 
   // Send Message
@@ -375,7 +392,7 @@ const Messages = ({ userRole = 'admin' }) => {
       id: dmId,
       targetUid: user.id,
       name: user.name,
-      role: type === 'staff' ? (user.roleName || user.department || 'Faculty') : `Student (${user.grade || 'General'})`,
+      role: type === 'staff' ? (user.roleName || user.department || 'Faculty') : studentLabel(user),
       roleType: type,
       memberIds: conversationMemberIds({ id: dmId }),
       lastMessage: 'Direct conversation',
@@ -401,7 +418,7 @@ const Messages = ({ userRole = 'admin' }) => {
         console.warn('Could not register conversation in Firestore:', e.message);
       }
     }
-  }, [currentUser, activeSchoolId]);
+  }, [currentUser, activeSchoolId, studentLabel]);
 
   // Create Group Channel
   const handleCreateGroupSubmit = async (e) => {
@@ -473,14 +490,11 @@ const Messages = ({ userRole = 'admin' }) => {
   // Moderation: Add Member to Group
   const handleAddMemberToGroup = () => {
     if (!selectedMemberToAdd) return;
-    const allUsers = [
-      ...staffList.map(s => ({ id: s.id, name: s.name, role: 'Faculty' })),
-      ...studentsList.map(st => ({ id: st.id, name: st.name, role: 'Student' }))
-    ];
-    const userToAdd = allUsers.find(u => u.name === selectedMemberToAdd);
-    if (!userToAdd) return;
+    const candidate = memberCandidates.find(u => String(u.id) === String(selectedMemberToAdd));
+    if (!candidate) return;
+    const userToAdd = { id: candidate.id, name: candidate.name, role: candidate.role };
 
-    if (activeChat.members?.some(m => m.name === userToAdd.name)) {
+    if (activeChat.members?.some(m => String(m.id) === String(userToAdd.id))) {
       alert("This member is already in the channel!");
       return;
     }
@@ -1008,18 +1022,20 @@ const Messages = ({ userRole = 'admin' }) => {
                     <div className="add-member-widget glass">
                       <label>Add Participant:</label>
                       <div className="add-member-input-row">
+                        <input
+                          type="text"
+                          value={memberSearch}
+                          onChange={(e) => { setMemberSearch(e.target.value); setSelectedMemberToAdd(''); }}
+                          placeholder={isAlbanian ? 'Kërko staf ose nxënës…' : 'Search staff or students…'}
+                          aria-label={isAlbanian ? 'Kërko pjesëmarrës' : 'Search participants'}
+                        />
                         <select 
                           value={selectedMemberToAdd}
                           onChange={(e) => setSelectedMemberToAdd(e.target.value)}
                           className="custom-form-select"
                         >
-                          <option value="">Select faculty or student...</option>
-                          <optgroup label="Faculty & Staff">
-                            {staffList.map(s => <option key={s.id} value={s.name}>{s.name} ({s.department})</option>)}
-                          </optgroup>
-                          <optgroup label="Enrolled Students">
-                            {studentsList.map(st => <option key={st.id} value={st.name}>{st.name} (Grade {st.grade})</option>)}
-                          </optgroup>
+                          <option value="">{isAlbanian ? 'Zgjidhni stafin ose nxënësin…' : 'Select faculty or student…'}</option>
+                          {memberCandidates.map(u => <option key={`${u.role}_${u.id}`} value={u.id}>{u.name}{u.detail ? ` (${u.detail})` : ''}</option>)}
                         </select>
                         <button 
                           className="btn-primary btn-sm"
@@ -1046,7 +1062,7 @@ const Messages = ({ userRole = 'admin' }) => {
                             {member.isModerator && <span className="mod-pill">Mod</span>}
                           </div>
                           <span className="member-role-label">
-                            {member.role || 'Member'} {member.grade ? `• Grade ${member.grade}` : ''}
+                            {member.role || 'Member'}
                           </span>
                         </div>
 
@@ -1203,7 +1219,7 @@ const Messages = ({ userRole = 'admin' }) => {
                       className={`dir-filter-pill ${newChatTab === 'all' ? 'active' : ''}`}
                       onClick={() => setNewChatTab('all')}
                     >
-                      {isAlbanian ? 'Të Gjithë' : 'All Users'} ({staffList.length + studentsList.length})
+                      {isAlbanian ? 'Të Gjithë' : 'All Users'} ({studentTotal === undefined ? '…' : (staffList.length + studentTotal).toLocaleString()})
                     </button>
                     <button 
                       type="button"
@@ -1217,7 +1233,7 @@ const Messages = ({ userRole = 'admin' }) => {
                       className={`dir-filter-pill ${newChatTab === 'students' ? 'active' : ''}`}
                       onClick={() => setNewChatTab('students')}
                     >
-                      🎓 {isAlbanian ? 'Nxënësit' : 'Students'} ({studentsList.length})
+                      🎓 {isAlbanian ? 'Nxënësit' : 'Students'} ({studentTotal === undefined ? '…' : studentTotal.toLocaleString()})
                     </button>
                   </div>
 
@@ -1238,12 +1254,18 @@ const Messages = ({ userRole = 'admin' }) => {
                     )}
                   </div>
 
+                  {newChatTab !== 'staff' && studentsHint(newChatSearch, chatStudentSearch) && (
+                    <p className="directory-hint">{studentsHint(newChatSearch, chatStudentSearch)}</p>
+                  )}
+
                   {/* Scrollable User Directory */}
                   <div className="new-chat-user-list">
                     {modalDirectoryUsers.length === 0 ? (
                       <div className="empty-directory-state">
                         <Users size={32} className="muted-icon" />
-                        <p>No members found matching "<strong>{newChatSearch}</strong>"</p>
+                        <p>{newChatSearch.trim()
+                          ? <>{isAlbanian ? 'Asnjë anëtar nuk përputhet me' : 'No members found matching'} "<strong>{newChatSearch}</strong>"</>
+                          : (isAlbanian ? 'Shkruani një emër për të filluar.' : 'Type a name to begin.')}</p>
                       </div>
                     ) : (
                       modalDirectoryUsers.map(user => (
@@ -1260,13 +1282,13 @@ const Messages = ({ userRole = 'admin' }) => {
                             <div className="user-title-line">
                               <strong className="user-name">{user.name}</strong>
                               <span className={`user-category-tag ${user.userType}`}>
-                                {user.userType === 'staff' ? 'Staff' : 'Student'}
+                                {user.userType === 'staff' ? (isAlbanian ? 'Staf' : 'Staff') : (isAlbanian ? 'Nxënës' : 'Student')}
                               </span>
                             </div>
                             <span className="user-meta-sub">
                               {user.userType === 'staff' 
                                 ? (user.roleName || user.department || 'Faculty') 
-                                : `Grade ${user.grade} • Enrolled Student`
+                                : studentLabel(user)
                               }
                             </span>
                           </div>
@@ -1324,21 +1346,21 @@ const Messages = ({ userRole = 'admin' }) => {
                           className={`dir-filter-pill ${groupFilterTab === 'all' ? 'active' : ''}`}
                           onClick={() => setGroupFilterTab('all')}
                         >
-                          All ({staffList.length + studentsList.length})
+                          {isAlbanian ? 'Të Gjithë' : 'All'} ({studentTotal === undefined ? '…' : (staffList.length + studentTotal).toLocaleString()})
                         </button>
                         <button 
                           type="button"
                           className={`dir-filter-pill ${groupFilterTab === 'staff' ? 'active' : ''}`}
                           onClick={() => setGroupFilterTab('staff')}
                         >
-                          👨‍🏫 Staff ({staffList.length})
+                          👨‍🏫 {isAlbanian ? 'Stafi' : 'Staff'} ({staffList.length})
                         </button>
                         <button 
                           type="button"
                           className={`dir-filter-pill ${groupFilterTab === 'students' ? 'active' : ''}`}
                           onClick={() => setGroupFilterTab('students')}
                         >
-                          🎓 Students ({studentsList.length})
+                          🎓 {isAlbanian ? 'Nxënësit' : 'Students'} ({studentTotal === undefined ? '…' : studentTotal.toLocaleString()})
                         </button>
                       </div>
                     </div>
@@ -1348,7 +1370,7 @@ const Messages = ({ userRole = 'admin' }) => {
                       <Search size={15} className="search-icon" />
                       <input 
                         type="text" 
-                        placeholder="Filter candidates by name, subject, grade..." 
+                        placeholder={isAlbanian ? 'Kërko sipas emrit, lëndës ose ID-së…' : 'Search by name, subject or ID…'} 
                         value={groupSearchQuery}
                         onChange={(e) => setGroupSearchQuery(e.target.value)}
                       />
@@ -1359,22 +1381,42 @@ const Messages = ({ userRole = 'admin' }) => {
                       )}
                     </div>
 
+                    {selectedGroupMembers.length > 0 && (
+                      <div className="selected-member-chips">
+                        {selectedGroupMembers.map(member => (
+                          <span key={`${member.userType}_${member.id}`} className="selected-member-chip">
+                            {member.name}
+                            <button type="button" onClick={() => setSelectedGroupMembers(prev => prev.filter(sel => String(sel.id) !== String(member.id)))}
+                              aria-label={isAlbanian ? `Hiq ${member.name}` : `Remove ${member.name}`}>
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {groupFilterTab !== 'staff' && studentsHint(groupSearchQuery, groupStudentSearch) && (
+                      <p className="directory-hint">{studentsHint(groupSearchQuery, groupStudentSearch)}</p>
+                    )}
+
                     {/* Candidate Member Cards (Unconstrained, flows naturally with single modal scrollbar) */}
                     <div className="group-members-grid">
                       {filteredGroupCandidates.length === 0 ? (
                         <div className="empty-group-candidates">
-                          <p>No candidates found matching "{groupSearchQuery}"</p>
+                          <p>{groupSearchQuery.trim()
+                            ? (isAlbanian ? `Asnjë kandidat nuk përputhet me "${groupSearchQuery}"` : `No candidates found matching "${groupSearchQuery}"`)
+                            : (isAlbanian ? 'Shkruani një emër për të gjetur anëtarë.' : 'Type a name to find members.')}</p>
                         </div>
                       ) : (
                         filteredGroupCandidates.map(u => {
-                          const isSelected = selectedGroupMembers.some(sel => sel.name === u.name);
+                          const isSelected = selectedGroupMembers.some(sel => String(sel.id) === String(u.id));
                           return (
                             <div 
                               key={`${u.userType}_${u.id}`}
                               className={`group-pick-card ${isSelected ? 'selected' : ''}`}
                               onClick={() => {
                                 if (isSelected) {
-                                  setSelectedGroupMembers(prev => prev.filter(sel => sel.name !== u.name));
+                                  setSelectedGroupMembers(prev => prev.filter(sel => String(sel.id) !== String(u.id)));
                                 } else {
                                   setSelectedGroupMembers(prev => [...prev, u]);
                                 }
@@ -1385,7 +1427,7 @@ const Messages = ({ userRole = 'admin' }) => {
                               </div>
                               <div className="pick-card-info">
                                 <strong>{u.name}</strong>
-                                <span>{u.userType === 'staff' ? (u.roleName || u.department || 'Staff') : `Student • Gr. ${u.grade}`}</span>
+                                <span>{u.userType === 'staff' ? (u.roleName || u.department || 'Staff') : studentLabel(u)}</span>
                               </div>
                               <div className={`checkbox-indicator ${isSelected ? 'checked' : ''}`}>
                                 {isSelected && <Check size={12} />}

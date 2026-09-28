@@ -86,3 +86,11 @@ export function classGroupForItem(item, groups = [], groupsById = classGroupsByI
   if (item.classGroupId && groupsById.has(String(item.classGroupId))) return groupsById.get(String(item.classGroupId));
   return findClassGroupByLabel(groups, item.classLabel);
 }
+
+/** The homeroom teacher's current name, flagged when unassigned or no longer on staff. */
+export function homeroomTeacherInfo(group, staffList = [], isAlbanian = false) {
+  if (!group?.homeroomTeacherId) return { name: isAlbanian ? 'Pa kujdestar' : 'No homeroom teacher', missing: true };
+  const member = staffList.find(staff => String(staff.id) === String(group.homeroomTeacherId));
+  if (member) return { name: member.name || group.homeroomTeacherName || '—', missing: false, member };
+  return { name: `${group.homeroomTeacherName || '—'} ${isAlbanian ? '(nuk është më në staf)' : '(no longer on staff)'}`, missing: true };
+}

@@ -1,11 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
+  arrayUnion,
   collection, 
   doc, 
+  getDoc,
+  limit,
   onSnapshot, 
+  query,
   setDoc, 
   updateDoc, 
   deleteDoc, 
+  where,
   writeBatch,
   getDocs,
   serverTimestamp 
@@ -15,6 +20,22 @@ import { functions } from '../services/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from './AuthContext';
 import { provisionNewUser } from '../services/userProvisioningService';
+import { classGroupLabel, cleanSection, sortClassGroups } from '../features/classGroups';
+import { explicitCourseAssignments } from '../features/enrollment';
+import { studentSearchFields } from '../features/students/studentSearch';
+
+// Keep in step with DIRECTORY_VERSION in functions/schoolDirectory.js.
+const DIRECTORY_VERSION = 1;
+const WRITE_CHUNK = 400;
+const STAFF_ROLES = ['admin', 'teacher', 'dept_head'];
+
+async function commitInChunks(operations) {
+  for (let index = 0; index < operations.length; index += WRITE_CHUNK) {
+    const batch = writeBatch(db);
+    operations.slice(index, index + WRITE_CHUNK).forEach(apply => apply(batch));
+    await batch.commit();
+  }
+}
 
 const INITIAL_ROLES = [
   { id: 'admin', name: 'Administrator', category: 'Administration', color: '335 70% 65%', icon: 'Shield', description: 'Full access to school systems, staff management & policies' },
@@ -62,49 +83,62 @@ export const DEFAULT_ROLE_PERMISSIONS = {
 const SchoolDataContext = createContext(null);
 
 export const SchoolDataProvider = ({ children }) => {
-  const { activeSchoolId, activeSchool, currentUser } = useAuth();
+  const { activeSchoolId, activeSchool, currentUser, currentRole, roleReady } = useAuth();
 
   const [staffList, setStaffList] = useState([]);
+  const [staffLoaded, setStaffLoaded] = useState(false);
   const [rolesList, setRolesList] = useState(INITIAL_ROLES);
-  const [studentsList, setStudentsList] = useState([]);
   const [classesList, setClassesList] = useState([]);
   const [classesLoaded, setClassesLoaded] = useState(false);
   const [classesError, setClassesError] = useState(null);
+  const [classGroups, setClassGroups] = useState([]);
+  const [classGroupsLoaded, setClassGroupsLoaded] = useState(false);
+  const [classGroupsError, setClassGroupsError] = useState(null);
   const [eventsList, setEventsList] = useState([]);
   const [rolePermissions, setRolePermissions] = useState(DEFAULT_ROLE_PERMISSIONS);
-  const [loading, setLoading] = useState(true);
+  // Bumped after this browser changes students so server-side counts refresh.
+  const [studentsVersion, setStudentsVersion] = useState(0);
+  const [myStudentState, setMyStudentState] = useState({ key: '', record: null });
+  const [directoryState, setDirectoryState] = useState({ schoolId: null, status: 'idle' });
 
   const isSeedingRolesRef = useRef(false);
+  const preparedSchoolsRef = useRef(new Set());
+  const bumpStudentsVersion = useCallback(() => setStudentsVersion(version => version + 1), []);
 
   // Realtime listeners partitioned strictly by activeSchoolId
   useEffect(() => {
     if (!activeSchoolId) {
       setStaffList([]);
-      setStudentsList([]);
+      setStaffLoaded(true);
       setClassesList([]);
       setClassesLoaded(true);
       setClassesError(null);
+      setClassGroups([]);
+      setClassGroupsLoaded(true);
+      setClassGroupsError(null);
       setEventsList([]);
       setRolesList(INITIAL_ROLES);
       setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
-      setLoading(false);
       return;
     }
 
     setStaffList([]);
-    setStudentsList([]);
+    setStaffLoaded(false);
     setClassesList([]);
     setClassesLoaded(false);
     setClassesError(null);
+    setClassGroups([]);
+    setClassGroupsLoaded(false);
+    setClassGroupsError(null);
     setEventsList([]);
     setRolesList(INITIAL_ROLES);
     setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
-    setLoading(true);
 
     const handleSnapshotError = (colName) => (err) => {
       console.warn(`Snapshot listener notice for ${colName}:`, err.message);
       if (colName === 'classes') { setClassesLoaded(true); setClassesError(err.message || 'Course data is unavailable.'); }
-      setLoading(false);
+      if (colName === 'classGroups') { setClassGroupsLoaded(true); setClassGroupsError(err.message || 'Class data is unavailable.'); }
+      if (colName === 'staff') setStaffLoaded(true);
     };
 
     // 1. Roles Listener
@@ -217,18 +251,18 @@ export const SchoolDataProvider = ({ children }) => {
       }
 
       setStaffList(staff);
+      setStaffLoaded(true);
     }, handleSnapshotError('staff'));
 
-    // 3. Students Listener (Live production data from Firestore, empty initially)
-    const studentsCol = collection(db, 'schools', activeSchoolId, 'students');
-    const unsubStudents = onSnapshot(studentsCol, (snapshot) => {
-      const students = [];
-      snapshot.forEach(docSnap => {
-        students.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setStudentsList(students);
-      setLoading(false);
-    }, handleSnapshotError('students'));
+    // 3. Homeroom classes (10A, 10B...). A school has tens of these, so one
+    // live listener serves every page. Student records are never loaded in
+    // bulk; pages query the students they show (see features/students).
+    const classGroupsCol = collection(db, 'schools', activeSchoolId, 'classGroups');
+    const unsubClassGroups = onSnapshot(classGroupsCol, (snapshot) => {
+      setClassGroups(sortClassGroups(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))));
+      setClassGroupsLoaded(true);
+      setClassGroupsError(null);
+    }, handleSnapshotError('classGroups'));
 
     // 4. Classes Listener (Live production data from Firestore, empty initially)
     const classesCol = collection(db, 'schools', activeSchoolId, 'classes');
@@ -269,12 +303,66 @@ export const SchoolDataProvider = ({ children }) => {
     return () => {
       unsubRoles();
       unsubStaff();
-      unsubStudents();
+      unsubClassGroups();
       unsubClasses();
       unsubEvents();
       unsubSchool();
     };
   }, [activeSchoolId]);
+
+  // The signed-in person's own student record (none for staff).
+  const myStudentKey = activeSchoolId && currentUser?.uid ? `${activeSchoolId}|${currentUser.uid}` : '';
+  const isStudentRole = roleReady && currentRole === 'student';
+  const userEmail = (currentUser?.email || '').toLowerCase();
+  useEffect(() => {
+    if (!myStudentKey) return undefined;
+    const students = collection(db, 'schools', activeSchoolId, 'students');
+    let fallbackUnsubscribe = null;
+    const unsubscribe = onSnapshot(doc(students, currentUser.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        fallbackUnsubscribe?.();
+        fallbackUnsubscribe = null;
+        setMyStudentState({ key: myStudentKey, record: { id: snapshot.id, ...snapshot.data() } });
+        return;
+      }
+      // Older records may be keyed by something other than the account id.
+      if (isStudentRole && userEmail && !fallbackUnsubscribe) {
+        fallbackUnsubscribe = onSnapshot(query(students, where('email', '==', userEmail), limit(1)),
+          (result) => setMyStudentState({ key: myStudentKey, record: result.empty ? null : { id: result.docs[0].id, ...result.docs[0].data() } }),
+          () => setMyStudentState({ key: myStudentKey, record: null }));
+        return;
+      }
+      if (!fallbackUnsubscribe) setMyStudentState({ key: myStudentKey, record: null });
+    }, () => setMyStudentState({ key: myStudentKey, record: null }));
+    return () => { unsubscribe(); fallbackUnsubscribe?.(); };
+  }, [myStudentKey, activeSchoolId, currentUser?.uid, isStudentRole, userEmail]);
+  const myStudentRecord = myStudentState.key === myStudentKey ? myStudentState.record : null;
+  const myStudentLoaded = !myStudentKey || myStudentState.key === myStudentKey;
+
+  // One-time upgrade of older student records (search and sort fields) so the
+  // directory can page and search on the server. Staff sessions trigger it.
+  const schoolDocCurrent = activeSchool?.id === activeSchoolId;
+  const directoryReady = schoolDocCurrent && Number(activeSchool?.directoryVersion || 0) >= DIRECTORY_VERSION;
+  const canPrepareDirectory = roleReady && STAFF_ROLES.includes(currentRole);
+  useEffect(() => {
+    if (!activeSchoolId || !schoolDocCurrent || directoryReady || !canPrepareDirectory) return undefined;
+    if (preparedSchoolsRef.current.has(activeSchoolId)) return undefined;
+    preparedSchoolsRef.current.add(activeSchoolId);
+    const schoolId = activeSchoolId;
+    let active = true;
+    Promise.resolve()
+      .then(() => { if (active) setDirectoryState({ schoolId, status: 'preparing' }); })
+      .then(() => httpsCallable(functions, 'prepareSchoolDirectory')({ schoolId }))
+      .then(() => { setDirectoryState({ schoolId, status: 'done' }); setStudentsVersion(version => version + 1); })
+      .catch((error) => {
+        console.warn('Could not prepare the student directory:', error?.message || error);
+        preparedSchoolsRef.current.delete(schoolId);
+        setDirectoryState({ schoolId, status: 'error' });
+      });
+    return () => { active = false; };
+  }, [activeSchoolId, schoolDocCurrent, directoryReady, canPrepareDirectory]);
+  const directoryStatus = directoryReady ? 'ready'
+    : directoryState.schoolId === activeSchoolId && directoryState.status !== 'idle' ? directoryState.status : 'pending';
 
   // Staff Handlers
   const addStaff = useCallback(async (newStaff) => {
@@ -338,35 +426,136 @@ export const SchoolDataProvider = ({ children }) => {
   const addStudent = useCallback(async (newStudent) => {
     if (!activeSchoolId) throw new Error('Select a school first.');
     if (!newStudent.email) throw new Error('A student email is required to create an account.');
-    return provisionNewUser({
-      email: newStudent.email,
-      password: newStudent.password,
-      name: newStudent.name,
-      role: 'student',
-      schoolId: activeSchoolId,
-      schoolName: activeSchool?.name || '',
-      extraData: newStudent
-    });
-  }, [activeSchoolId, activeSchool?.name]);
+    try {
+      return await provisionNewUser({
+        email: newStudent.email,
+        password: newStudent.password,
+        name: newStudent.name,
+        role: 'student',
+        schoolId: activeSchoolId,
+        schoolName: activeSchool?.name || '',
+        extraData: newStudent
+      });
+    } finally {
+      bumpStudentsVersion();
+    }
+  }, [activeSchoolId, activeSchool?.name, bumpStudentsVersion]);
 
+  // Keeps the stored class label and search fields in step with the edit.
   const updateStudent = useCallback(async (id, updates) => {
-    if (!activeSchoolId) return;
+    if (!activeSchoolId) throw new Error('Select a school first.');
     const studentDocRef = doc(db, 'schools', activeSchoolId, 'students', String(id));
-    await updateDoc(studentDocRef, { ...updates, updatedAt: serverTimestamp() });
-  }, [activeSchoolId]);
+    const patch = { ...updates };
+    if ('classGroupId' in patch) {
+      patch.classGroupId = String(patch.classGroupId || '');
+      patch.grade = classGroups.find(group => group.id === patch.classGroupId)?.label || '';
+    }
+    if ('name' in patch || 'email' in patch || 'studentId' in patch) {
+      const needsCurrent = !('name' in patch && 'email' in patch && 'studentId' in patch);
+      const current = needsCurrent ? (await getDoc(studentDocRef)).data() || {} : {};
+      Object.assign(patch, studentSearchFields({ ...current, ...patch }));
+    }
+    await updateDoc(studentDocRef, { ...patch, updatedAt: serverTimestamp() });
+    bumpStudentsVersion();
+  }, [activeSchoolId, classGroups, bumpStudentsVersion]);
 
   const deleteStudent = useCallback(async (id) => {
     if (!activeSchoolId) throw new Error('Select a school first.');
     await httpsCallable(functions, 'removeSchoolStudent')({ schoolId: activeSchoolId, studentUid: String(id) });
-  }, [activeSchoolId]);
+    bumpStudentsVersion();
+  }, [activeSchoolId, bumpStudentsVersion]);
 
-  const toggleArchiveStudent = useCallback(async (id) => {
-    if (!activeSchoolId) return;
-    const student = studentsList.find(s => String(s.id) === String(id));
-    const nextStatus = student?.status === 'archived' ? 'active' : 'archived';
-    const studentDocRef = doc(db, 'schools', activeSchoolId, 'students', String(id));
-    await updateDoc(studentDocRef, { status: nextStatus, updatedAt: serverTimestamp() });
-  }, [activeSchoolId, studentsList]);
+  // Accepts the student record (preferred) or an id.
+  const toggleArchiveStudent = useCallback(async (studentOrId) => {
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    const id = String(typeof studentOrId === 'object' ? studentOrId?.id : studentOrId);
+    const studentDocRef = doc(db, 'schools', activeSchoolId, 'students', id);
+    const status = typeof studentOrId === 'object' && studentOrId?.status !== undefined
+      ? studentOrId.status : (await getDoc(studentDocRef)).data()?.status;
+    await updateDoc(studentDocRef, { status: status === 'archived' ? 'active' : 'archived', updatedAt: serverTimestamp() });
+    bumpStudentsVersion();
+  }, [activeSchoolId, bumpStudentsVersion]);
+
+  // ── Homeroom classes ──────────────────────────────────────────────────
+  const classGroupFields = useCallback((draft) => {
+    const gradeLevel = Number(draft.gradeLevel);
+    const section = cleanSection(draft.section);
+    const teacher = staffList.find(member => String(member.id) === String(draft.homeroomTeacherId));
+    return {
+      gradeLevel,
+      section,
+      label: classGroupLabel({ gradeLevel, section }),
+      homeroomTeacherId: String(draft.homeroomTeacherId || ''),
+      homeroomTeacherName: String(teacher?.name || draft.homeroomTeacherName || '').slice(0, 200),
+      homeroomTeacherEmail: String(teacher?.email || draft.homeroomTeacherEmail || '').slice(0, 320),
+      room: String(draft.room || '').trim().slice(0, 100),
+    };
+  }, [staffList]);
+
+  const addClassGroup = useCallback(async (draft) => {
+    if (!activeSchoolId || !currentUser?.uid) throw new Error('Select a school first.');
+    const ref = doc(collection(db, 'schools', activeSchoolId, 'classGroups'));
+    const payload = { id: ref.id, ...classGroupFields(draft), createdByUid: currentUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    await setDoc(ref, payload);
+    return payload;
+  }, [activeSchoolId, currentUser?.uid, classGroupFields]);
+
+  // Renaming a class (e.g. promoting 10A to 11A) updates the label stored on
+  // its students and linked courses; screens also resolve labels by id.
+  const updateClassGroup = useCallback(async (id, draft) => {
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    const fields = classGroupFields(draft);
+    const previous = classGroups.find(group => group.id === id);
+    await updateDoc(doc(db, 'schools', activeSchoolId, 'classGroups', String(id)), { ...fields, updatedAt: serverTimestamp() });
+    if (previous && previous.label !== fields.label) {
+      const members = await getDocs(query(collection(db, 'schools', activeSchoolId, 'students'), where('classGroupId', '==', String(id))));
+      const linkedCourses = classesList.filter(course => String(course.classGroupId || '') === String(id));
+      await commitInChunks([
+        ...members.docs.map(member => batch => batch.update(member.ref, { grade: fields.label, updatedAt: serverTimestamp() })),
+        ...linkedCourses.map(course => batch => batch.update(doc(db, 'schools', activeSchoolId, 'classes', String(course.id)), { classLabel: fields.label, updatedAt: serverTimestamp() })),
+      ]);
+      bumpStudentsVersion();
+    }
+    return fields;
+  }, [activeSchoolId, classGroups, classesList, classGroupFields, bumpStudentsVersion]);
+
+  // Students leave the class first, so a failure never leaves them pointing at
+  // a deleted class. keepCourseEnrollment turns "enrolled through the class"
+  // into stored course assignments.
+  const deleteClassGroup = useCallback(async (id, { keepCourseEnrollment = true } = {}) => {
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    const schoolRef = doc(db, 'schools', activeSchoolId);
+    const members = await getDocs(query(collection(schoolRef, 'students'), where('classGroupId', '==', String(id))));
+    const linkedCourseIds = classesList.filter(course => String(course.classGroupId || '') === String(id)).map(course => String(course.id));
+    const slots = await getDocs(query(collection(schoolRef, 'scheduleEntries'), where('classGroupId', '==', String(id)))).catch(() => null);
+    await commitInChunks([
+      ...members.docs.map(member => batch => batch.update(member.ref, {
+        classGroupId: '', grade: '', updatedAt: serverTimestamp(),
+        ...(keepCourseEnrollment && linkedCourseIds.length ? { assignedClasses: arrayUnion(...linkedCourseIds) } : {}),
+      })),
+      ...linkedCourseIds.map(courseId => batch => batch.update(doc(schoolRef, 'classes', courseId), { classGroupId: '', classLabel: '', updatedAt: serverTimestamp() })),
+      ...(slots?.docs || []).map(slot => batch => batch.update(slot.ref, { classGroupId: '' })),
+    ]);
+    await deleteDoc(doc(schoolRef, 'classGroups', String(id)));
+    bumpStudentsVersion();
+    return { students: members.size, courses: linkedCourseIds.length };
+  }, [activeSchoolId, classesList, bumpStudentsVersion]);
+
+  // Puts students into a class (or none). Course assignments that the class
+  // now covers, or that belonged to the class they left, are dropped.
+  const setStudentsClassGroup = useCallback(async (students, classGroupId) => {
+    if (!activeSchoolId) throw new Error('Select a school first.');
+    const targetId = String(classGroupId || '');
+    const label = targetId ? classGroups.find(group => group.id === targetId)?.label || '' : '';
+    if (targetId && !label) throw new Error('That class no longer exists.');
+    await commitInChunks(students.map(student => batch => batch.update(doc(db, 'schools', activeSchoolId, 'students', String(student.id)), {
+      classGroupId: targetId,
+      grade: label,
+      assignedClasses: explicitCourseAssignments(student.assignedClasses, classesList, targetId, student.classGroupId),
+      updatedAt: serverTimestamp(),
+    })));
+    bumpStudentsVersion();
+  }, [activeSchoolId, classGroups, classesList, bumpStudentsVersion]);
 
   // Class Handlers
   const addClass = useCallback(async (newClass) => {
@@ -439,14 +628,22 @@ export const SchoolDataProvider = ({ children }) => {
   return (
     <SchoolDataContext.Provider value={{
       staffList,
+      staffLoaded,
       rolesList,
-      studentsList,
       classesList,
       classesLoaded,
       classesError,
+      classGroups,
+      classGroupsLoaded,
+      classGroupsError,
       eventsList,
       rolePermissions,
-      loading,
+      loading: !staffLoaded || !classesLoaded || !classGroupsLoaded,
+      myStudentRecord,
+      myStudentLoaded,
+      studentsVersion,
+      directoryReady,
+      directoryStatus,
       addStaff,
       updateStaff,
       deleteStaff,
@@ -459,6 +656,10 @@ export const SchoolDataProvider = ({ children }) => {
       addClass,
       updateClass,
       deleteClass,
+      addClassGroup,
+      updateClassGroup,
+      deleteClassGroup,
+      setStudentsClassGroup,
       addEvent,
       updateEvent,
       deleteEvent,
@@ -474,14 +675,22 @@ export const useSchoolData = () => {
   if (!ctx) {
     return {
       staffList: [],
+      staffLoaded: false,
       rolesList: [],
-      studentsList: [],
       classesList: [],
       classesLoaded: false,
       classesError: null,
+      classGroups: [],
+      classGroupsLoaded: false,
+      classGroupsError: null,
       eventsList: [],
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
       loading: false,
+      myStudentRecord: null,
+      myStudentLoaded: false,
+      studentsVersion: 0,
+      directoryReady: false,
+      directoryStatus: 'pending',
       addStaff: () => {},
       updateStaff: () => {},
       deleteStaff: () => {},
@@ -494,6 +703,10 @@ export const useSchoolData = () => {
       addClass: () => {},
       updateClass: () => {},
       deleteClass: () => {},
+      addClassGroup: () => {},
+      updateClassGroup: () => {},
+      deleteClassGroup: () => {},
+      setStudentsClassGroup: () => {},
       addEvent: () => {},
       updateEvent: () => {},
       deleteEvent: () => {},

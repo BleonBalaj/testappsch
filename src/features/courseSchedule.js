@@ -73,6 +73,7 @@ export function mergeCourseSchedule(courses = [], savedEntries = []) {
         teacherId: course.teacherId || '',
         teacherEmail: course.teacherEmail || '',
         createdByUid: course.createdByUid || '',
+        classGroupId: course.classGroupId || '',
         classLabel: course.classLabel || '',
         curriculumSubject: course.curriculumSubject || '',
         period: course.period || '',

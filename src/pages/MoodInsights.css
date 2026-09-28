@@ -4,13 +4,6 @@
   margin: 0 auto;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
 .title-with-icon {
   display: flex;
   align-items: center;
@@ -72,22 +65,22 @@
   align-items: flex-end;
 }
 
-.input-group {
+.custom-date-row .input-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   flex: 1;
 }
 
-.input-group label {
+.custom-date-row .input-group label {
   font-size: 0.8rem;
   font-weight: 700;
   color: hsl(var(--muted-foreground));
   text-transform: uppercase;
 }
 
-.input-group input {
-  background: hsla(var(--background), 0.5);
+.custom-date-row .input-group input {
+  background: hsl(var(--background));
   border: 1px solid hsla(var(--border), 0.5);
   padding: 0.75rem;
   border-radius: 10px;
@@ -356,3 +349,86 @@
   .history-section { grid-column: 1; }
   .chart-section { grid-column: 1; }
 }
+
+/* Honest empty and per-mood states */
+.mood-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  border-radius: 24px;
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+}
+
+.mood-empty svg { color: hsl(var(--primary)); }
+.mood-empty h3 { margin: 0; color: hsl(var(--foreground)); }
+.mood-empty p { margin: 0; max-width: 460px; }
+
+.chart-empty {
+  margin: auto;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+}
+
+.stat-trend {
+  color: hsl(var(--muted-foreground));
+  background: hsla(var(--foreground), 0.06);
+}
+
+.mood-bg-happy { background: hsla(var(--mood-happy), 0.18); color: hsl(var(--mood-happy)); }
+.mood-bg-neutral { background: hsla(var(--chart-2), 0.18); color: hsl(var(--chart-2)); }
+.mood-bg-sad { background: hsla(var(--mood-sad), 0.18); color: hsl(var(--mood-sad)); }
+.mood-bg-mixed,
+.mood-bg-none { background: hsla(var(--primary), 0.15); color: hsl(var(--primary)); }
+
+.mood-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.mood-breakdown-row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr 2rem;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+}
+
+.mood-breakdown-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.mood-breakdown-count {
+  text-align: right;
+  font-weight: 700;
+}
+
+.mood-fill-happy { background: hsl(var(--mood-happy)); }
+.mood-fill-neutral { background: hsl(var(--chart-2)); }
+.mood-fill-sad { background: hsl(var(--mood-sad)); }
+
+.mood-dot-happy { background: hsl(var(--mood-happy)); }
+.mood-dot-neutral { background: hsl(var(--chart-2)); }
+.mood-dot-sad { background: hsl(var(--mood-sad)); }
+
+.mood-bar-happy { background: linear-gradient(180deg, hsl(var(--mood-happy)), hsla(var(--mood-happy), 0.3)); }
+.mood-bar-neutral { background: linear-gradient(180deg, hsl(var(--chart-2)), hsla(var(--chart-2), 0.3)); }
+.mood-bar-sad { background: linear-gradient(180deg, hsl(var(--mood-sad)), hsla(var(--mood-sad), 0.3)); }
+
+.history-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 10px;
+  color: hsl(var(--primary));
+  background: hsla(var(--primary), 0.12);
+}
+
+.mood-status-tag.happy { background: hsla(var(--mood-happy), 0.12); color: hsl(var(--mood-happy)); }

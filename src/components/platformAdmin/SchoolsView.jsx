@@ -2,6 +2,7 @@ import React, { useDeferredValue, useMemo, useState } from 'react';
 import { AlertTriangle, School as SchoolIcon, Search } from 'lucide-react';
 import { Card, EmptyState, Pagination } from './shared';
 import { formatDate, formatDateTime, formatNumber, relativeTime } from '../../features/platformAdmin/format';
+import { compareIsoDesc } from '../../features/platformAdmin/metrics';
 
 const PAGE_SIZE = 25;
 const SORTS = [
@@ -24,9 +25,9 @@ export default function SchoolsView({ snapshot, range, activity, now, onOpenScho
     const lastActive = school => activity.get(school.id)?.lastActiveAt || '';
     return list.sort((a, b) => {
       if (sort === 'members') return b.members.active - a.members.active;
-      if (sort === 'newest') return (b.createdAt || '').localeCompare(a.createdAt || '');
+      if (sort === 'newest') return compareIsoDesc(a.createdAt, b.createdAt);
       if (sort === 'name') return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      return lastActive(b).localeCompare(lastActive(a));
+      return compareIsoDesc(lastActive(a), lastActive(b));
     });
   }, [snapshot.schools, deferredQuery, sort, activity]);
 
@@ -58,6 +59,7 @@ export default function SchoolsView({ snapshot, range, activity, now, onOpenScho
                 <th scope="col">School</th>
                 <th scope="col" className="padm-num">Members</th>
                 <th scope="col" className="padm-num padm-col-md">Active · {range.option.label.toLowerCase()}</th>
+                <th scope="col" className="padm-num padm-col-lg">Courses</th>
                 <th scope="col" className="padm-num padm-col-lg">Classes</th>
                 <th scope="col" className="padm-num padm-col-lg">Lesson plans</th>
                 <th scope="col">Last activity</th>
@@ -87,7 +89,8 @@ export default function SchoolsView({ snapshot, range, activity, now, onOpenScho
                       <span className="padm-list-sub padm-cell-sub">{formatNumber(students)} students</span>
                     </td>
                     <td className="padm-num padm-col-md">{formatNumber(schoolActivity?.activeMembers || 0)}</td>
-                    <td className="padm-num padm-col-lg">{school.classes === null ? '—' : formatNumber(school.classes)}</td>
+                    <td className="padm-num padm-col-lg">{school.courses == null ? '—' : formatNumber(school.courses)}</td>
+                    <td className="padm-num padm-col-lg">{school.classGroups == null ? '—' : formatNumber(school.classGroups)}</td>
                     <td className="padm-num padm-col-lg">{school.lessonPlans === null ? '—' : formatNumber(school.lessonPlans)}</td>
                     <td title={formatDateTime(schoolActivity?.lastActiveAt)}>
                       {relativeTime(schoolActivity?.lastActiveAt, now)}

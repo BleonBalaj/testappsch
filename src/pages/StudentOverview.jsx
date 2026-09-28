@@ -14,6 +14,8 @@ import { db } from '../services/firebase';
 import { calcStudentGradeData, INITIAL_WEIGHTS } from '../features/gradebook/grading';
 import { Avatar } from '../components/Avatar';
 import { displayCourse, enrolledCoursesForStudent } from '../features/enrollment';
+import { classGroupsById, hasValidClass, homeroomTeacherInfo, studentClassLabel } from '../features/classGroups';
+import { useStudentRecord } from '../features/students/studentData';
 import './StudentOverview.css';
 
 /* ─── Grade helpers ────────────────────────────────────── */
@@ -47,10 +49,13 @@ const TABS = [
 /* ─── Component ─────────────────────────────────────────── */
 const StudentOverview = ({ student, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const { studentsList, classesList, classesLoaded, toggleArchiveStudent } = useSchoolData();
+  const { classesList, classesLoaded, classGroups = [], staffList = [], toggleArchiveStudent } = useSchoolData();
   const { activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
-  const liveStudent = studentsList.find(s => s.id === student?.id) || student;
+  // Live copy of this one record, so edits elsewhere show up immediately.
+  const { student: freshStudent } = useStudentRecord(activeSchoolId, student?.id);
+  const liveStudent = freshStudent || student;
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
   const studentId = liveStudent?.id;
   const enrolledClasses = useMemo(() => enrolledCoursesForStudent(liveStudent, classesList), [classesList, liveStudent]);
   const [courseRecords, setCourseRecords] = useState({});
@@ -138,7 +143,7 @@ const StudentOverview = ({ student, onBack }) => {
           </div>
           <button 
             className="btn-secondary glass btn-sm"
-            onClick={() => toggleArchiveStudent && toggleArchiveStudent(liveStudent.id)}
+            onClick={() => toggleArchiveStudent && toggleArchiveStudent(liveStudent)}
           >
             <ArchiveRestore size={14} /> {t('student.restoreStudent', 'Restore / Unarchive Student')}
           </button>
@@ -193,7 +198,13 @@ const StudentOverview = ({ student, onBack }) => {
               <h2 className="sov-name">{liveStudent.name}</h2>
               <span className="sov-id-tag">{liveStudent.studentId || liveStudent.id}</span>
             </div>
-            <p className="sov-sub">Grade {liveStudent.grade} • {classesLoaded ? enrolledClasses.length : '…'} {t('student.classesAssigned', 'Classes Assigned')}</p>
+            <p className="sov-sub">
+              {studentClassLabel(liveStudent, groupsById)
+                ? `${isAlbanian ? 'Klasa' : 'Class'} ${studentClassLabel(liveStudent, groupsById)}${hasValidClass(liveStudent, groupsById) ? '' : (isAlbanian ? ' (pa lidhje)' : ' (not linked)')}`
+                : (isAlbanian ? 'Pa klasë' : 'No class')}
+              {hasValidClass(liveStudent, groupsById) ? ` · ${isAlbanian ? 'Kujdestari' : 'Homeroom'}: ${homeroomTeacherInfo(groupsById.get(String(liveStudent.classGroupId)), staffList, isAlbanian).name}` : ''}
+              {' • '}{classesLoaded ? enrolledClasses.length : '…'} {isAlbanian ? 'lëndë' : enrolledClasses.length === 1 ? 'course' : 'courses'}
+            </p>
             <div className="sov-classes-pills">
               {!classesLoaded ? (
                 <span className="sov-class-pill">{isAlbanian ? 'Po ngarkohen lëndët…' : 'Loading courses…'}</span>
