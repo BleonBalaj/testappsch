@@ -57,6 +57,33 @@ service cloud.firestore {
       );
     }
 
+    // users/{uid} profile: fields a signed-in user may write about themselves.
+    // Only validates the keys being written, so older documents with extra
+    // fields can still be edited.
+    function validProfileValues(uid, keys) {
+      let d = request.resource.data;
+      return (!('uid' in keys) || d.uid == uid) &&
+        (!('email' in keys) || (request.auth.token.email is string && d.email == request.auth.token.email.lower())) &&
+        (!('displayName' in keys) || (d.displayName is string && d.displayName.size() <= 200)) &&
+        (!('name' in keys) || (d.name is string && d.name.size() <= 200)) &&
+        (!('photoURL' in keys) || d.photoURL == null || d.photoURL is string) &&
+        (!('createdAt' in keys) || d.createdAt == request.time) &&
+        (!('updatedAt' in keys) || d.updatedAt == request.time);
+    }
+
+    function conversationPath(schoolId, conversationId) {
+      return /databases/$(database)/documents/schools/$(schoolId)/conversations/$(conversationId);
+    }
+
+    // memberIds lists the uids allowed in a conversation. Direct-message ids
+    // are `dm_<uidA>_<uidB>`, so their member list must match the id.
+    function validConversationMembers(conversationId, ids) {
+      return ids is list && ids.size() >= 1 && ids.size() <= 500 && request.auth.uid in ids && (
+        !conversationId.matches('dm_.*') ||
+        (ids.size() == 2 && conversationId == 'dm_' + ids[0] + '_' + ids[1])
+      );
+    }
+
     function validOwnSchoolLink(schoolId, uid) {
       return isOwner(uid) &&
         request.resource.data.schoolId == schoolId &&
@@ -81,7 +108,16 @@ service cloud.firestore {
     // USERS COLLECTION & PRIVATE PREFERENCES
     // ──────────────────────────────────────────────────────────
     match /users/{uid} {
-      allow read, create, update: if isOwner(uid);
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) &&
+        request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'name', 'photoURL', 'createdAt', 'updatedAt']) &&
+        validProfileValues(uid, request.resource.data.keys());
+      // uid and createdAt can be filled in once, never changed afterwards.
+      allow update: if isOwner(uid) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'email', 'displayName', 'name', 'photoURL', 'createdAt', 'updatedAt']) &&
+        validProfileValues(uid, request.resource.data.diff(resource.data).affectedKeys()) &&
+        (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
+        (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
       allow delete: if false;
 
       // App-wide global preferences (Theme, animations, volume, etc.)
@@ -115,6 +151,16 @@ service cloud.firestore {
       match /dashboardNotes/{noteId} {
         allow read, write: if isOwner(uid);
       }
+    }
+
+    // Server-only collections, written by Cloud Functions with the Admin SDK.
+    // The platform admin page also reads through Cloud Functions, so no email
+    // gets extra client access here.
+    match /pendingInvitations/{invitationKey} {
+      allow read, write: if false;
+    }
+    match /platformMaintenance/{docId} {
+      allow read, write: if false;
     }
 
     // ──────────────────────────────────────────────────────────
@@ -254,12 +300,36 @@ service cloud.firestore {
         allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'resources', true, false);
       }
 
-      // Conversations & Messages (Real-time Chat)
+      // Conversations & Messages (Real-time Chat): members only.
       match /conversations/{conversationId} {
-        allow read, write: if canUseModule(schoolId, 'messages', true, true);
+        allow read: if canUseModule(schoolId, 'messages', true, true) &&
+          request.auth.uid in resource.data.memberIds;
+        allow create: if canUseModule(schoolId, 'messages', true, true) &&
+          validConversationMembers(conversationId, request.resource.data.get('memberIds', null));
+        // Members may update everything except who is in the conversation. A
+        // direct message stored before memberIds existed may gain its list
+        // from either participant, since the id proves who they are.
+        allow update: if canUseModule(schoolId, 'messages', true, true) && (
+          (request.auth.uid in resource.data.get('memberIds', []) &&
+            request.resource.data.get('memberIds', null) == resource.data.get('memberIds', null)) ||
+          (!('memberIds' in resource.data) && conversationId.matches('dm_.*') &&
+            validConversationMembers(conversationId, request.resource.data.get('memberIds', null)))
+        );
+        allow delete: if false;
 
         match /messages/{messageId} {
-          allow read, write: if canUseModule(schoolId, 'messages', true, true);
+          allow read: if canUseModule(schoolId, 'messages', true, true) &&
+            request.auth.uid in get(conversationPath(schoolId, conversationId)).data.get('memberIds', []);
+          // getAfter lets the first message and its new conversation commit together.
+          allow create: if canUseModule(schoolId, 'messages', true, true) &&
+            request.auth.uid in getAfter(conversationPath(schoolId, conversationId)).data.get('memberIds', []) &&
+            request.resource.data.senderUid == request.auth.uid;
+          allow update: if canUseModule(schoolId, 'messages', true, true) &&
+            request.auth.uid in get(conversationPath(schoolId, conversationId)).data.get('memberIds', []) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+          allow delete: if canUseModule(schoolId, 'messages', true, true) &&
+            request.auth.uid in get(conversationPath(schoolId, conversationId)).data.get('memberIds', []) &&
+            (resource.data.get('senderUid', '') == request.auth.uid || isSchoolTeacherOrAdmin(schoolId));
         }
       }
 
@@ -268,9 +338,15 @@ service cloud.firestore {
         allow read, write: if canUseModule(schoolId, 'tasks', true, true);
       }
 
-      // Mood entries
+      // Mood entries: each member writes only their own `<uid>_<date>` entry.
       match /moodEntries/{entryId} {
-        allow read, write: if canUseModule(schoolId, 'mood-insights', true, true);
+        allow read: if canUseModule(schoolId, 'mood-insights', true, true) &&
+          (resource.data.userId == request.auth.uid || isSchoolAdmin(schoolId));
+        allow create, update: if canUseModule(schoolId, 'mood-insights', true, true) &&
+          entryId.matches(request.auth.uid + '_.*') &&
+          request.resource.data.userId == request.auth.uid;
+        allow delete: if isSchoolAdmin(schoolId) ||
+          (canUseModule(schoolId, 'mood-insights', true, true) && resource.data.userId == request.auth.uid);
       }
 
       // Invitations

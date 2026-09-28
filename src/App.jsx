@@ -22,6 +22,8 @@ import NotificationContainer from './components/Notification';
 import QuickAction from './components/QuickAction';
 import Login from './pages/Login';
 import SchoolSwitcher from './components/SchoolSwitcher';
+import PlatformAdminRoute from './pages/PlatformAdminRoute';
+import { parseAdminPath } from './features/platformAdmin/route';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MoodProvider } from './context/MoodContext';
@@ -475,17 +477,32 @@ function AppContent() {
   );
 }
 
+function useAdminRoute() {
+  const [route, setRoute] = useState(() => parseAdminPath(window.location.pathname));
+  useEffect(() => {
+    const sync = () => setRoute(parseAdminPath(window.location.pathname));
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+  return route;
+}
+
 export default function App() {
+  const adminRoute = useAdminRoute();
   return (
     <AuthProvider>
       <LanguageProvider>
-        <SchoolDataProvider>
-          <TasksProvider>
-            <MoodProvider>
-              <AppContent />
-            </MoodProvider>
-          </TasksProvider>
-        </SchoolDataProvider>
+        {adminRoute ? (
+          <PlatformAdminRoute view={adminRoute.view} />
+        ) : (
+          <SchoolDataProvider>
+            <TasksProvider>
+              <MoodProvider>
+                <AppContent />
+              </MoodProvider>
+            </TasksProvider>
+          </SchoolDataProvider>
+        )}
       </LanguageProvider>
     </AuthProvider>
   );

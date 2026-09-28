@@ -7,23 +7,22 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test \"src/**/*.test.js\"",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-testappsch \"node --test tests/rules/*.test.js\""
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
     "firebase": "^12.19.0",
-    "firebase-admin": "^14.5.0",
     "framer-motion": "^12.36.0",
     "lucide-react": "^0.577.0",
-    "nodemailer": "^10.0.10",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4.2.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

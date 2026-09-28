@@ -28,7 +28,6 @@ import './Login.css';
 export const Login = ({ onLogin, onNavigate, addNotification }) => {
   const { 
     currentUser,
-    checkEmailExists, 
     loginUser, 
     registerNewUserAndSchool, 
     resetUserPassword, 
@@ -168,17 +167,8 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
 
     setIsLoading(true);
     try {
-      // Step 1: Pre-auth check across the platform
-      const exists = await checkEmailExists(cleanEmail);
-      if (exists) {
-        // Enforce the exact specified multi-school identity rule:
-        setActiveTab('signin');
-        setInfoMessage('This account already exists in another school. Sign in or recover your account to continue.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Step 2: Create new global account & provision initial school
+      // Firebase Auth rejects an existing email (auth/email-already-in-use),
+      // which the catch below turns into the "sign in instead" message.
       const { user, school } = await registerNewUserAndSchool({
         email: cleanEmail,
         password,

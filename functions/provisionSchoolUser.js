@@ -3,7 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 
-const BUILTIN_ROLES = new Set(['admin', 'teacher', 'dept_head', 'counselor', 'support', 'student']);
+export const BUILTIN_ROLES = new Set(['admin', 'teacher', 'dept_head', 'counselor', 'support', 'student']);
 const safeString = (value, limit = 200) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
 const safeList = value => Array.isArray(value) ? value.filter(item => typeof item === 'string').map(item => item.trim().slice(0, 150)).filter(Boolean).slice(0, 100) : [];
 
@@ -24,7 +24,7 @@ export function canEditStudentCourses({ creatorUid, callerUid, member, school })
     school?.rolePermissions?.teacher?.canEditDeleteStudents !== false;
 }
 
-function roleData({ role, uid, email, name, extra }) {
+export function roleData({ role, uid, email, name, extra }) {
   if (role === 'student') return {
     id: uid, studentId: safeString(extra.studentId, 50) || `STU-${uid.slice(0, 8).toUpperCase()}`,
     name, email, role, status: 'active', grade: safeString(extra.grade, 40) || '10A',
