@@ -300,4 +300,43 @@ Before completing any UI change or new screen, verify the following checklist:
 
 ---
 
+## 11. Rules for AI Agents Working on This Repo (Cloud Sessions Included)
+
+> [!IMPORTANT]
+> **The owner must never have to find bugs.** Every change handed over has to work on the live Firebase project the first time. Do not hand over work that relies on the owner testing it. If something cannot be verified, say so up front, before the owner deploys.
+
+### 11.1 How this app runs in production
+* **Frontend**: Vite + React, served by **Firebase Hosting** from `dist/` (SPA rewrite `** → /index.html`). Each page has its own URL (`src/features/navigation/pageRoutes.js`).
+* **Backend**: **Cloud Functions (2nd gen) callables** in `us-central1` (`functions/`). There is **no Express/`/api` server**. Hosting never served one, so never add client calls to `/api/...`.
+* **Data**: Firestore with `firestore.rules`, and Firebase Auth (email/password).
+* **The owner deploys from Windows with exactly**: `cmd.exe /c "npx firebase-tools deploy"` (everything: hosting, functions, rules).
+* `firebase.json` runs `npm run build` before every hosting deploy (`predeploy`). Never remove it: `firebase deploy` does not rebuild by itself, and an old `dist/` was once deployed by mistake.
+* Platform admin: `admin@bleon.com` is hardcoded in `functions/platformAdmin.js` (authoritative) and `src/features/platformAdmin/access.js` (UI only). Firestore rules give it no extra client access.
+
+### 11.2 Emulator ≠ production: check these for every change
+Passing emulator tests is **not** proof. These differences already broke production once:
+* **Admin SDK init**: in production, `firebase-functions` verifies callable ID tokens with its own named app (`__FIREBASE_FUNCTIONS_SDK__`); the emulator skips this. Always call `ensureDefaultApp()` from `functions/adminApp.js`. **Never** use `if (!getApps().length) initializeApp()`: it breaks every function with `app/no-app`.
+* **Firestore indexes** are not enforced by the emulator. Avoid collection-group and composite queries unless the index is added to `firestore.indexes.json` in the same change.
+* **Auth metadata** differs: the emulator records a sign-in at creation time for Admin-created users; production leaves `lastSignInTime` empty until the first sign-in.
+* **Secrets/IAM** (e.g. `GEMINI_API_KEY`) exist only in production; the emulator uses `functions/.secret.local`, which must never be committed.
+* **Browser caching**: Hosting serves pages with `no-cache` and hashed `/assets` as immutable (see `firebase.json` headers). Keep it that way.
+
+### 11.3 Before handing anything over
+1. Run everything that applies: `npm test`, `npm run lint`, `npm run build`, `cd functions && npm test`, `npm run test:rules` (Firestore emulator).
+2. Exercise every changed flow end to end against the emulators (Auth + Firestore + Functions) in a real browser.
+3. Walk through §11.2 for the change and fix any production-only risk before handing over.
+4. Never break existing flows. In particular:
+   * School admins create teachers and students **with a manually set password**; teachers create students. This must keep working.
+   * Sign-up stays hidden (`SHOW_SIGNUP = false` in `src/pages/Login.jsx`) until the owner says otherwise.
+   * Keep existing page architecture; add, don't restructure, unless asked.
+5. Unexpected server errors must reach the UI with their real message (`functions/callableErrors.js`), never a bare `INTERNAL`.
+
+### 11.4 Handing over
+* Give complete, exact steps for the owner's setup: merge the pull request → `git pull` → `npm install` if dependencies changed → `cmd.exe /c "npx firebase-tools deploy"` → any post-deploy steps (for example the `/admin` **Fix now** repairs).
+* Tell the owner how to confirm the new version is live, e.g. `.firebase/hosting.ZGlzdA.cache` lists the new `assets/` files, or the changed page shows the change.
+* The owner's live Firebase project and logs are not reachable from cloud sandboxes. State plainly what could not be verified, and add safeguards (clear error messages, logging) for it.
+* Work on a branch and open a pull request; once a pull request is merged, follow-up work goes in a new pull request.
+
+---
+
 *Authored for the LumiSchool Design & Engineering Team. Keep this file updated as new components are added.*
