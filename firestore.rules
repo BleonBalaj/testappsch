@@ -71,6 +71,36 @@ service cloud.firestore {
         (!('updatedAt' in keys) || d.updatedAt == request.time);
     }
 
+    // A homeroom class such as 10A: grade level 0-12 (0 = Përgatitore), an
+    // optional section, a display label and a homeroom teacher. No timetable.
+    function validClassGroup(groupId) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['id', 'gradeLevel', 'section', 'label', 'homeroomTeacherId', 'homeroomTeacherName', 'createdByUid']) &&
+        d.keys().hasOnly(['id', 'gradeLevel', 'section', 'label', 'homeroomTeacherId', 'homeroomTeacherName', 'homeroomTeacherEmail', 'room', 'createdByUid', 'createdAt', 'updatedAt']) &&
+        d.id == groupId &&
+        d.gradeLevel is int && d.gradeLevel >= 0 && d.gradeLevel <= 12 &&
+        d.section is string && d.section.size() <= 10 &&
+        d.label is string && d.label.size() > 0 && d.label.size() <= 40 &&
+        d.homeroomTeacherId is string && d.homeroomTeacherId.size() <= 128 &&
+        d.homeroomTeacherName is string && d.homeroomTeacherName.size() <= 200 &&
+        (!('homeroomTeacherEmail' in d) || (d.homeroomTeacherEmail is string && d.homeroomTeacherEmail.size() <= 320)) &&
+        (!('room' in d) || (d.room is string && d.room.size() <= 100));
+    }
+
+    // Links on shared materials must be web links, never script URLs.
+    function validResourceLink() {
+      let d = request.resource.data;
+      return !('url' in d) || d.url == '' || (d.url is string && d.url.size() <= 2048 && d.url.matches('(?i)https?://.+'));
+    }
+
+    // Search fields a student may refresh when renaming themselves.
+    function validOwnStudentSearchFields() {
+      let d = request.resource.data;
+      return d.name is string && d.name.size() <= 200 &&
+        (!('nameLower' in d) || (d.nameLower is string && d.nameLower.size() <= 200)) &&
+        (!('searchTokens' in d) || (d.searchTokens is list && d.searchTokens.size() <= 250));
+    }
+
     function conversationPath(schoolId, conversationId) {
       return /databases/$(database)/documents/schools/$(schoolId)/conversations/$(conversationId);
     }
@@ -151,6 +181,10 @@ service cloud.firestore {
       match /dashboardNotes/{noteId} {
         allow read, write: if isOwner(uid);
       }
+      // Personal bookmarks on a school's shared materials.
+      match /resourceBookmarks/{schoolId} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // Server-only collections, written by Cloud Functions with the Admin SDK.
@@ -204,7 +238,8 @@ service cloud.firestore {
         // Provision and remove accounts through the callable so Auth,
         // membership, school link, and directory stay in sync.
         allow create: if false;
-        allow update: if isSchoolAdmin(schoolId) || (isOwner(studentId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])) ||
+        allow update: if isSchoolAdmin(schoolId) ||
+          (isOwner(studentId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'nameLower', 'searchTokens']) && validOwnStudentSearchFields()) ||
           (isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'students', true, false) && canUseModule(schoolId, 'canEditDeleteStudents', true, false));
         allow delete: if false;
       }
@@ -220,8 +255,19 @@ service cloud.firestore {
 
         match /{allClassSubcollections=**} {
           allow read: if canUseModule(schoolId, 'classes', true, true);
-          allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
+          // Course materials carry links; the check passes for records without one.
+          allow create, update: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true) && validResourceLink();
+          allow delete: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
         }
+      }
+
+      // Homeroom classes. Every member reads them (student cards, rosters,
+      // timetables); only school administrators create, edit or delete them.
+      match /classGroups/{groupId} {
+        allow read: if isSchoolMember(schoolId);
+        allow create: if isSchoolAdmin(schoolId) && validClassGroup(groupId) && request.resource.data.createdByUid == request.auth.uid;
+        allow update: if isSchoolAdmin(schoolId) && validClassGroup(groupId) && request.resource.data.createdByUid == resource.data.createdByUid;
+        allow delete: if isSchoolAdmin(schoolId);
       }
 
       // Class enrollments
@@ -297,7 +343,8 @@ service cloud.firestore {
       // Resources
       match /resources/{resourceId} {
         allow read: if canUseModule(schoolId, 'resources', true, false);
-        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'resources', true, false);
+        allow create, update: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'resources', true, false) && validResourceLink();
+        allow delete: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'resources', true, false);
       }
 
       // Conversations & Messages (Real-time Chat): members only.

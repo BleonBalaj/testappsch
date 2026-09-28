@@ -52,11 +52,12 @@ test('schools count active members by role and flag deleted-account memberships'
       { schoolId: 'deleted-school', uid: 't1', role: 'teacher', status: 'active' },
     ],
     profileIds: new Set(['owner', 't1', 's1']),
-    schoolCounts: { sch1: { classes: 3, lessonPlans: 7 } },
+    schoolCounts: { sch1: { courses: 3, classGroups: 2, lessonPlans: 7 } },
   });
   const [school] = snapshot.schools;
   assert.deepEqual(school.members, { total: 4, active: 2, byRole: { admin: 1, teacher: 1 } });
-  assert.equal(school.classes, 3);
+  assert.equal(school.courses, 3);
+  assert.equal(school.classGroups, 2);
   assert.equal(school.creatorEmail, 'owner@x.com');
   const health = Object.fromEntries(snapshot.health.map(item => [item.id, item]));
   assert.equal(health.orphanMemberships.count, 1);

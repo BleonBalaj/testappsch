@@ -36,6 +36,16 @@ export const updateSchoolStaff = onCall({ region: 'us-central1', invoker: 'publi
   });
 });
 
+// One-time upgrade of a school's student records so the directory can page,
+// filter and search them on the server. Safe to call again; it is a no-op
+// once the school is current.
+export const prepareSchoolDirectory = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 540, memory: '512MiB', maxInstances: 5 }, async (request) => {
+  return reportErrors('prepareSchoolDirectory', request, async () => {
+    const { prepareDirectory } = await import('./schoolDirectory.js');
+    return prepareDirectory(request);
+  });
+});
+
 export const listMyInvitations = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 30 }, async (request) => {
   const { listMyInvitations: list } = await import('./invitations.js');
   return list(request);
@@ -54,7 +64,7 @@ export const declineSchoolInvitation = onCall({ region: 'us-central1', invoker: 
 // Platform owner dashboard. Access is checked inside against the hardcoded
 // admin email; everyone else gets the same answer as a missing endpoint.
 export const getPlatformAdminOverview = onCall({
-  region: 'us-central1', invoker: 'public', timeoutSeconds: 120, memory: '512MiB', maxInstances: 2,
+  region: 'us-central1', invoker: 'public', timeoutSeconds: 300, memory: '1GiB', maxInstances: 2,
 }, async (request) => {
   const { getPlatformOverview } = await import('./platformAdmin.js');
   return getPlatformOverview(request);

@@ -206,3 +206,76 @@ test('server-only collections are closed to every client', async () => {
   await assertFails(getDoc(doc(asPlatformAdmin(), 'platformMaintenance/conversationMemberIndex')));
   await assertFails(setDoc(doc(asPlatformAdmin(), 'platformMaintenance/conversationMemberIndex'), { completedAt: 2 }));
 });
+
+// ── homeroom classes, student search fields, materials ─────────────────
+const classGroup = (overrides = {}) => ({
+  id: 'cg1', gradeLevel: 10, section: 'A', label: '10A', homeroomTeacherId: TEACHER, homeroomTeacherName: 'Teacher One',
+  homeroomTeacherEmail: 'teacher1@school.test', room: '104', createdByUid: OWNER, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  ...overrides,
+});
+
+test('only school administrators create, edit and delete classes; every member reads them', async () => {
+  const ref = db => doc(db, 'schools/sch1/classGroups/cg1');
+  await assertFails(setDoc(ref(as(TEACHER)), classGroup({ createdByUid: TEACHER })));
+  await assertFails(setDoc(ref(as(STUDENT_A)), classGroup({ createdByUid: STUDENT_A })));
+  await assertSucceeds(setDoc(ref(as(OWNER)), classGroup()));
+  await assertSucceeds(getDoc(ref(as(STUDENT_A))));
+  await assertSucceeds(getDocs(collection(as(TEACHER), 'schools/sch1/classGroups')));
+  await assertFails(getDoc(ref(as(OTHER_OWNER))));
+  await assertSucceeds(updateDoc(ref(as(OWNER)), { section: 'B', label: '10B', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(ref(as(OWNER)), { createdByUid: TEACHER }));
+  await assertFails(updateDoc(ref(as(TEACHER)), { room: '1' }));
+  await assertFails(deleteDoc(ref(as(TEACHER))));
+  await assertSucceeds(deleteDoc(ref(as(OWNER))));
+});
+
+test('class records are validated: grade 0-12, known fields, matching id and creator', async () => {
+  const owner = as(OWNER);
+  const ref = doc(owner, 'schools/sch1/classGroups/cg1');
+  await assertFails(setDoc(ref, classGroup({ gradeLevel: 13 })));
+  await assertFails(setDoc(ref, classGroup({ gradeLevel: '10' })));
+  await assertFails(setDoc(ref, classGroup({ label: '' })));
+  await assertFails(setDoc(ref, classGroup({ section: 'ABCDEFGHIJK' })));
+  await assertFails(setDoc(ref, classGroup({ id: 'other' })));
+  await assertFails(setDoc(ref, classGroup({ createdByUid: TEACHER })));
+  await assertFails(setDoc(ref, classGroup({ schedule: 'Mon 9:00' })));
+  const { homeroomTeacherId: _omit, ...withoutTeacher } = classGroup();
+  await assertFails(setDoc(ref, withoutTeacher));
+  await assertSucceeds(setDoc(ref, classGroup({ gradeLevel: 0, section: '', label: 'Përgatitore', room: '' })));
+});
+
+test('students may rename themselves with fresh search fields but nothing else', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'schools/sch1/students', STUDENT_A), { name: 'A', classGroupId: '', status: 'active' });
+  });
+  const ref = doc(as(STUDENT_A), 'schools/sch1/students', STUDENT_A);
+  await assertSucceeds(setDoc(ref, { name: 'Ana', nameLower: 'ana', searchTokens: ['a', 'an', 'ana'] }, { merge: true }));
+  await assertSucceeds(setDoc(ref, { name: 'Ana B' }, { merge: true }));
+  await assertFails(setDoc(ref, { name: 'Ana', classGroupId: 'cg1' }, { merge: true }));
+  await assertFails(setDoc(ref, { status: 'archived' }, { merge: true }));
+  await assertFails(setDoc(ref, { name: 'Ana', searchTokens: 'ana' }, { merge: true }));
+  await assertFails(setDoc(doc(as(STUDENT_B), 'schools/sch1/students', STUDENT_A), { name: 'Hacked' }, { merge: true }));
+  await assertSucceeds(updateDoc(doc(as(TEACHER), 'schools/sch1/students', STUDENT_A), { classGroupId: 'cg1', grade: '10A' }));
+});
+
+test('material bookmarks are private to each person', async () => {
+  await assertSucceeds(setDoc(doc(as(STUDENT_A), 'users', STUDENT_A, 'resourceBookmarks', 'sch1'), { resourceIds: ['r1'] }));
+  await assertSucceeds(getDoc(doc(as(STUDENT_A), 'users', STUDENT_A, 'resourceBookmarks', 'sch1')));
+  await assertFails(getDoc(doc(as(STUDENT_B), 'users', STUDENT_A, 'resourceBookmarks', 'sch1')));
+  await assertFails(setDoc(doc(as(OWNER), 'users', STUDENT_A, 'resourceBookmarks', 'sch1'), { resourceIds: [] }));
+});
+
+test('shared materials and course materials accept web links only', async () => {
+  const teacher = as(TEACHER);
+  await assertSucceeds(setDoc(doc(teacher, 'schools/sch1/resources/r1'), { title: 'Guide', url: 'https://drive.google.com/file/1' }));
+  await assertSucceeds(setDoc(doc(teacher, 'schools/sch1/resources/r2'), { title: 'Old', url: '' }));
+  await assertSucceeds(setDoc(doc(teacher, 'schools/sch1/resources/r3'), { title: 'No link' }));
+  await assertFails(setDoc(doc(teacher, 'schools/sch1/resources/r4'), { title: 'Bad', url: 'javascript:alert(1)' }));
+  await assertFails(setDoc(doc(teacher, 'schools/sch1/resources/r5'), { title: 'Bad', url: 'data:text/html,hi' }));
+  await assertSucceeds(deleteDoc(doc(teacher, 'schools/sch1/resources/r1')));
+  await assertFails(setDoc(doc(as(STUDENT_A), 'schools/sch1/resources/r6'), { title: 'x', url: 'https://x.test' }));
+  await assertSucceeds(setDoc(doc(teacher, 'schools/sch1/classes/c1/materials/m1'), { title: 'Slides', url: 'HTTPS://example.com/a.pdf' }));
+  await assertFails(setDoc(doc(teacher, 'schools/sch1/classes/c1/materials/m2'), { title: 'Bad', url: 'javascript:void(0)' }));
+  await assertSucceeds(setDoc(doc(teacher, 'schools/sch1/classes/c1/grades/g1'), { scores: {} }));
+  await assertSucceeds(deleteDoc(doc(teacher, 'schools/sch1/classes/c1/materials/m1')));
+});
