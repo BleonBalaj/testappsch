@@ -422,19 +422,21 @@ const Resources = ({ userRole = 'student' }) => {
                     )}
                   </div>
 
-                  <div className="dropdown-options-list">
+                  <div className="dropdown-options-list" role="listbox" aria-label={isAlbanian ? 'Materialet për' : 'Materials for'}>
                     {filteredScopeGroups.length === 0 ? (
                       <div className="dropdown-empty-state">
                         <span>{isAlbanian ? 'Nuk u gjet lëndë ose klasë' : 'No matching course or class'}</span>
                       </div>
                     ) : (
                       filteredScopeGroups.map(group => (
-                        <div key={group.category} className="dropdown-group">
+                        <div key={group.category} className="dropdown-group" role="group" aria-label={group.category}>
                           <div className="dropdown-group-title">{group.category}</div>
                           {group.items.map(item => (
                             <button
                               key={item.id}
                               type="button"
+                              role="option"
+                              aria-selected={activeScope === item.id}
                               className={`dropdown-option-row ${activeScope === item.id ? 'active' : ''}`}
                               onClick={() => { setActiveScope(item.id); setIsScopeOpen(false); setScopeSearch(''); }}
                             >
@@ -515,9 +517,12 @@ const Resources = ({ userRole = 'student' }) => {
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
               onClick={e => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="res-add-title"
             >
               <div className="modal-header">
-                <h3>{isAlbanian ? 'Shto Material Studimi' : 'Add Study Material'}</h3>
+                <h3 id="res-add-title">{isAlbanian ? 'Shto Material Studimi' : 'Add Study Material'}</h3>
                 <p className="modal-subtitle">{isAlbanian ? 'Ndani një lidhje për fletë pune, video, prezantime ose udhëzues.' : 'Share a link to a worksheet, video, slides or reading guide.'}</p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddOpen(false)} aria-label={isAlbanian ? 'Mbyll' : 'Close'} disabled={saving}>
                   <X size={16} />
@@ -628,9 +633,12 @@ const Resources = ({ userRole = 'student' }) => {
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
               onClick={e => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="res-delete-title"
             >
               <div className="modal-header">
-                <h3>{isAlbanian ? 'Fshij materialin?' : 'Delete material?'}</h3>
+                <h3 id="res-delete-title">{isAlbanian ? 'Fshij materialin?' : 'Delete material?'}</h3>
                 <p className="modal-subtitle">{resourceToDelete.title}</p>
                 <button type="button" className="icon-btn-close" onClick={() => setResourceToDelete(null)} aria-label={isAlbanian ? 'Mbyll' : 'Close'}>
                   <X size={16} />

@@ -1279,7 +1279,7 @@ const Messages = ({ userRole = 'admin' }) => {
                     <Search size={17} className="search-icon" />
                     <input 
                       type="text" 
-                      placeholder={isAlbanian ? 'Shkruani emrin, departamentin, rolin apo klasën...' : 'Type a name, department, role, or grade...'} 
+                      placeholder={isAlbanian ? 'Shkruani emrin, email-in, ID-në, departamentin ose rolin…' : 'Type a name, email, ID, department or role…'} 
                       value={newChatSearch}
                       onChange={(e) => setNewChatSearch(e.target.value)}
                       autoFocus
@@ -1407,7 +1407,7 @@ const Messages = ({ userRole = 'admin' }) => {
                       <Search size={15} className="search-icon" />
                       <input 
                         type="text" 
-                        placeholder={isAlbanian ? 'Kërko sipas emrit, lëndës ose ID-së…' : 'Search by name, subject or ID…'} 
+                        placeholder={isAlbanian ? 'Kërko sipas emrit, email-it, ID-së ose departamentit…' : 'Search by name, email, ID or department…'} 
                         value={groupSearchQuery}
                         onChange={(e) => setGroupSearchQuery(e.target.value)}
                       />

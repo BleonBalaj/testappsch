@@ -209,7 +209,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                   <input 
                     ref={searchInputRef}
                     type="text"
-                    placeholder={isAlbanian ? 'Kërko klasa ose lëndë...' : 'Search class groups or courses...'}
+                    placeholder={isAlbanian ? 'Kërko klasa ose lëndë...' : 'Search classes or courses...'}
                     value={dropdownSearch}
                     onChange={(e) => setDropdownSearch(e.target.value)}
                   />
@@ -225,14 +225,14 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                 </div>
 
                 {/* Dropdown Options List */}
-                <div className="dropdown-options-list">
+                <div className="dropdown-options-list" role="listbox" aria-label={isAlbanian ? 'Renditja për' : 'Rank by'}>
                   {filteredDropdownGroups.length === 0 ? (
                     <div className="dropdown-empty-state">
-                      <span>{isAlbanian ? 'Nuk u gjet klasë ose lëndë' : 'No matching class group or course'}</span>
+                      <span>{isAlbanian ? 'Nuk u gjet klasë ose lëndë' : 'No matching class or course'}</span>
                     </div>
                   ) : (
                     filteredDropdownGroups.map(group => (
-                      <div key={group.category} className="dropdown-group">
+                      <div key={group.category} className="dropdown-group" role="group" aria-label={group.category}>
                         <div className="dropdown-group-title">{group.category}</div>
                         {group.items.map(item => {
                           const Icon = item.icon;
@@ -241,6 +241,8 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                             <button
                               key={item.id}
                               type="button"
+                              role="option"
+                              aria-selected={isSelected}
                               className={`dropdown-option-item ${isSelected ? 'selected' : ''}`}
                               onClick={() => {
                                 setActiveFilter(item.id);

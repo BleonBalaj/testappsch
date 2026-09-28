@@ -60,6 +60,23 @@ export function searchQueryToken(term) {
   return longest ? longest.slice(0, SEARCH_TOKEN_MAX_LENGTH) : '';
 }
 
+/** The distinct query words as stored tokens, longest first, at most four. */
+export function searchWordTokens(term) {
+  const tokens = [...new Set(searchTermWords(term).map(word => word.slice(0, SEARCH_TOKEN_MAX_LENGTH)))];
+  return tokens.sort((a, b) => b.length - a.length).slice(0, 4);
+}
+
+/** The token matching the fewest students (`counts` in the same order); ties go to the longer word. */
+export function chooseSearchToken(tokens = [], counts = []) {
+  if (!tokens.length) return '';
+  const countAt = index => (Number.isFinite(counts[index]) ? counts[index] : Infinity);
+  let best = 0;
+  for (let index = 1; index < tokens.length; index += 1) {
+    if (countAt(index) < countAt(best) || (countAt(index) === countAt(best) && tokens[index].length > tokens[best].length)) best = index;
+  }
+  return tokens[best];
+}
+
 /** Every query word must start one of the student's words. */
 export function matchesStudentSearch(student, term) {
   const queryWords = searchTermWords(term);

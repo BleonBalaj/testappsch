@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  matchesStudentSearch, normalizeSearchText, searchQueryToken, studentSearchFields, studentSearchTokens,
+  chooseSearchToken, matchesStudentSearch, normalizeSearchText, searchQueryToken, searchWordTokens, studentSearchFields, studentSearchTokens,
   SEARCH_TOKEN_MAX_LENGTH, SEARCH_TOKENS_LIMIT,
 } from './studentSearch.js';
 
@@ -49,4 +49,22 @@ test('long emails still match on the stored prefix and the full comparison', () 
   const token = searchQueryToken(long.email);
   assert.ok(studentSearchTokens(long).includes(token));
   assert.equal(matchesStudentSearch(long, long.email), true);
+});
+
+test('multi-word searches consider each distinct word, longest first', () => {
+  assert.deepEqual(searchWordTokens('  Ëndrit   Ilazi ëndrit '), ['endrit', 'ilazi']);
+  assert.deepEqual(searchWordTokens('a b c d e f'), ['a', 'b', 'c', 'd']);
+  assert.equal(searchWordTokens('x'.repeat(40))[0].length, SEARCH_TOKEN_MAX_LENGTH);
+  assert.deepEqual(searchWordTokens(''), []);
+});
+
+test('the search runs on the word with the fewest students', () => {
+  // "Ëndrit" is common, "Ilazi" is rare: query by the rare word so no match is cut off.
+  assert.equal(chooseSearchToken(['endrit', 'ilazi'], [200, 50]), 'ilazi');
+  assert.equal(chooseSearchToken(['endrit', 'ilazi'], [3, 50]), 'endrit');
+  // Ties and unknown counts prefer the longer word.
+  assert.equal(chooseSearchToken(['endrit', 'ilazi'], [10, 10]), 'endrit');
+  assert.equal(chooseSearchToken(['endrit', 'ilazi'], [Infinity, Infinity]), 'endrit');
+  assert.equal(chooseSearchToken(['endrit', 'ilazi'], [undefined, 7]), 'ilazi');
+  assert.equal(chooseSearchToken([], []), '');
 });

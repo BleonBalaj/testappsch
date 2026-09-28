@@ -166,7 +166,7 @@ const SearchableCourseSelector = ({
           <div className="dropdown-course-list">
             {classesList.length === 0 ? (
               <div style={{ padding: '1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.84rem' }}>
-                {isAlbanian ? 'Nuk ka lëndë aktive në shkollë. Krijoni lëndë te "Kurset & Klasat".' : 'No courses created in school yet. Add courses in "Courses & Classes".'}
+                {isAlbanian ? 'Nuk ka lëndë aktive në shkollë. Krijoni lëndë te "Lëndët & Klasat".' : 'No courses created in school yet. Add courses in "Courses & Classes".'}
               </div>
             ) : filteredCourses.length === 0 ? (
               <div style={{ padding: '1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.84rem' }}>
@@ -384,6 +384,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
     courseId: selectedCourse ? String(selectedCourse.id) : '',
     courseClassGroupId: selectedCourse?.classGroupId ? String(selectedCourse.classGroupId) : '',
     ordered: directoryReady,
+    pageResults: true,
   });
   const statusCounts = useStudentCounts(activeSchoolId, STATUS_COUNT_SPECS, studentsVersion);
   const countFor = spec => statusCounts.get(spec);
@@ -572,20 +573,29 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
     );
   };
 
+  const matched = directory.matched ?? students.length;
+  // Paged mode only filters by status, so its total is that status count.
+  const statusTotal = countFor(STATUS_COUNT_SPECS[{ all: 0, active: 1, archived: 2, unassigned: 3 }[statusFilter] ?? 0]);
+  const shownOf = total => (students.length < total
+    ? (isAlbanian ? `Po shfaqen ${students.length.toLocaleString()} nga ${total.toLocaleString()} nxënës` : `Showing ${students.length.toLocaleString()} of ${total.toLocaleString()} students`)
+    : (isAlbanian ? `${total.toLocaleString()} nxënës` : `${total.toLocaleString()} ${total === 1 ? 'student' : 'students'}`));
   const resultSummary = directory.loading ? '' : directory.mode === 'search'
     ? (directory.capped
-      ? (isAlbanian ? `Po shfaqen ${students.length} përputhjet e para. Shkruani më shumë për t'i ngushtuar.` : `Showing the first ${students.length} matches. Type more to narrow them down.`)
-      : (isAlbanian ? `${students.length} përputhje` : `${students.length} match${students.length === 1 ? '' : 'es'}`))
+      ? (isAlbanian ? `Po shfaqen përputhjet e para (${matched}). Shkruani më shumë për t'i ngushtuar.` : `Showing the first ${matched} matches. Type more to narrow them down.`)
+      : directory.hasMore
+        ? (directory.loadingMore
+          ? (isAlbanian ? `${students.length} përputhje deri tani · duke kërkuar më shumë…` : `${students.length} ${students.length === 1 ? 'match' : 'matches'} so far · searching for more…`)
+          : (isAlbanian ? `${students.length === 1 ? 'Po shfaqet përputhja e parë' : `Po shfaqen ${students.length} përputhjet e para`} · lëvizni poshtë për më shumë` : `Showing the first ${students.length} ${students.length === 1 ? 'match' : 'matches'} · scroll for more`))
+        : (isAlbanian ? `${matched} përputhje` : `${matched} ${matched === 1 ? 'match' : 'matches'}`))
     : directory.mode === 'paged'
-      ? (isAlbanian ? `Po shfaqen ${students.length.toLocaleString()} nxënës` : `Showing ${students.length.toLocaleString()} student${students.length === 1 ? '' : 's'}`) +
-        (!filtersActive && totalCount !== undefined ? (isAlbanian ? ` nga ${totalCount.toLocaleString()}` : ` of ${totalCount.toLocaleString()}`) : '')
-      : (isAlbanian ? `${students.length} nxënës` : `${students.length} student${students.length === 1 ? '' : 's'}`);
+      ? (statusTotal !== undefined ? shownOf(statusTotal) : (isAlbanian ? `Po shfaqen ${students.length.toLocaleString()} nxënës` : `Showing ${students.length.toLocaleString()} ${students.length === 1 ? 'student' : 'students'}`))
+      : shownOf(matched);
 
   const addFormGroup = studentForm.classGroupId ? groupsById.get(studentForm.classGroupId) : null;
   const editFormGroup = editStudentForm.classGroupId ? groupsById.get(editStudentForm.classGroupId) : null;
   const noClassesHint = classGroupsLoaded && classGroups.length === 0 ? (
     <small>{isAlbanian
-      ? 'Ende nuk ka klasa. Krijojini te "Kurset & Klasat" → "Klasat".'
+      ? 'Ende nuk ka klasa. Krijojini te "Lëndët & Klasat" → "Klasat".'
       : 'No classes yet. Create them under "Courses & Classes" → "Classes".'}</small>
   ) : null;
 
@@ -673,10 +683,10 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       {resultSummary && <p className="students-result-summary" aria-live="polite">{resultSummary}</p>}
 
       <motion.div className="students-grid" variants={itemVariants}>
-        {directory.loading ? (
+        {directory.loading || (students.length === 0 && directory.hasMore) ? (
           <div className="students-empty-state glass" role="status">
             <Users size={32} />
-            <h3>{isAlbanian ? 'Po ngarkohen nxënësit…' : 'Loading students…'}</h3>
+            <h3>{directory.mode === 'search' ? (isAlbanian ? 'Duke kërkuar…' : 'Searching…') : (isAlbanian ? 'Po ngarkohen nxënësit…' : 'Loading students…')}</h3>
           </div>
         ) : directory.error ? (
           <div className="students-empty-state glass" role="alert">
@@ -691,7 +701,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
             <h3>{filtersActive ? (isAlbanian ? 'Asnjë Nxënës Nuk Përputhet' : 'No Students Match Filters') : (isAlbanian ? 'Ende nuk ka nxënës' : 'No students yet')}</h3>
             <p>{filtersActive
               ? (isAlbanian ? 'Provoni të pastroni kërkimin ose filtrat.' : 'Try clearing your search or filters.')
-              : (isAlbanian ? 'Regjistroni nxënësin e parë me butonin "Regjistro Nxënës".' : 'Add the first student with the "Add Student" button.')}</p>
+              : (isAlbanian ? 'Regjistroni nxënësin e parë me butonin "Regjistro Nxënës".' : 'Add the first student with the "Register Student" button.')}</p>
             {filtersActive && (
               <button className="btn-secondary btn-sm" onClick={resetFilters}>
                 <RotateCcw size={14} /> {isAlbanian ? 'Pastro Filtrat' : 'Reset Filters'}

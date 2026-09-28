@@ -1,18 +1,8 @@
 .mood-insights-page {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.title-with-icon {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.page-title-icon {
-  color: hsl(var(--primary));
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-bottom: 3rem;
 }
 
 .range-pills {
@@ -61,7 +51,6 @@
   display: flex;
   gap: 1.5rem;
   padding: 1.5rem;
-  margin-bottom: 2rem;
   align-items: flex-end;
 }
 
@@ -258,7 +247,7 @@
   padding: 2rem;
 }
 
-.section-header {
+.history-section .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;

@@ -446,7 +446,7 @@ const AddAssignmentModal = ({ weights, categoryLabels, onSave, onClose }) => {
       >
         <div className="modal-header">
           <h3>{isAlbanian ? 'Shto Detyrë' : 'Add Assignment'}</h3>
-          <p className="modal-subtitle">{isAlbanian ? 'Krijoni një detyrë ose testim për këtë klasë.' : 'Create a coursework item or examination for this class.'}</p>
+          <p className="modal-subtitle">{isAlbanian ? 'Krijoni një detyrë ose testim për këtë lëndë.' : 'Create a coursework item or examination for this course.'}</p>
           <button type="button" className="icon-btn-close" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
@@ -645,7 +645,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
   /* Cloud operations */
   const saveGrades = async (assignmentId, localScores) => {
-    if (!activeSchoolId || !classData?.id) throw new Error('No active school or class.');
+    if (!activeSchoolId || !classData?.id) throw new Error('No active school or course.');
     const assignment = assignments.find(item => item.id === assignmentId);
     if (!assignment) throw new Error('Assignment no longer exists.');
     const max = Number(assignment.totalPoints);
@@ -662,7 +662,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const saveGradingSettings = async ({ newWeights, newCategoryLabels, newGradingSettings, newCurriculumStage }) => {
     const validationError = validateCategoryWeights(newWeights, newCategoryLabels, assignments);
     if (validationError) throw new Error(validationError);
-    if (!activeSchoolId || !classData?.id) throw new Error('No active school or class.');
+    if (!activeSchoolId || !classData?.id) throw new Error('No active school or course.');
     const classDocRef = doc(db, 'schools', activeSchoolId, 'classes', String(classData.id));
     await updateDoc(classDocRef, {
         weights: newWeights,
@@ -710,7 +710,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   };
 
   const addAssignment = async (form) => {
-    if (!activeSchoolId || !classData?.id) throw new Error('No active school or class.');
+    if (!activeSchoolId || !classData?.id) throw new Error('No active school or course.');
     if (!Object.hasOwn(weights, form.category)) throw new Error('Choose an available category.');
     if (!form.title?.trim() || !Number.isFinite(Number(form.totalPoints)) || Number(form.totalPoints) <= 0) throw new Error('Enter a title and positive total points.');
     const assignId = `asg_${Date.now()}`;
@@ -816,7 +816,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             <strong style={{ color: 'hsl(var(--chart-2))' }}>{classData.progress}%</strong>
           </div>
           <div className="co-stat-pill" style={{ borderColor: `hsl(var(${classData.color}) / 0.3)`, background: `hsl(var(${classData.color}) / 0.13)` }}>
-            <span style={{ color: `hsl(var(${classData.color}))` }}>{t('classes.classAvg', 'Class Avg')}</span>
+            <span style={{ color: `hsl(var(${classData.color}))` }}>{t('classes.classAvg', 'Course Avg')}</span>
             <strong style={{ color: `hsl(var(${classData.color}))` }}>
               {classOverallAvg() !== null ? `${classOverallAvg()}%` : '—'}
             </strong>
@@ -860,7 +860,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
           <motion.div key="dashboard" className="co-tab-content" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}>
             <div className="co-dashboard-grid">
               <div className="co-widget glass">
-                <h4>{t('classes.breakdown', 'Class Breakdown')}</h4>
+                <h4>{t('classes.breakdown', 'Grade Breakdown')}</h4>
                 <div className="breakdown-list">
                   {['A','B','C','D','F'].map((letter, idx) => {
                     const count = students.filter(s => {
@@ -926,7 +926,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     <span>{isAlbanian ? 'Të Vlerësuara' : 'Graded'}</span><strong>{assignments.filter(a => students.some(s => grades[s.id]?.[a.id] !== undefined)).length}</strong>
                   </div>
                   <div className="qs-item">
-                    <span>{t('classes.classAvg', 'Class Avg')}</span><strong style={{ color: gradeColor(classOverallAvg()) }}>{classOverallAvg() !== null ? `${classOverallAvg()}%` : '—'}</strong>
+                    <span>{t('classes.classAvg', 'Course Avg')}</span><strong style={{ color: gradeColor(classOverallAvg()) }}>{classOverallAvg() !== null ? `${classOverallAvg()}%` : '—'}</strong>
                   </div>
                   <div className="qs-item">
                     <span>{isAlbanian ? 'Nota' : 'Letter'}</span><strong style={{ color: gradeColor(classOverallAvg()) }}>{gradeLabel(classOverallAvg())}</strong>
@@ -1013,7 +1013,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
               <div>
                 <h3 style={{ margin: 0 }}>
                   {!canEditClass
-                    ? (isAlbanian ? 'Detyrat & Notat e Kursit' : 'Course Assignments & Grades') 
+                    ? (isAlbanian ? 'Detyrat & Notat e Lëndës' : 'Course Assignments & Grades') 
                     : (isAlbanian ? 'Ditari i Notave & Vlerësimi' : 'Gradebook & Assessment')}
                 </h3>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))' }}>
@@ -1192,7 +1192,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             <div className="assignments-section" style={{ marginTop: '0.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <h4 style={{ margin: 0, color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 800 }}>
-                  {isAlbanian ? 'Detyrat & Testimet e Kursit' : 'Assignments & Examinations'}
+                  {isAlbanian ? 'Detyrat & Testimet e Lëndës' : 'Assignments & Examinations'}
                 </h4>
               </div>
 
@@ -1220,7 +1220,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                       <th>{isAlbanian ? 'Kategoria' : 'Category'}</th>
                       <th>{t('common.date', 'Date')}</th>
                       <th>{isAlbanian ? 'Pikët Totale' : 'Total Pts'}</th>
-                      <th>{t('classes.classAvg', 'Class Avg')}</th>
+                      <th>{t('classes.classAvg', 'Course Avg')}</th>
                       <th>{!canEditClass ? t('common.status', 'Status') : t('common.actions', 'Actions')}</th>
                     </tr>
                   </thead>
@@ -1436,7 +1436,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             ) : (
               <div className="empty-state">
                 <BookOpen size={28} />
-                <p>{isAlbanian ? 'Ende nuk ka materiale të ngarkuara për këtë kurs.' : 'No materials uploaded for this course yet.'}</p>
+                <p>{isAlbanian ? 'Ende nuk ka materiale të ngarkuara për këtë lëndë.' : 'No materials uploaded for this course yet.'}</p>
               </div>
             )}
           </motion.div>
@@ -1459,7 +1459,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                   <thead>
                     <tr>
                       <th>{t('common.date', 'Date')}</th>
-                      <th>{isAlbanian ? 'Gjithsej Nxënës' : 'Class Roster Count'}</th>
+                      <th>{isAlbanian ? 'Gjithsej Nxënës' : 'Course Roster Count'}</th>
                       <th>{isAlbanian ? 'Prezent' : 'Present'}</th>
                       <th>{isAlbanian ? 'Mungesë' : 'Absent'}</th>
                       <th>{isAlbanian ? 'Përqindja Ditore' : 'Daily Attendance'}</th>
@@ -1491,7 +1491,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             ) : (
               <div className="empty-state">
                 <ClipboardList size={28} />
-                <p>{isAlbanian ? 'Ende nuk është regjistruar vijueshmëria për këtë kurs.' : 'No attendance recorded for this class yet.'}</p>
+                <p>{isAlbanian ? 'Ende nuk është regjistruar vijueshmëria për këtë lëndë.' : 'No attendance recorded for this course yet.'}</p>
               </div>
             )}
           </motion.div>
@@ -1629,7 +1629,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
             >
               <div className="modal-header">
                 <h3>{isAlbanian ? 'Ngarko Material Mësimor' : 'Add Course Material'}</h3>
-                <p className="modal-subtitle">{isAlbanian ? 'Ndani dokumente reference, prezantime leksionesh, apo linqe studimi me këtë klasë.' : 'Share reference documents, lecture slides, or study links with this class.'}</p>
+                <p className="modal-subtitle">{isAlbanian ? 'Ndani dokumente reference, prezantime leksionesh, apo linqe studimi me këtë lëndë.' : 'Share reference documents, lecture slides, or study links with this course.'}</p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddMaterialOpen(false)} aria-label="Close">
                   <X size={16} />
                 </button>
@@ -1796,8 +1796,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     <UserMinus size={20} />
                   </div>
                   <div>
-                    <h3>{isAlbanian ? 'Çregjistro nga Lista e Kursit?' : 'Remove from Class Roster?'}</h3>
-                    <p className="modal-subtitle">{isAlbanian ? 'Konfirmimi i çregjistrimit nga kursi' : 'Class enrollment removal confirmation'}</p>
+                    <h3>{isAlbanian ? 'Çregjistro nga Lista e Lëndës?' : 'Remove from Course Roster?'}</h3>
+                    <p className="modal-subtitle">{isAlbanian ? 'Konfirmimi i çregjistrimit nga lënda' : 'Course enrollment removal confirmation'}</p>
                   </div>
                 </div>
                 <button type="button" className="icon-btn-close" onClick={() => setStudentToRemove(null)} aria-label="Close">
@@ -1811,7 +1811,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                 </p>
                 <div className="roster-notice-callout">
                   <CheckCircle2 size={16} />
-                  <span>{isAlbanian ? 'Ky nxënës do të çregjistrohet vetëm nga ky kurs. Profili, të dhënat dhe historiku i tij mbeten të sigurt në Drejtorinë e Shkollës.' : 'This student will only be unenrolled from this specific class roster. Their master profile, records, and data will remain safe and active in the school Students Directory.'}</span>
+                  <span>{isAlbanian ? 'Ky nxënës do të çregjistrohet vetëm nga kjo lëndë. Profili, të dhënat dhe historiku i tij mbeten të sigurt në Drejtorinë e Shkollës.' : 'This student will only be unenrolled from this course roster. Their master profile, records, and data will remain safe and active in the school Students Directory.'}</span>
                 </div>
               </div>
 
@@ -1827,7 +1827,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
                     setStudentToRemove(null);
                   }}
                 >
-                  <UserMinus size={14} /> {isAlbanian ? 'Çregjistro nga Kursi' : 'Remove from Roster'}
+                  <UserMinus size={14} /> {isAlbanian ? 'Çregjistro nga Lënda' : 'Remove from Roster'}
                 </button>
               </div>
             </motion.div>

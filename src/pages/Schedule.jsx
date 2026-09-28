@@ -71,7 +71,7 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot,
             )}
             {activeTab === 'all-schedule' && userRole !== 'admin' && isEnrolledOrTaught && !item.isEvent && (
               <span className="enrolled-status-pill">
-                <CheckCircle2 size={11} /> {userRole === 'teacher' ? (isAlbanian ? 'Lënda Ime' : 'My Class') : (isAlbanian ? 'I Regjistruar' : 'Enrolled')}
+                <CheckCircle2 size={11} /> {userRole === 'teacher' ? (isAlbanian ? 'Lënda Ime' : 'My Course') : (isAlbanian ? 'I Regjistruar' : 'Enrolled')}
               </span>
             )}
           </div>
@@ -246,6 +246,9 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
 
   // Add Slot Form State
   const [newSlotForm, setNewSlotForm] = useState(EMPTY_SLOT_FORM);
+  // A course taught to one class decides the period's class.
+  const slotCourse = newSlotForm.courseId ? classesList.find(course => String(course.id) === String(newSlotForm.courseId)) : null;
+  const slotCourseGroup = slotCourse?.classGroupId ? groupsById.get(String(slotCourse.classGroupId)) || null : null;
 
   const days = DAYS;
 
@@ -450,7 +453,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   const handleAddSlotSubmit = async (e) => {
     e.preventDefault();
     if (!activeSchoolId) { setSlotError(isAlbanian ? 'Zgjidhni një shkollë së pari.' : 'Select a school first.'); return; }
-    const slotGroup = newSlotForm.classGroupId ? groupsById.get(newSlotForm.classGroupId) : null;
+    const slotGroup = slotCourseGroup || (newSlotForm.classGroupId ? groupsById.get(newSlotForm.classGroupId) : null);
     const slotClassLabel = slotGroup?.label || newSlotForm.classLabel.trim();
     if (!newSlotForm.subject.trim() || !newSlotForm.time.trim() || (!newSlotForm.isEvent && (!slotClassLabel || !newSlotForm.curriculumSubject || !newSlotForm.period))) {
       setSlotError(isAlbanian ? 'Plotësoni fushat e kërkuara të orës.' : 'Complete the required schedule fields.');
@@ -458,7 +461,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     }
 
     const slotId = `slot_${Date.now()}`;
-    const linkedCourse = classesList.find(course => String(course.id) === String(newSlotForm.courseId));
+    const linkedCourse = slotCourse;
     const selectedTeacher = staffList.find(staff => staff.name === newSlotForm.teacher);
     const newItem = {
       ...newSlotForm,
@@ -559,7 +562,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                 type="button"
                 className={`segmented-tab ${effectiveTab === 'my-schedule' ? 'active' : ''}`}
                 onClick={() => setActiveTab('my-schedule')}
-                title={userRole === 'student' ? (isAlbanian ? 'Shfaq Lëndët & Ngjarjet e Mia' : 'Show My Enrolled Classes & Events') : (isAlbanian ? 'Shfaq Orarin Tim Mësimor' : 'Show My Teaching Timetable')}
+                title={userRole === 'student' ? (isAlbanian ? 'Shfaq Lëndët & Ngjarjet e Mia' : 'Show My Courses & Events') : (isAlbanian ? 'Shfaq Orarin Tim Mësimor' : 'Show My Teaching Timetable')}
               >
                 <Calendar size={14} />
                 <span>{userRole === 'student' ? (isAlbanian ? 'Orari Im' : 'My Schedule') : (isAlbanian ? 'Orari Im Mësimor' : 'My Timetable')}</span>
@@ -656,7 +659,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
           <Search size={18} className="search-icon" />
           <input 
             type="text" 
-            placeholder={effectiveTab === 'my-schedule' ? (isAlbanian ? 'Kërko në orarin tim, sallat, apo mësimdhënësit...' : 'Search within my scheduled classes, rooms, or teachers...') : (isAlbanian ? 'Kërko të gjitha lëndët, mësimdhënësit, sallat, apo ngjarjet...' : 'Search all classes, teachers, subjects, rooms, or events...')} 
+            placeholder={effectiveTab === 'my-schedule' ? (isAlbanian ? 'Kërko në orarin tim, sallat, apo mësimdhënësit...' : 'Search my lessons, rooms or teachers...') : (isAlbanian ? 'Kërko të gjitha lëndët, mësimdhënësit, sallat, apo ngjarjet...' : 'Search courses, classes, teachers, rooms or events...')} 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -725,9 +728,9 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
           </div>
 
           <div className="filter-group-item">
-            <label htmlFor="schedule-course-filter"><BookOpen size={13} /> {isAlbanian ? 'KURSI:' : 'Course:'}</label>
+            <label htmlFor="schedule-course-filter"><BookOpen size={13} /> {isAlbanian ? 'LËNDA:' : 'Course:'}</label>
             <select id="schedule-course-filter" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="schedule-filter-select glass">
-              <option value="all">{isAlbanian ? 'Të gjitha kurset' : 'All courses'}</option>
+              <option value="all">{isAlbanian ? 'Të gjitha lëndët' : 'All courses'}</option>
               {classesList.map(course => (
                 <option key={course.id} value={String(course.id)}>
                   {course.name}{course.classGroupId && groupsById.get(String(course.classGroupId)) ? ` · ${groupsById.get(String(course.classGroupId)).label}` : ''}
@@ -803,7 +806,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
               </div>
               <h3>
                 {effectiveTab === 'my-schedule'
-                  ? (isAlbanian ? `Nuk ka lëndë të planifikuara në orarin tuaj për ${t('schedule.' + selectedDay.toLowerCase(), selectedDay)}` : `No classes scheduled in your personal timetable for ${selectedDay}`)
+                  ? (isAlbanian ? `Nuk ka lëndë të planifikuara në orarin tuaj për ${t('schedule.' + selectedDay.toLowerCase(), selectedDay)}` : `No lessons scheduled in your timetable for ${selectedDay}`)
                   : (isAlbanian ? `Nuk u gjetën orë të planifikuara për ${t('schedule.' + selectedDay.toLowerCase(), selectedDay)}` : `No scheduled periods found for ${selectedDay}`)}
               </h3>
               <p>
@@ -861,7 +864,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
             >
               <div className="modal-header">
                 <h3>{isAlbanian ? 'Shto Orë ose Ngjarje' : 'Add Period or Event'}</h3>
-                <p className="modal-subtitle">{isAlbanian ? 'Planifikoni një orë mësimore, sesion laboratori, ose ngjarje të shkollës.' : 'Schedule a class period, laboratory session, or campus event.'}</p>
+                <p className="modal-subtitle">{isAlbanian ? 'Planifikoni një orë mësimore, sesion laboratori, ose ngjarje të shkollës.' : 'Schedule a lesson, lab session or campus event.'}</p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddSlotOpen(false)} aria-label="Close">
                   <X size={16} />
                 </button>
@@ -930,7 +933,9 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                         id="schedule-class-label"
                         className="custom-form-select"
                         required
-                        value={newSlotForm.classGroupId}
+                        value={slotCourseGroup ? slotCourseGroup.id : newSlotForm.classGroupId}
+                        disabled={Boolean(slotCourseGroup)}
+                        aria-describedby={slotCourseGroup ? 'schedule-class-locked' : undefined}
                         onChange={e => setNewSlotForm({ ...newSlotForm, classGroupId: e.target.value, classLabel: groupsById.get(e.target.value)?.label || '' })}
                       >
                         <option value="">{isAlbanian ? 'Zgjidhni klasën' : 'Choose a class'}</option>
@@ -945,6 +950,11 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
                         value={newSlotForm.classLabel}
                         onChange={e => setNewSlotForm({ ...newSlotForm, classLabel: e.target.value })}
                       />
+                    )}
+                    {slotCourseGroup && (
+                      <small id="schedule-class-locked" className="schedule-field-hint">
+                        {isAlbanian ? `Lënda mësohet te klasa ${slotCourseGroup.label}.` : `This course is taught to class ${slotCourseGroup.label}.`}
+                      </small>
                     )}
                   </div>
                   <div className="input-group">

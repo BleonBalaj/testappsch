@@ -311,11 +311,11 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const taughtCourses = useMemo(() => (isStudent ? [] : classesList.filter(isClassTaughtByMe)), [classesList, isClassTaughtByMe, isStudent]);
   // Counts come from the server; the dashboard never loads the student list.
   const countSpecs = useMemo(() => [
-    ...(isStudent ? [] : [{ kind: 'all' }]),
+    ...(isStudent ? [] : [{ kind: 'status', value: 'active' }]),
     ...taughtCourses.map(course => ({ kind: 'course', value: String(course.id), classGroupId: course.classGroupId ? String(course.classGroupId) : '' })),
   ], [isStudent, taughtCourses]);
   const studentCounts = useStudentCounts(activeSchoolId, countSpecs, studentsVersion);
-  const totalStudents = isStudent ? undefined : studentCounts.get({ kind: 'all' });
+  const totalStudents = isStudent ? undefined : studentCounts.get({ kind: 'status', value: 'active' });
   const teacherClasses = useMemo(() => taughtCourses.map(c => ({
     id: c.id,
     name: c.name,
@@ -420,7 +420,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
                 <h3 style={{ color: 'hsl(var(--primary))' }}>
                   {t('dashboard.howsYourDay')}
                 </h3>
-                <button onClick={() => setIsMoodModalOpen(false)}><X size={20} /></button>
+                <button type="button" onClick={() => setIsMoodModalOpen(false)} aria-label={isAlbanian ? 'Mbyll' : 'Close'}><X size={20} /></button>
               </div>
               <p>{getMoodPrompt()}</p>
               <textarea 
@@ -464,7 +464,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
         {isStudent ? (
           <>
             <StatCard icon={Star} label={isAlbanian ? 'Mesatarja aktuale' : 'Current grade average'} value={studentGradesLoading ? '…' : studentGradeAverage === null ? '—' : `${studentGradeAverage}%`} color="--primary" delay={0.1} subtext={studentGradesError ? (isAlbanian ? 'Notat nuk mund të ngarkohen' : 'Grades unavailable') : `${studentCourseGrades.length} ${isAlbanian ? 'lëndë me nota' : 'graded courses'}`} />
-            <StatCard icon={BookOpen} label={t('dashboard.enrolledClasses')} value={`${studentCourses.length} ${isAlbanian ? 'Kurse' : 'Courses'}`} color="--accent" delay={0.2} subtext={studentCourses.length ? (isAlbanian ? 'Lëndët ku jeni regjistruar' : 'Your enrolled courses') : (isAlbanian ? 'Nuk ka lëndë të regjistruara' : 'No enrolled courses')} />
+            <StatCard icon={BookOpen} label={t('dashboard.enrolledClasses')} value={`${studentCourses.length} ${isAlbanian ? 'Lëndë' : 'Courses'}`} color="--accent" delay={0.2} subtext={studentCourses.length ? (isAlbanian ? 'Lëndët ku jeni regjistruar' : 'Your enrolled courses') : (isAlbanian ? 'Nuk ka lëndë të regjistruara' : 'No enrolled courses')} />
             <StatCard icon={CheckCircle2} label={t('dashboard.personalTasks')} value={`${pendingStudentTasksCount} ${t('common.pending')}`} color="--chart-1" delay={0.3} subtext={`${completedStudentTasksCount} ${t('common.completed')}`} />
             <StatCard icon={Target} label={t('dashboard.academicEvents')} value={`${eventsList.length} ${isAlbanian ? 'Të Planifikuara' : 'Scheduled'}`} color="--chart-2" delay={0.4} subtext={t('dashboard.campusCalendar')} />
           </>

@@ -107,7 +107,7 @@ const ClassCard = ({
               )
             )}
             {(userRole === 'teacher' || userRole === 'dept_head') && isLead && (
-              <span className="class-enroll-badge instructor" title={isAlbanian ? "Ju jeni mësimdhënësi për këtë kurs" : "You are the lead instructor for this course"}>
+              <span className="class-enroll-badge instructor" title={isAlbanian ? "Ju jeni mësimdhënësi i kësaj lënde" : "You are the lead instructor for this course"}>
                 {isAlbanian ? 'Lënda Ime' : 'My Course'}
               </span>
             )}
@@ -289,11 +289,11 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
     e.preventDefault();
     if (!editingClass) return;
     if (!editForm.name.trim()) {
-      setEditFormError(isAlbanian ? 'Ju lutem shënoni titullin e kursit.' : 'Please enter the course title.');
+      setEditFormError(isAlbanian ? 'Ju lutem shënoni titullin e lëndës.' : 'Please enter the course title.');
       return;
     }
     if (!editForm.code.trim()) {
-      setEditFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm.' : 'Course code is required.');
+      setEditFormError(isAlbanian ? 'Kodi i lëndës është i detyrueshëm.' : 'Course code is required.');
       return;
     }
     if (editForm.credits !== '' && (!Number.isFinite(Number(editForm.credits)) || Number(editForm.credits) <= 0)) {
@@ -471,11 +471,11 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
   const handleCreateClass = async (e) => {
     e.preventDefault();
     if (!newClassName.trim()) {
-      setFormError(isAlbanian ? 'Ju lutem shënoni titullin e kursit.' : 'Please enter the course title.');
+      setFormError(isAlbanian ? 'Ju lutem shënoni titullin e lëndës.' : 'Please enter the course title.');
       return;
     }
     if (!newClassCode.trim()) {
-      setFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm (p.sh. CS-101, CHEM-302).' : 'Course code is required (e.g. CS-101, CHEM-302).');
+      setFormError(isAlbanian ? 'Kodi i lëndës është i detyrueshëm (p.sh. CS-101, CHEM-302).' : 'Course code is required (e.g. CS-101, CHEM-302).');
       return;
     }
     if (newClassCredits !== '' && (!Number.isFinite(Number(newClassCredits)) || Number(newClassCredits) <= 0)) {
@@ -531,7 +531,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
       setNewStageTouched(false);
       addNotification?.('success', isAlbanian ? `Lënda "${newClass.name}" u krijua.` : `Course "${newClass.name}" created.`);
     } catch (error) {
-      setFormError(error.message || (isAlbanian ? 'Kursi nuk u ruajt.' : 'Course could not be saved.'));
+      setFormError(error.message || (isAlbanian ? 'Lënda nuk u ruajt.' : 'Course could not be saved.'));
     }
   };
 
@@ -578,7 +578,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
             <span className="count-pill glass">
               {showGroups
                 ? `${classGroups.length} ${isAlbanian ? 'klasa' : classGroups.length === 1 ? 'class' : 'classes'}`
-                : `${filteredClasses.length} ${isAlbanian ? 'kurse' : filteredClasses.length === 1 ? 'course' : 'courses'}`}
+                : `${filteredClasses.length} ${isAlbanian ? 'lëndë' : filteredClasses.length === 1 ? 'course' : 'courses'}`}
             </span>
           </div>
           <p>{showGroups
@@ -606,10 +606,10 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
       </motion.header>
 
       {userRole !== 'student' && (
-        <motion.div className="classes-view-switch" role="tablist" aria-label={isAlbanian ? 'Kurset ose klasat' : 'Courses or classes'} variants={cardItemVariants}>
+        <motion.div className="classes-view-switch" role="tablist" aria-label={isAlbanian ? 'Lëndët ose klasat' : 'Courses or classes'} variants={cardItemVariants}>
           <button type="button" role="tab" aria-selected={!showGroups} className={`classes-view-tab ${!showGroups ? 'active' : ''}`} onClick={() => chooseView('courses')}>
             <BookOpen size={16} />
-            <span>{isAlbanian ? 'Kurset' : 'Courses'}</span>
+            <span>{isAlbanian ? 'Lëndët' : 'Courses'}</span>
             <span className="tab-pill-counter">{classesList.length}</span>
           </button>
           <button type="button" role="tab" aria-selected={showGroups} className={`classes-view-tab ${showGroups ? 'active' : ''}`} onClick={() => chooseView('groups')}>
@@ -619,7 +619,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
           </button>
           <span className="classes-view-hint">{showGroups
             ? (isAlbanian ? 'Klasa: grupi i nxënësve me kujdestarin. Nuk ka orar.' : 'Class: a group of students with a homeroom teacher. No timetable.')
-            : (isAlbanian ? 'Kursi: lënda në orar, me mësimdhënës dhe orë.' : 'Course: a subject on the timetable, with a teacher and times.')}</span>
+            : (isAlbanian ? 'Lënda: mësohet sipas orarit, me mësimdhënës dhe orë.' : 'Course: a subject on the timetable, with a teacher and times.')}</span>
         </motion.div>
       )}
 
@@ -702,8 +702,8 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
               <BookOpen size={22} />
             </div>
             <div>
-              <h4>{currentUser?.displayName || currentUser?.name ? (isAlbanian ? `Kurset Mësimdhënëse të ${currentUser.displayName || currentUser.name}` : `${currentUser.displayName || currentUser.name}'s Teaching Schedule`) : (isAlbanian ? 'Kurset e Mia Mësimdhënëse' : 'My Teaching Schedule')}</h4>
-              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? (isAlbanian ? 'Kurs Aktiv Mësimdhënës' : 'Active Course Taught') : (isAlbanian ? 'Kurse Aktive Mësimdhënëse' : 'Active Courses Taught')}</p>
+              <h4>{currentUser?.displayName || currentUser?.name ? (isAlbanian ? `Lëndët që jep ${currentUser.displayName || currentUser.name}` : `${currentUser.displayName || currentUser.name}'s Teaching Schedule`) : (isAlbanian ? 'Lëndët që Jap' : 'My Teaching Schedule')}</h4>
+              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? (isAlbanian ? 'Lëndë Aktive që Jepni' : 'Active Course Taught') : (isAlbanian ? 'Lëndë Aktive që Jepni' : 'Active Courses Taught')}</p>
             </div>
           </div>
           <div className="strip-stats">
@@ -789,7 +789,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
                 {effectiveTab === 'my-classes'
                   ? (isAlbanian
                       ? (userRole === 'teacher'
-                          ? 'Nuk ka kurse që ligjëroni që përputhen me kërkimin tuaj. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.'
+                          ? 'Asnjë nga lëndët që jepni nuk përputhet me kërkimin tuaj. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.'
                           : 'Nuk ka lëndë që përputhen me kërkimin tuaj në listën tuaj të regjistrimeve. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.')
                       : 'No courses match your search in your list. Switch to "All Courses" to browse other subjects.')
                   : (isAlbanian
@@ -836,7 +836,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>{isAlbanian ? 'Shto Kurs të Ri' : 'Add New Course'}</h3>
+                <h3>{isAlbanian ? 'Shto Lëndë të Re' : 'Add New Course'}</h3>
                 <p className="modal-subtitle">
                   {isAlbanian ? 'Krijoni një lëndë mësimore dhe caktoni mësimdhënësin kryesor.' : 'Create a curriculum subject and assign a lead instructor.'}
                 </p>
@@ -864,7 +864,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
                 <div className="form-grid-2">
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Titulli i Kursit' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Titulli i Lëndës' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                     </label>
                     <input 
                       type="text" 
@@ -877,7 +877,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
 
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Kodi i Kursit' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Kodi i Lëndës' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'hsl(var(--primary))', marginLeft: '0.35rem' }}>
                         ({isAlbanian ? 'I Detyrueshëm' : 'Required'})
                       </span>
@@ -959,7 +959,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
                 </div>
 
                 <div className="input-group">
-                  <label htmlFor="new-course-credits">{isAlbanian ? 'Kredite të Kursit' : 'Course Credits'}</label>
+                  <label htmlFor="new-course-credits">{isAlbanian ? 'Kreditet e Lëndës' : 'Course Credits'}</label>
                   <input
                     id="new-course-credits"
                     type="number"
@@ -1032,7 +1032,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
                     {isAlbanian ? 'Anulo' : 'Cancel'}
                   </button>
                   <button type="submit" className="btn-primary">
-                    {isAlbanian ? 'Krijo Kursin' : 'Create Course'}
+                    {isAlbanian ? 'Krijo Lëndën' : 'Create Course'}
                   </button>
                 </div>
               </form>
@@ -1054,10 +1054,10 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>{isAlbanian ? 'Ndrysho Detajet e Kursit' : 'Edit Course Details'}</h3>
+                <h3>{isAlbanian ? 'Ndrysho Detajet e Lëndës' : 'Edit Course Details'}</h3>
                 <p className="modal-subtitle">
                   {isAlbanian 
-                    ? 'Modifikoni emrin e kursit, mësimdhënësin kryesor, orarin dhe sallën.' 
+                    ? 'Modifikoni emrin e lëndës, mësimdhënësin kryesor, orarin dhe sallën.' 
                     : 'Modify course name, lead instructor, schedule, room, and attributes.'}
                 </p>
                 <button type="button" className="icon-btn-close" onClick={() => setEditingClass(null)} aria-label="Close">
@@ -1084,7 +1084,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
                 <div className="form-grid-2">
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Titulli i Kursit' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Titulli i Lëndës' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                     </label>
                     <input 
                       type="text" 
@@ -1097,7 +1097,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
 
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Kodi i Kursit' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Kodi i Lëndës' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                     </label>
                     <input 
                       type="text" 
@@ -1214,7 +1214,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Kredite të Kursit' : 'Course Credits'}</label>
+                    <label>{isAlbanian ? 'Kreditet e Lëndës' : 'Course Credits'}</label>
                     <input 
                       type="number" 
                       min="0.1"
@@ -1275,7 +1275,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
                   {isAlbanian ? 'Fshij Lëndën' : 'Delete Course'}
                 </h3>
                 <p className="modal-subtitle">
-                  {isAlbanian ? 'Konfirmoni heqjen e këtij kursi nga kurrikula shkollore.' : 'Confirm removal of this course from the school curriculum.'}
+                  {isAlbanian ? 'Konfirmoni heqjen e kësaj lënde nga kurrikula shkollore.' : 'Confirm removal of this course from the school curriculum.'}
                 </p>
                 <button type="button" className="icon-btn-close" onClick={() => !isDeleting && setClassToDelete(null)} aria-label="Close">
                   <X size={16} />

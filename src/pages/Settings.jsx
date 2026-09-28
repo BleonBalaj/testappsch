@@ -767,7 +767,7 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
               <strong>Active Portal: {currentRole === 'student' ? t('nav.student') : currentRole === 'teacher' ? t('nav.teacher') : t('nav.admin')}</strong>
               <p>
                 {currentRole === 'student' 
-                  ? 'Access to enrolled classes, gradebook, transcripts, and personal tasks.'
+                  ? 'Access to enrolled courses, gradebook, transcripts, and personal tasks.'
                   : currentRole === 'teacher'
                   ? 'Access to lesson planning, gradebook, class notes, and student rosters.'
                   : 'Access to school-wide governance, curriculum policies, and staff invitations.'}
@@ -1239,7 +1239,7 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
                   <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
                     {isAlbanian 
                       ? 'Përcaktoni nëse mësimdhënësit kanë të drejtë të modifikojnë dhe fshijnë lëndët nga katalogu i shkollës.'
-                      : 'Control whether teachers can edit course information and delete classes from the catalog.'}
+                      : 'Control whether teachers can edit course information and delete courses from the catalog.'}
                   </p>
                 </div>
 

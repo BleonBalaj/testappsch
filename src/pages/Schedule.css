@@ -26,6 +26,7 @@
 .schedule-unscheduled p { margin: 0; color: hsl(var(--muted-foreground)); }
 .schedule-unscheduled ul { margin: 0.7rem 0 0; padding-left: 1.3rem; line-height: 1.6; }
 .schedule-form-error { color: hsl(var(--destructive)); font-weight: 700; }
+.schedule-field-hint { display: block; margin-top: 0.3rem; font-size: 0.75rem; color: hsl(var(--muted-foreground)); }
 .schedule-event-toggle { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; }
 .schedule-event-toggle input { width: 18px; height: 18px; }
 

@@ -153,7 +153,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                     </div>
                     <div className="student-compact-list">
                       {displayStudents.length === 0 ? (
-                        <span style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>{isAlbanian ? 'Nuk ka nxënës të regjistruar në këtë lëndë' : 'No students enrolled in this class'}</span>
+                        <span style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>{isAlbanian ? 'Ende nuk ka nxënës të regjistruar' : 'No students enrolled yet'}</span>
                       ) : (
                         <>
                           {displayStudents.slice(0, 5).map((student) => (
@@ -269,7 +269,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                               ? (isAlbanian ? 'Po ngarkohen nxënësit…' : 'Loading students…')
                               : !rosterSource
                                 ? (isAlbanian ? 'Kjo orë nuk është e lidhur me një lëndë ose klasë.' : 'This period is not linked to a course or class.')
-                                : (isAlbanian ? 'Nuk ka nxënës të regjistruar në këtë lëndë ende.' : 'No students enrolled in this class yet.')}
+                                : (isAlbanian ? 'Ende nuk ka nxënës të regjistruar.' : 'No students enrolled yet.')}
                           </div>
                         ) : (
                           displayStudents.map((student) => {
@@ -334,7 +334,7 @@ const ClassDetail = ({ isOpen, onClose, classInfo, userRole = 'student', onCreat
                   <div className="materials-list">
                     {classMaterials.length === 0 ? (
                       <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                        {isAlbanian ? 'Nuk ka materiale të ngarkuara për këtë lëndë ende.' : 'No course materials uploaded for this class yet.'}
+                        {isAlbanian ? 'Nuk ka materiale të ngarkuara për këtë lëndë ende.' : 'No materials uploaded for this course yet.'}
                       </div>
                     ) : (
                       classMaterials.map((doc) => (

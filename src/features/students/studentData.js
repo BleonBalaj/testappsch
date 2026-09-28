@@ -7,7 +7,7 @@ import {
   collection, doc, documentId, getCountFromServer, getDocs, limit, onSnapshot, or, orderBy, query, startAfter, where,
 } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { matchesStudentSearch, normalizeSearchText, searchQueryToken } from './studentSearch';
+import { chooseSearchToken, matchesStudentSearch, normalizeSearchText, searchWordTokens } from './studentSearch';
 
 export const DIRECTORY_PAGE_SIZE = 30;
 export const SEARCH_RESULT_LIMIT = 100;
@@ -17,9 +17,86 @@ const COUNT_CONCURRENCY = 6;
 const ID_CHUNK = 30; // Firestore's limit for an "in" filter.
 const EXPORT_PAGE_SIZE = 1000;
 
+const CACHE_GRACE_MS = 4000;
+
 const studentsCollection = schoolId => collection(db, 'schools', schoolId, 'students');
 const toStudent = snapshot => ({ id: snapshot.id, ...snapshot.data() });
 const isIndexBuilding = error => error?.code === 'failed-precondition';
+const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
+/**
+ * onSnapshot that waits for the server's first answer. With the offline cache
+ * on, a new query first reports whichever matching records happen to be
+ * cached, which can be a few students out of a whole class. That cached
+ * answer is used only when offline or when the server is slow to reply.
+ */
+function onServerSnapshot(target, onNext, onError) {
+  let delivered = false;
+  let latestCached = null;
+  let timer = null;
+  const deliver = snapshot => { delivered = true; onNext(snapshot); };
+  const unsubscribe = onSnapshot(target, { includeMetadataChanges: true }, snapshot => {
+    if (!delivered && snapshot.metadata.fromCache && !isOffline()) {
+      latestCached = snapshot;
+      if (!timer) timer = setTimeout(() => { timer = null; if (!delivered && latestCached) deliver(latestCached); }, CACHE_GRACE_MS);
+      return;
+    }
+    clearTimeout(timer);
+    timer = null;
+    // Skip metadata-only query updates once the data is showing.
+    if (delivered && typeof snapshot.docChanges === 'function' && snapshot.docChanges().length === 0) return;
+    deliver(snapshot);
+  }, onError);
+  return () => { clearTimeout(timer); unsubscribe(); };
+}
+
+// ── Search token ─────────────────────────────────────────────────────────
+// Firestore allows one array-contains per query, so a search runs on one of
+// its words and the others are checked on the client. Every match contains
+// every word, so any word's results include all matches; the word with the
+// fewest students gives the smallest list to page through.
+
+const tokenCounts = new Map();
+function countTokenMatches(schoolId, token) {
+  const key = `${schoolId}|${token}`;
+  const cached = tokenCounts.get(key);
+  if (cached?.promise) return cached.promise;
+  if (cached && Date.now() - cached.at < COUNT_TTL_MS) return Promise.resolve(cached.value);
+  const promise = getCountFromServer(query(studentsCollection(schoolId), where('searchTokens', 'array-contains', token)))
+    .then(snapshot => {
+      const value = snapshot.data().count;
+      tokenCounts.set(key, { value, at: Date.now() });
+      return value;
+    })
+    // Without a count, fall back to preferring the longest word.
+    .catch(() => { tokenCounts.delete(key); return Infinity; });
+  tokenCounts.set(key, { promise, at: Date.now() });
+  return promise;
+}
+
+/** The query word with the fewest matching students. */
+export async function pickSearchToken(schoolId, term) {
+  const tokens = searchWordTokens(term);
+  if (tokens.length <= 1) return tokens[0] || '';
+  const counts = await Promise.all(tokens.map(token => countTokenMatches(schoolId, token)));
+  return chooseSearchToken(tokens, counts);
+}
+
+/** pickSearchToken as a hook; the token is empty while a multi-word choice is counted. */
+function useSearchToken(schoolId, term, enabled) {
+  const tokens = enabled && schoolId ? searchWordTokens(term) : [];
+  const key = tokens.length > 1 ? `${schoolId}|${tokens.join(' ')}` : '';
+  const [state, setState] = useState({ key: '', token: '' });
+  useEffect(() => {
+    if (!key) return undefined;
+    let active = true;
+    pickSearchToken(schoolId, term).then(token => { if (active) setState({ key, token }); });
+    return () => { active = false; };
+  }, [key, schoolId, term]);
+  if (tokens.length === 0) return { token: '', searching: false };
+  if (tokens.length === 1) return { token: tokens[0], searching: true };
+  return { token: state.key === key ? state.token : '', searching: true };
+}
 
 export function compareStudents(a, b) {
   const nameA = a?.nameLower ?? normalizeSearchText(a?.name);
@@ -45,9 +122,9 @@ export function studentMatchesFilters(student, { status = 'all', classGroupId = 
   return true;
 }
 
-function directoryMode({ enabled, schoolId, token, courseId, classGroupId }) {
+function directoryMode({ enabled, schoolId, searching, courseId, classGroupId }) {
   if (!enabled || !schoolId) return 'off';
-  if (token) return 'search';
+  if (searching) return 'search';
   if (courseId) return 'course';
   if (classGroupId) return 'class';
   return 'paged';
@@ -57,23 +134,26 @@ function directoryMode({ enabled, schoolId, token, courseId, classGroupId }) {
  * One view of the student directory with live updates.
  * - No filter: pages of 30 ordered by name ("Load more" grows the page).
  * - Class or course: that roster (bounded by class size).
- * - Search: an indexed prefix lookup, refined on the client.
+ * - Search: the rarest query word's matches in name order, a page at a time,
+ *   refined on the client by the other words and filters.
  * `ordered` is false until the school's records carry sort fields.
  */
 export function useStudentDirectory({
   schoolId, search = '', status = 'all', classGroupId = '', courseId = '', courseClassGroupId = '',
-  pageSize = DIRECTORY_PAGE_SIZE, enabled = true, ordered = true,
+  pageSize = DIRECTORY_PAGE_SIZE, enabled = true, ordered = true, pageResults = false,
 }) {
-  const token = searchQueryToken(search);
-  const mode = directoryMode({ enabled, schoolId, token, courseId, classGroupId });
+  const { token, searching } = useSearchToken(schoolId, search, enabled);
+  const mode = directoryMode({ enabled, schoolId, searching, courseId, classGroupId });
   const filterKey = [schoolId, mode, token, status, classGroupId, courseId, courseClassGroupId, ordered].join('|');
   const [paging, setPaging] = useState({ key: filterKey, count: pageSize });
   const count = paging.key === filterKey ? paging.count : pageSize;
-  const queryKey = `${filterKey}|${mode === 'paged' ? count : 0}`;
+  const pagedQueries = mode === 'paged' || (mode === 'search' && ordered);
+  const queryKey = `${filterKey}|${pagedQueries ? count : 0}`;
   const [state, setState] = useState({ key: '', items: [], raw: 0, error: null, fallback: false });
 
   useEffect(() => {
-    if (mode === 'off') return undefined;
+    // A multi-word search waits until its word is chosen.
+    if (mode === 'off' || (mode === 'search' && !token)) return undefined;
     let active = true;
     const students = studentsCollection(schoolId);
     const results = {};
@@ -93,15 +173,29 @@ export function useStudentDirectory({
     };
     const fail = error => { if (active) setState({ key: queryKey, items: [], raw: 0, error, fallback }); };
     const listen = (name, studentQuery, onError = fail) => {
-      unsubscribers.push(onSnapshot(studentQuery, snapshot => {
+      unsubscribers.push(onServerSnapshot(studentQuery, snapshot => {
         results[name] = snapshot.docs.map(toStudent);
         publish();
       }, onError));
     };
 
     if (mode === 'search') {
+      const searchQuery = withOrder => (withOrder
+        ? query(students, where('searchTokens', 'array-contains', token), orderBy('nameLower'), limit(count + 1))
+        : query(students, where('searchTokens', 'array-contains', token), limit(SEARCH_RESULT_LIMIT)));
       names.push('search');
-      listen('search', query(students, where('searchTokens', 'array-contains', token), limit(SEARCH_RESULT_LIMIT)));
+      // Until the search index is ready, show the first matches unsorted.
+      listen('search', searchQuery(ordered), error => {
+        if (!active) return;
+        if (ordered && isIndexBuilding(error) && !fallback) {
+          fallback = true;
+          unsubscribers.splice(0).forEach(unsubscribe => unsubscribe());
+          listen('search', searchQuery(false));
+          return;
+        }
+        fail(error);
+      });
+      if (!ordered) fallback = true;
     } else if (mode === 'course') {
       names.push('explicit');
       if (courseClassGroupId) names.push('class');
@@ -141,30 +235,39 @@ export function useStudentDirectory({
   const current = state.key === queryKey || sameFilters ? state : null;
   const shownCount = state.key === queryKey ? count : Number(state.key.slice(state.key.lastIndexOf('|') + 1)) || count;
   // Memoized so callers can depend on the array without re-running effects.
-  const { students, hasMore } = useMemo(() => {
-    if (!current) return { students: [], hasMore: false };
+  // `matched` is the number of results for search and roster modes; paged mode counts on the server.
+  const { students, hasMore, matched } = useMemo(() => {
+    if (!current) return { students: [], hasMore: false, matched: undefined };
     if (mode === 'paged') {
       const page = current.fallback ? sortStudents(current.items) : current.items;
-      return { students: page.slice(0, shownCount), hasMore: page.length > shownCount };
+      return { students: page.slice(0, shownCount), hasMore: page.length > shownCount, matched: undefined };
     }
     const filters = { status, classGroupId, courseId, courseClassGroupId };
-    return {
-      students: sortStudents(current.items.filter(student => studentMatchesFilters(student, filters) &&
-        (mode !== 'search' || matchesStudentSearch(student, search)))),
-      hasMore: false,
-    };
-  }, [current, mode, shownCount, status, classGroupId, courseId, courseClassGroupId, search]);
+    if (mode === 'search' && !current.fallback) {
+      // Name-ordered pages of the chosen word's matches; the extra record tells whether more exist.
+      const page = current.items.slice(0, shownCount).filter(student => studentMatchesFilters(student, filters) && matchesStudentSearch(student, search));
+      const more = current.raw > shownCount;
+      return { students: page, hasMore: more, matched: more ? undefined : page.length };
+    }
+    const all = sortStudents(current.items.filter(student => studentMatchesFilters(student, filters) &&
+      (mode !== 'search' || matchesStudentSearch(student, search))));
+    // Lists (e.g. the Students page) can show a large roster a page at a time.
+    return pageResults
+      ? { students: all.slice(0, shownCount), hasMore: all.length > shownCount, matched: all.length }
+      : { students: all, hasMore: false, matched: all.length };
+  }, [current, mode, shownCount, status, classGroupId, courseId, courseClassGroupId, search, pageResults]);
   const loading = mode !== 'off' && state.key !== queryKey;
   const loadMore = useCallback(() => setPaging({ key: filterKey, count: count + pageSize }), [filterKey, count, pageSize]);
   return {
     students,
+    matched,
     // True until the first results for these filters arrive.
     loading: loading && !current,
     loadingMore: loading && Boolean(current),
     error: current?.error || null,
     hasMore,
     // A search or roster hit its cap, so more matches may exist.
-    capped: Boolean(current && mode === 'search' && current.raw >= SEARCH_RESULT_LIMIT) ||
+    capped: Boolean(current && mode === 'search' && current.fallback && current.raw >= SEARCH_RESULT_LIMIT) ||
       Boolean(current && (mode === 'course' || mode === 'class') && current.raw >= ROSTER_LIMIT),
     mode,
     loadMore,
@@ -194,7 +297,7 @@ export function useStudentRecord(schoolId, studentId) {
   const [state, setState] = useState({ key: '', student: null, error: null });
   useEffect(() => {
     if (!key) return undefined;
-    return onSnapshot(doc(db, 'schools', schoolId, 'students', String(studentId)),
+    return onServerSnapshot(doc(db, 'schools', schoolId, 'students', String(studentId)),
       snapshot => setState({ key, student: snapshot.exists() ? toStudent(snapshot) : null, error: null }),
       error => setState({ key, student: null, error }));
   }, [key, schoolId, studentId]);
@@ -204,32 +307,39 @@ export function useStudentRecord(schoolId, studentId) {
 
 /** Typeahead search for pickers (enroll, message, add to class). */
 export function useStudentSearch(schoolId, term, { max = 20, enabled = true, debounceMs = 250 } = {}) {
-  const token = enabled && schoolId ? searchQueryToken(term) : '';
-  const [debounced, setDebounced] = useState({ token: '', term: '' });
+  const words = enabled && schoolId ? searchWordTokens(term).join(' ') : '';
+  const [debounced, setDebounced] = useState({ words: '', term: '' });
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced({ token, term }), token ? debounceMs : 0);
+    const timer = setTimeout(() => setDebounced({ words, term }), words ? debounceMs : 0);
     return () => clearTimeout(timer);
-  }, [token, term, debounceMs]);
-  const key = debounced.token && schoolId ? `${schoolId}|${debounced.token}` : '';
+  }, [words, term, debounceMs]);
+  const key = debounced.words && schoolId ? `${schoolId}|${debounced.words}` : '';
   const [state, setState] = useState({ key: '', items: [], raw: 0, error: null });
   useEffect(() => {
     if (!key) return undefined;
     let active = true;
-    getDocs(query(studentsCollection(schoolId), where('searchTokens', 'array-contains', debounced.token), limit(SEARCH_RESULT_LIMIT)))
+    const students = studentsCollection(schoolId);
+    // First matches in name order; unsorted while the search index builds.
+    pickSearchToken(schoolId, debounced.term)
+      .then(token => getDocs(query(students, where('searchTokens', 'array-contains', token), orderBy('nameLower'), limit(SEARCH_RESULT_LIMIT)))
+        .catch(error => {
+          if (!isIndexBuilding(error)) throw error;
+          return getDocs(query(students, where('searchTokens', 'array-contains', token), limit(SEARCH_RESULT_LIMIT)));
+        }))
       .then(snapshot => { if (active) setState({ key, items: snapshot.docs.map(toStudent), raw: snapshot.size, error: null }); })
       .catch(error => { if (active) setState({ key, items: [], raw: 0, error }); });
     return () => { active = false; };
-  }, [key, schoolId, debounced.token]);
+  }, [key, schoolId, debounced.term]);
   const current = state.key === key ? state : null;
   const results = useMemo(() => (current
     ? sortStudents(current.items.filter(student => matchesStudentSearch(student, debounced.term))).slice(0, max)
     : []), [current, debounced.term, max]);
   return {
     results,
-    loading: Boolean(token) && (token !== debounced.token || !current),
+    loading: Boolean(words) && (words !== debounced.words || !current),
     error: current?.error || null,
     capped: Boolean(current && (current.raw >= SEARCH_RESULT_LIMIT || results.length >= max)),
-    active: Boolean(token),
+    active: Boolean(words),
   };
 }
 

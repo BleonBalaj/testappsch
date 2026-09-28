@@ -59,8 +59,8 @@ const ClassGroupsView = ({ userRole, canEditMembership, onOpenCourse, onOpenSche
     try {
       const result = await deleteClassGroup(groupToDelete.id, { keepCourseEnrollment: keepCourses });
       addNotification?.('success', isAlbanian
-        ? `Klasa ${groupToDelete.label} u fshi. ${result.students} nxënës tani janë pa klasë.`
-        : `Class ${groupToDelete.label} was deleted. ${result.students} student${result.students === 1 ? '' : 's'} now have no class.`);
+        ? `Klasa ${groupToDelete.label} u fshi. ${result.students} nxënës tani ${result.students === 1 ? 'është' : 'janë'} pa klasë.`
+        : `Class ${groupToDelete.label} was deleted. ${result.students === 1 ? '1 student now has' : `${result.students} students now have`} no class.`);
       setGroupToDelete(null);
     } catch (error) {
       addNotification?.('error', error.message || (isAlbanian ? 'Klasa nuk u fshi.' : 'The class could not be deleted.'));
@@ -229,11 +229,17 @@ const ClassGroupsView = ({ userRole, canEditMembership, onOpenCourse, onOpenSche
                     <strong>{isAlbanian ? 'Çfarë ndodh' : 'What happens'}</strong>
                     <ul className="cg-effects">
                       <li>{isAlbanian
-                        ? `${deleteStudentCount ?? '…'} nxënës aktivë mbesin pa klasë derisa t'u caktoni një tjetër.`
-                        : `${deleteStudentCount ?? '…'} active student${deleteStudentCount === 1 ? '' : 's'} will have no class until you assign another.`}</li>
+                        ? (deleteStudentCount === 1
+                          ? "1 nxënës aktiv mbetet pa klasë derisa t'i caktoni një tjetër."
+                          : `${deleteStudentCount ?? '…'} nxënës aktivë mbesin pa klasë derisa t'u caktoni një tjetër.`)
+                        : `${deleteStudentCount ?? '…'} active ${deleteStudentCount === 1 ? 'student' : 'students'} will have no class until you assign another.`}</li>
                       {deleteCourseCount > 0 && <li>{isAlbanian
-                        ? `${deleteCourseCount} lëndë të lidhura me këtë klasë bëhen lëndë të hapura.`
-                        : `${deleteCourseCount} linked course${deleteCourseCount === 1 ? '' : 's'} become open courses.`}</li>}
+                        ? (deleteCourseCount === 1
+                          ? '1 lëndë e lidhur me këtë klasë bëhet lëndë e hapur.'
+                          : `${deleteCourseCount} lëndë të lidhura me këtë klasë bëhen lëndë të hapura.`)
+                        : (deleteCourseCount === 1
+                          ? '1 linked course becomes an open course.'
+                          : `${deleteCourseCount} linked courses become open courses.`)}</li>}
                     </ul>
                   </div>
                 </div>

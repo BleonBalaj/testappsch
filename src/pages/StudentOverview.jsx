@@ -138,7 +138,7 @@ const StudentOverview = ({ student, onBack }) => {
             <Archive size={22} className="banner-icon-archived" />
             <div>
               <h4>{t('student.archivedRecord', 'Archived Student Record')}</h4>
-              <p>{isAlbanian ? 'Ky nxënës është arkivuar dhe është joaktiv në listat aktuale të klasave.' : 'This student is archived and inactive in current class rosters.'}</p>
+              <p>{isAlbanian ? 'Ky nxënës është arkivuar dhe është joaktiv në listat aktuale të klasave.' : 'This student is archived and inactive in current course rosters.'}</p>
             </div>
           </div>
           <button 
@@ -155,8 +155,8 @@ const StudentOverview = ({ student, onBack }) => {
           <div className="sov-banner-left">
             <AlertTriangle size={22} className="banner-icon-unassigned" />
             <div>
-              <h4>{t('student.activeStandingNoClasses', 'Active Standing · No Assigned Classes')}</h4>
-              <p>{t('student.unassignedBanner', 'This student is in good standing in the school directory, but is not yet assigned to any active class schedule or curriculum courses.')}</p>
+              <h4>{t('student.activeStandingNoClasses', 'Active Standing · No Assigned Courses')}</h4>
+              <p>{t('student.unassignedBanner', 'This student is in good standing in the school directory, but is not enrolled in any course yet.')}</p>
             </div>
           </div>
         </div>
@@ -180,7 +180,7 @@ const StudentOverview = ({ student, onBack }) => {
             )}
             {isUnassigned && (
               <span className="sov-badge-status unassigned">
-                <AlertTriangle size={12} /> {t('student.noActiveClasses', 'No Active Classes')}
+                <AlertTriangle size={12} /> {t('student.noActiveClasses', 'No Active Courses')}
               </span>
             )}
             <button className="btn-secondary glass btn-sm"><MessageSquare size={15} /> {t('student.message', 'Message')}</button>
@@ -216,7 +216,7 @@ const StudentOverview = ({ student, onBack }) => {
                 ))
               ) : (
                 <span className="sov-class-pill unassigned">
-                  <AlertTriangle size={12} /> {t('student.noActiveClasses', 'No Active Classes Enrolled')}
+                  <AlertTriangle size={12} /> {t('student.noActiveClasses', 'No Active Courses Enrolled')}
                 </span>
               )}
             </div>
@@ -237,7 +237,7 @@ const StudentOverview = ({ student, onBack }) => {
           <div className="sov-stat" style={{ borderColor: 'hsl(var(--accent)/0.35)', background: 'hsl(var(--accent)/0.12)' }}>
             <BookOpen size={16} color="hsl(var(--accent))" />
             <span>{t('student.enrolled', 'Enrolled')}</span>
-            <strong style={{ color: 'hsl(var(--accent))' }}>{classesLoaded ? enrolledClasses.length : '…'} {isAlbanian ? 'Lëndë' : 'Classes'}</strong>
+            <strong style={{ color: 'hsl(var(--accent))' }}>{classesLoaded ? enrolledClasses.length : '…'} {isAlbanian ? 'Lëndë' : 'Courses'}</strong>
           </div>
         </div>
       </div>
@@ -327,7 +327,7 @@ const StudentOverview = ({ student, onBack }) => {
                     </p>
                   ) : data.classes.length === 0 ? (
                     <p style={{ padding: '1rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem', textAlign: 'center' }}>
-                      {t('student.noClassesEnrolled', 'No classes enrolled yet.')}
+                      {t('student.noClassesEnrolled', 'No courses enrolled yet.')}
                     </p>
                   ) : (
                     data.classes.map((c, i) => (
@@ -354,7 +354,7 @@ const StudentOverview = ({ student, onBack }) => {
               <table>
                 <thead>
                   <tr>
-                    <th>{t('student.class', 'Class')}</th>
+                    <th>{t('student.class', 'Course')}</th>
                     <th>{t('student.teacher', 'Teacher')}</th>
                     <th>{t('student.gradePct', 'Grade %')}</th>
                     <th>{t('student.letter', 'Letter')}</th>
@@ -367,7 +367,7 @@ const StudentOverview = ({ student, onBack }) => {
                   ) : data.classes.length === 0 ? (
                     <tr>
                       <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
-                        {t('student.noEnrolledGrades', 'No enrolled classes or course grades recorded.')}
+                        {t('student.noEnrolledGrades', 'No enrolled courses or grades recorded.')}
                       </td>
                     </tr>
                   ) : (

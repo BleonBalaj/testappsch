@@ -23,6 +23,23 @@ function teachesCourse(staff, course) {
   return Boolean(course.teacher) && lower(course.teacher) === lower(staff.name);
 }
 
+// Who takes over before a staff member is removed.
+function teachingWarning({ homerooms, courses }, isAlbanian) {
+  const labels = homerooms.map(group => group.label).join(', ');
+  if (isAlbanian) {
+    const parts = [
+      homerooms.length && `është kujdestar i ${homerooms.length === 1 ? 'klasës' : 'klasave'} ${labels}`,
+      courses.length && `jep ${courses.length} lëndë`,
+    ].filter(Boolean).join(' dhe ');
+    return `${parts.charAt(0).toUpperCase()}${parts.slice(1)}. Caktoni dikë tjetër te "Lëndët & Klasat".`;
+  }
+  const parts = [
+    homerooms.length && `are the homeroom teacher of ${labels}`,
+    courses.length && `teach ${courses.length} ${courses.length === 1 ? 'course' : 'courses'}`,
+  ].filter(Boolean).join(' and ');
+  return `They ${parts}. Assign someone else in "Courses & Classes".`;
+}
+
 // Helper for rendering role icon
 export const getRoleIcon = (iconName, size = 14) => {
   switch (iconName) {
@@ -550,7 +567,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
               <div className="modal-header">
                 <h3>{isAlbanian ? 'Regjistro Anëtar të Stafit' : 'Register Staff Member'}</h3>
                 <p className="modal-subtitle">
-                  {isAlbanian ? 'Shtoni fakultet ose staf për të caktuar kurse dhe leje të personalizuara.' : 'Add faculty or staff to assign courses and custom permissions.'}
+                  {isAlbanian ? 'Shtoni fakultet ose staf për të caktuar lëndë dhe leje të personalizuara.' : 'Add faculty or staff to assign courses and custom permissions.'}
                 </p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddStaffOpen(false)} aria-label="Close">
                   <X size={16} />
@@ -1108,9 +1125,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
                     : 'will be permanently removed from this school. Their login access will be revoked immediately. If they have no other school memberships they will see a "not part of any school" screen on next login.'}
                   {(teachingFor(staffToDelete).homerooms.length > 0 || teachingFor(staffToDelete).courses.length > 0) && (
                     <p style={{ margin: '0.6rem 0 0', fontWeight: 600 }}>
-                      {isAlbanian
-                        ? `Është kujdestar i ${teachingFor(staffToDelete).homerooms.map(group => group.label).join(', ') || '—'} dhe jep ${teachingFor(staffToDelete).courses.length} lëndë. Caktoni dikë tjetër te "Kurset & Klasat".`
-                        : `They are the homeroom teacher of ${teachingFor(staffToDelete).homerooms.map(group => group.label).join(', ') || 'no class'} and teach ${teachingFor(staffToDelete).courses.length} course${teachingFor(staffToDelete).courses.length === 1 ? '' : 's'}. Assign someone else in "Courses & Classes".`}
+                      {teachingWarning(teachingFor(staffToDelete), isAlbanian)}
                     </p>
                   )}
                 </div>

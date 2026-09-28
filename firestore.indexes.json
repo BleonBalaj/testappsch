@@ -16,6 +16,14 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "nameLower", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "students",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "nameLower", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
