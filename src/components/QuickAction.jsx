@@ -17,7 +17,7 @@ const QuickAction = ({ _addNotification, onNavigate, userRole = 'admin', current
     { id: 'tasks', icon: Check, label: 'My Personal Tasks', color: 'hsl(var(--primary))', target: 'tasks' },
     { id: 'schedule', icon: CalendarPlus, label: 'Class Timetable', color: 'hsl(var(--accent))', target: 'schedule' },
     { id: 'events', icon: CalendarPlus, label: 'Academic Calendar', color: 'hsl(var(--chart-1))', target: 'events' },
-    { id: 'class', icon: BookOpen, label: 'My Classes', color: 'hsl(var(--chart-2))', target: 'classes' },
+    { id: 'class', icon: BookOpen, label: 'My Courses', color: 'hsl(var(--chart-2))', target: 'classes' },
   ] : [
     { id: 'student', icon: UserPlus, label: 'Add Student', color: 'hsl(var(--primary))', target: 'students' },
     { 

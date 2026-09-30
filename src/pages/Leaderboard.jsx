@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Medal, Users, BookOpen, Search, ChevronDown, Check, X, ArrowUpRight } from 'lucide-react';
+import { Trophy, Medal, BookOpen, Search, ChevronDown, Check, X, ArrowUpRight, GraduationCap } from 'lucide-react';
 import { Avatar } from '../components/Avatar';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { buildSchoolRankings } from '../features/gradebook/schoolResults';
 import { useCourseRecords } from '../features/gradebook/useCourseRecords';
-import { isStudentEnrolledInCourse } from '../features/enrollment';
+import { enrolledCoursesForStudent, isStudentEnrolledInCourse } from '../features/enrollment';
+import { classGroupsById, studentClassLabel } from '../features/classGroups';
+import { useClassRoster, useCourseRoster, useStudentsByIds } from '../features/students/studentData';
 import './Leaderboard.css';
 
 const PodiumStep = ({ student, rank, height, color, delay, onSelect, isAlbanian }) => {
@@ -44,28 +46,58 @@ const PodiumStep = ({ student, rank, height, color, delay, onSelect, isAlbanian 
 
 const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
   const isStudent = userRole === 'student';
-  const { studentsList = [], classesList = [], classesLoaded } = useSchoolData();
+  const { classesList = [], classesLoaded, classGroups = [], myStudentRecord } = useSchoolData();
   const { currentUser, activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
-  const [activeFilter, setActiveFilter] = useState('overall');
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
+  const myClassId = isStudent && myStudentRecord?.classGroupId && groupsById.has(String(myStudentRecord.classGroupId)) ? String(myStudentRecord.classGroupId) : '';
+  // Students see their own class by default; staff start with the whole school.
+  const [chosenFilter, setChosenFilter] = useState(null);
+  const activeFilter = chosenFilter ?? (myClassId ? `class:${myClassId}` : 'overall');
+  const setActiveFilter = setChosenFilter;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
-  const assessedCourses = useMemo(() => classesList.filter(course => studentsList.some(student => student.status !== 'archived' && isStudentEnrolledInCourse(student, course))), [classesList, studentsList]);
-  const { records, loading: gradesLoading, error: gradesError } = useCourseRecords(activeSchoolId, assessedCourses);
+
+  // Each view loads only the students it ranks: a course roster, a class
+  // roster, or (whole school) the students who appear in grade records.
+  const scopeCourse = activeFilter.startsWith('course:') ? classesList.find(course => String(course.id) === activeFilter.slice(7)) || null : null;
+  const scopeClassId = activeFilter.startsWith('class:') ? activeFilter.slice(6) : '';
+  const courseRoster = useCourseRoster(activeSchoolId, scopeCourse, { includeArchived: false });
+  const classRoster = useClassRoster(activeSchoolId, scopeClassId);
+  const scopeCourses = useMemo(() => {
+    if (scopeCourse) return [scopeCourse];
+    if (scopeClassId) {
+      const ids = new Set(classRoster.students.flatMap(student => enrolledCoursesForStudent(student, classesList).map(course => String(course.id))));
+      return classesList.filter(course => ids.has(String(course.id)));
+    }
+    return classesList;
+  }, [scopeCourse, scopeClassId, classRoster.students, classesList]);
+  const { records, loading: gradesLoading, error: gradesError } = useCourseRecords(activeSchoolId, scopeCourses);
+  const gradedStudentIds = useMemo(() => {
+    if (scopeCourse || scopeClassId || gradesLoading) return [];
+    const ids = new Set();
+    for (const record of Object.values(records)) {
+      for (const grade of record?.grades || []) Object.keys(grade.scores || {}).forEach(id => ids.add(id));
+    }
+    return [...ids];
+  }, [records, scopeCourse, scopeClassId, gradesLoading]);
+  const gradedStudents = useStudentsByIds(activeSchoolId, gradedStudentIds);
+  const rankingStudents = scopeCourse ? courseRoster.students : scopeClassId ? classRoster.students : gradedStudents.students;
+  const studentsLoading = scopeCourse ? courseRoster.loading : scopeClassId ? classRoster.loading : gradedStudents.loading;
 
   const dropdownGroups = useMemo(() => {
-    const cohorts = [...new Set(studentsList.filter(student => student.status !== 'archived').map(student => String(student.grade || '').trim()).filter(Boolean))]
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      .map(grade => ({ id: `cohort:${grade}`, label: `${isAlbanian ? 'Klasa' : 'Class'} ${grade}`, icon: Users }));
-    const courses = classesList.map(course => ({ id: `course:${course.id}`, label: [course.name, course.code && `(${course.code})`].filter(Boolean).join(' '), icon: BookOpen }));
+    const visibleClasses = isStudent ? classGroups.filter(group => group.id === myClassId) : classGroups;
+    const cohorts = visibleClasses.map(group => ({ id: `class:${group.id}`, label: `${isAlbanian ? 'Klasa' : 'Class'} ${group.label}`, icon: GraduationCap }));
+    const visibleCourses = isStudent ? classesList.filter(course => isStudentEnrolledInCourse(myStudentRecord, course)) : classesList;
+    const courses = visibleCourses.map(course => ({ id: `course:${course.id}`, label: [course.name, course.code && `(${course.code})`].filter(Boolean).join(' '), icon: BookOpen }));
     return [
       { category: isAlbanian ? 'Të gjitha' : 'General', items: [{ id: 'overall', label: isAlbanian ? 'Mesatarja e të gjitha lëndëve' : 'All graded courses', icon: Trophy }] },
-      ...(cohorts.length ? [{ category: isAlbanian ? 'Klasat' : 'Class groups', items: cohorts }] : []),
+      ...(cohorts.length ? [{ category: isAlbanian ? 'Klasat' : 'Classes', items: cohorts }] : []),
       ...(courses.length ? [{ category: isAlbanian ? 'Lëndët' : 'Courses', items: courses }] : []),
     ];
-  }, [studentsList, classesList, isAlbanian]);
+  }, [classesList, classGroups, isAlbanian, isStudent, myClassId, myStudentRecord]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -104,11 +136,16 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
     })).filter(group => group.items.length > 0);
   }, [dropdownSearch, dropdownGroups]);
 
-  const filteredRankings = useMemo(() => gradesLoading || gradesError ? [] : buildSchoolRankings(studentsList, classesList, records, currentOption.id), [studentsList, classesList, records, currentOption.id, gradesLoading, gradesError]);
+  const studentsById = useMemo(() => new Map(rankingStudents.map(student => [String(student.id), student])), [rankingStudents]);
+  const filteredRankings = useMemo(() => {
+    if (gradesLoading || gradesError || studentsLoading) return [];
+    return buildSchoolRankings(rankingStudents, scopeCourses, records, scopeCourse ? `course:${scopeCourse.id}` : 'overall')
+      .map(row => ({ ...row, classLabel: studentClassLabel(studentsById.get(String(row.id)), groupsById) }));
+  }, [rankingStudents, scopeCourses, records, scopeCourse, gradesLoading, gradesError, studentsLoading, studentsById, groupsById]);
 
   const handleStudentClick = (student) => {
     if (isStudent) return; // Students do not access administrative student overview
-    const actualStudent = studentsList.find(item => String(item.id) === String(student.id));
+    const actualStudent = studentsById.get(String(student.id));
     if (onStudentSelect && actualStudent) onStudentSelect(actualStudent);
   };
 
@@ -128,9 +165,9 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
       <header className="page-header">
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 className="gradient-text">
               {t('leaderboard.title', 'Academic Leaderboard')}
-              <Trophy size={32} style={{ color: 'hsl(var(--primary))' }} />
+              <Trophy size={30} className="page-title-icon" aria-hidden="true" />
             </h1>
             <span className="count-pill glass">{isAlbanian ? 'Notat aktuale' : 'Current grades'}</span>
           </div>
@@ -172,7 +209,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                   <input 
                     ref={searchInputRef}
                     type="text"
-                    placeholder={isAlbanian ? 'Kërko klasa ose lëndë...' : 'Search class groups or courses...'}
+                    placeholder={isAlbanian ? 'Kërko klasa ose lëndë...' : 'Search classes or courses...'}
                     value={dropdownSearch}
                     onChange={(e) => setDropdownSearch(e.target.value)}
                   />
@@ -188,14 +225,14 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                 </div>
 
                 {/* Dropdown Options List */}
-                <div className="dropdown-options-list">
+                <div className="dropdown-options-list" role="listbox" aria-label={isAlbanian ? 'Renditja për' : 'Rank by'}>
                   {filteredDropdownGroups.length === 0 ? (
                     <div className="dropdown-empty-state">
-                      <span>{isAlbanian ? 'Nuk u gjet klasë ose lëndë' : 'No matching class group or course'}</span>
+                      <span>{isAlbanian ? 'Nuk u gjet klasë ose lëndë' : 'No matching class or course'}</span>
                     </div>
                   ) : (
                     filteredDropdownGroups.map(group => (
-                      <div key={group.category} className="dropdown-group">
+                      <div key={group.category} className="dropdown-group" role="group" aria-label={group.category}>
                         <div className="dropdown-group-title">{group.category}</div>
                         {group.items.map(item => {
                           const Icon = item.icon;
@@ -204,6 +241,8 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                             <button
                               key={item.id}
                               type="button"
+                              role="option"
+                              aria-selected={isSelected}
                               className={`dropdown-option-item ${isSelected ? 'selected' : ''}`}
                               onClick={() => {
                                 setActiveFilter(item.id);
@@ -245,7 +284,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
           <h3>{isAlbanian ? 'Notat nuk mund të ngarkohen' : 'Grades could not be loaded'}</h3>
           <p>{isAlbanian ? 'Kontrolloni lejet e lëndëve dhe provoni përsëri.' : 'Check course access and try again.'}</p>
         </section>
-      ) : (gradesLoading || !classesLoaded) ? (
+      ) : (gradesLoading || studentsLoading || !classesLoaded) ? (
         <section className="empty-leaderboard glass" style={{ padding: '3rem 2rem', textAlign: 'center', borderRadius: '24px', margin: '2rem 0' }}>
           <p>{isAlbanian ? 'Po ngarkohen notat...' : 'Loading course grades...'}</p>
         </section>
@@ -291,7 +330,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                         initial={{ opacity: 0, x: -15 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 15 }}
-                        transition={{ duration: 0.2, delay: index * 0.04 }}
+                        transition={{ duration: 0.2, delay: Math.min(index, 12) * 0.03 }}
                         onClick={() => handleStudentClick(student)}
                         style={{ cursor: isStudent ? 'default' : 'pointer' }}
                         title={isCurrentUser ? (isAlbanian ? 'Profili Juaj në Renditje' : 'Your Ranking Profile') : (isStudent ? `${student.name}'s Academic Standing` : `View ${student.name}'s Profile`)}
@@ -311,7 +350,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
                           </div>
                         </div>
                       <div className="class-col muted">
-                        {student.grade ? `${isAlbanian ? 'Klasa' : 'Class'} ${student.grade}` : '—'}
+                        {student.classLabel ? `${isAlbanian ? 'Klasa' : 'Class'} ${student.classLabel}` : '—'}
                       </div>
                       <div className="trend-col">
                         {student.gradedCourses}

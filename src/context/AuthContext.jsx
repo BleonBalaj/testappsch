@@ -22,6 +22,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../services/firebase';
 import { buildProfileBackfill } from '../features/userProfile';
+import { studentSearchFields } from '../features/students/studentSearch';
 
 const listMyInvitationsCallable = httpsCallable(functions, 'listMyInvitations');
 const acceptInvitationCallable = httpsCallable(functions, 'acceptSchoolInvitation');
@@ -660,9 +661,18 @@ const DEFAULT_SCHOOL_ROLES = [
 
       const directory = currentRole === 'student' ? 'students' : 'staff';
       const directoryRef = doc(db, 'schools', activeSchoolId, directory, currentUser.uid);
-      await setDoc(directoryRef, {
-        name: cleanName
-      }, { merge: true });
+      if (directory === 'students') {
+        // Refresh the search fields so the directory finds the new name.
+        const existing = await getDoc(directoryRef);
+        if (existing.exists()) {
+          const record = existing.data();
+          await updateDoc(directoryRef, { name: cleanName, ...studentSearchFields({ name: cleanName, email: record.email, studentId: record.studentId }) });
+        }
+      } else {
+        await setDoc(directoryRef, {
+          name: cleanName
+        }, { merge: true });
+      }
 
       if (activeSchoolDoc?.creatorUid === currentUser.uid) {
         const schoolRef = doc(db, 'schools', activeSchoolId);

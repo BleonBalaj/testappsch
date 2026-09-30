@@ -5,35 +5,6 @@
   padding-bottom: 3rem;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.title-group {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.count-pill {
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.3rem 0.8rem;
-  border-radius: 20px;
-  color: hsl(var(--primary));
-  border: 1px solid hsla(var(--primary), 0.3);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
 
 
 /* Controls */
@@ -742,3 +713,72 @@
   opacity: 1;
 }
 
+
+/* ── Directory paging, notices and filters ── */
+.students-notice {
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  background: hsl(var(--card));
+  border: 1px solid hsla(var(--primary), 0.35);
+  color: hsl(var(--foreground));
+}
+
+.students-notice.is-warning {
+  border-color: hsla(var(--destructive), 0.45);
+  color: hsl(var(--destructive));
+}
+
+.students-result-summary {
+  margin: -0.5rem 0 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+.students-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.students-filter-selects {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+}
+
+.students-filter-selects .custom-form-select {
+  width: auto !important;
+  min-width: 180px;
+  max-width: 100%;
+  height: 2.4rem;
+}
+
+.student-grade.is-unlinked {
+  color: hsl(var(--chart-4, 38 92% 50%));
+}
+
+.student-locked-courses {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  line-height: 1.45;
+}
+
+.student-locked-courses svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+@media (max-width: 540px) {
+  .students-filter-selects .custom-form-select {
+    width: 100% !important;
+  }
+}

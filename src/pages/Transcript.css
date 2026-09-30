@@ -1,7 +1,7 @@
 .transcript-page {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 1.5rem;
   padding-bottom: 4rem;
   max-width: 1200px;
   margin: 0 auto;

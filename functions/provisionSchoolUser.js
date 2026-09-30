@@ -2,6 +2,7 @@ import { ensureDefaultApp } from './adminApp.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
+import { studentSearchFields } from './studentSearch.js';
 
 export const BUILTIN_ROLES = new Set(['admin', 'teacher', 'dept_head', 'counselor', 'support', 'student']);
 const safeString = (value, limit = 200) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
@@ -25,12 +26,17 @@ export function canEditStudentCourses({ creatorUid, callerUid, member, school })
 }
 
 export function roleData({ role, uid, email, name, extra }) {
-  if (role === 'student') return {
-    id: uid, studentId: safeString(extra.studentId, 50) || `STU-${uid.slice(0, 8).toUpperCase()}`,
-    name, email, role, status: 'active', grade: safeString(extra.grade, 40) || '10A',
-    phone: safeString(extra.phone, 60), guardian: safeString(extra.guardian),
-    assignedClasses: safeList(extra.assignedClasses),
-  };
+  if (role === 'student') {
+    const studentId = safeString(extra.studentId, 50) || `STU-${uid.slice(0, 8).toUpperCase()}`;
+    return {
+      id: uid, studentId, name, email, role, status: 'active',
+      // The class label is filled in from the selected class; no class is a valid state.
+      grade: safeString(extra.grade, 40), classGroupId: safeString(extra.classGroupId, 128),
+      phone: safeString(extra.phone, 60), guardian: safeString(extra.guardian),
+      assignedClasses: safeList(extra.assignedClasses),
+      ...studentSearchFields({ name, email, studentId }),
+    };
+  }
   return {
     id: uid, staffId: safeString(extra.staffId, 50) || `STF-${uid.slice(0, 8).toUpperCase()}`,
     name, email, role, roleId: role, roleName: safeString(extra.roleName, 100) || role,
@@ -39,6 +45,17 @@ export function roleData({ role, uid, email, name, extra }) {
     experience: safeString(extra.experience, 100), joinDate: safeString(extra.joinDate, 30),
     classes: Number.isFinite(Number(extra.classes)) ? Math.max(0, Number(extra.classes)) : 0,
   };
+}
+
+// A selected class must exist in this school; its label becomes the student's
+// class text so every screen shows the same name.
+async function withStudentClass(schoolRef, extra) {
+  const classGroupId = safeString(extra.classGroupId, 128);
+  if (!classGroupId) return { ...extra, classGroupId: '' };
+  if (classGroupId.includes('/')) throw new HttpsError('invalid-argument', 'Choose a valid class.');
+  const group = await schoolRef.collection('classGroups').doc(classGroupId).get();
+  if (!group.exists) throw new HttpsError('invalid-argument', 'The selected class no longer exists. Refresh the page and choose another class.');
+  return { ...extra, classGroupId, grade: safeString(group.data().label, 40) };
 }
 
 export async function provisionUser(request) {
@@ -50,7 +67,7 @@ export async function provisionUser(request) {
   const name = safeString(data.name);
   const role = safeString(data.role, 80) || 'student';
   const password = typeof data.password === 'string' ? data.password : '';
-  const extra = data.extraData && typeof data.extraData === 'object' && !Array.isArray(data.extraData) ? data.extraData : {};
+  let extra = data.extraData && typeof data.extraData === 'object' && !Array.isArray(data.extraData) ? data.extraData : {};
   if (!schoolId || schoolId.includes('/') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !name) {
     throw new HttpsError('invalid-argument', 'Enter a valid school, email, and name.');
   }
@@ -73,6 +90,7 @@ export async function provisionUser(request) {
     const roleSnap = await schoolRef.collection('roles').doc(role).get();
     if (!roleSnap.exists) throw new HttpsError('invalid-argument', 'The selected custom role does not exist.');
   }
+  if (role === 'student') extra = await withStudentClass(schoolRef, extra);
   let user;
   let createdAuthUser = false;
   try {

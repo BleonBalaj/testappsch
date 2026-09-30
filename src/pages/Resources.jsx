@@ -1,33 +1,33 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FileText, 
-  Video, 
-  Link as LinkIcon, 
-  Download, 
-  ExternalLink, 
-  Search, 
-  Filter, 
-  Clock, 
+import {
+  FileText,
+  Video,
+  Link as LinkIcon,
+  ExternalLink,
+  Search,
+  Filter,
+  Clock,
   BookOpen,
   LayoutGrid,
   List,
-  Star,
   Plus,
   X,
   Check,
   Bookmark,
   ChevronDown,
   Library,
-  Trash2
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, doc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
+import { useSchoolData } from '../context/SchoolDataContext';
 import { useLanguage } from '../context/LanguageContext';
+import { classGroupsById } from '../features/classGroups';
+import { normalizeWebLink, safeWebLink } from '../features/links';
 import './Resources.css';
-
-const INITIAL_RESOURCES = [];
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -48,152 +48,108 @@ const itemVariants = {
   }
 };
 
+const FORMAT_TYPES = ['All Types', 'PDF', 'Video', 'Link', 'Doc', 'Slides'];
+const EMPTY_FORM = { title: '', type: 'PDF', url: '', courseId: '', classGroupId: '', author: '' };
 
-const RESOURCE_CLASS_GROUPS = [
-  {
-    category: 'General Overview',
-    items: [
-      { id: 'All', label: 'All Subjects & Classes', desc: 'Complete library of materials' }
-    ]
-  },
-  {
-    category: 'Academic Classes & Courses',
-    items: [
-      { id: 'Mathematics', label: 'Advanced Mathematics (MATH-301)', desc: 'Calculus, linear algebra, problem sets' },
-      { id: 'Science', label: 'Physics Mechanics (PHYS-401)', desc: 'Mechanics, quantum, lab simulations' },
-      { id: 'Literature', label: 'English Literature (ENG-101)', desc: 'Essays, study guides, drama scripts' },
-      { id: 'History', label: 'World History (HIST-202)', desc: 'Timelines, documents, DBQ analysis' },
-      { id: 'Arts', label: 'Digital Arts & Design (ART-110)', desc: 'Brush techniques, 3D modeling, palettes' },
-      { id: 'Computer Science', label: 'Computer Science (CS-501)', desc: 'Python algorithms, data structures' }
-    ]
+const typeIcon = (type) => {
+  switch (type) {
+    case 'PDF': return <FileText size={24} color="hsl(var(--destructive))" />;
+    case 'Video': return <Video size={24} color="hsl(var(--primary))" />;
+    case 'Link': return <LinkIcon size={24} color="hsl(var(--mood-sad))" />;
+    default: return <BookOpen size={24} color="hsl(var(--accent))" />;
   }
-];
+};
 
-const CATEGORIES = ['All', 'Mathematics', 'Science', 'Literature', 'History', 'Arts', 'Computer Science'];
-
-const FORMAT_TYPES = ['All Types', 'PDF', 'Video', 'Link', 'Doc'];
-
-const ResourceCard = ({ resource, view, onToggleBookmark, onDownload, onDelete }) => {
-  const getIcon = (type) => {
-    switch(type) {
-      case 'PDF': return <FileText size={24} color="hsl(var(--destructive))" />;
-      case 'Video': return <Video size={24} color="hsl(var(--primary))" />;
-      case 'Link': return <LinkIcon size={24} color="hsl(var(--mood-sad))" />;
-      default: return <BookOpen size={24} color="hsl(var(--accent))" />;
-    }
-  };
+const ResourceCard = ({ resource, view, contextLabel, isBookmarked, onToggleBookmark, onDelete, isAlbanian }) => {
+  const url = safeWebLink(resource.url);
+  const openButton = url ? (
+    <a href={url} target="_blank" rel="noopener noreferrer" className={view === 'list' ? 'res-action-btn' : 'res-btn bouncy glass'}
+      title={isAlbanian ? 'Hap materialin' : 'Open material'} aria-label={isAlbanian ? `Hap ${resource.title}` : `Open ${resource.title}`}>
+      <ExternalLink size={view === 'list' ? 18 : 17} />
+    </a>
+  ) : (
+    <span className={view === 'list' ? 'res-action-btn is-disabled' : 'res-btn glass is-disabled'} title={isAlbanian ? 'Ky material nuk ka lidhje' : 'This material has no link'}>
+      <ExternalLink size={view === 'list' ? 18 : 17} />
+    </span>
+  );
+  const bookmarkButton = (
+    <button
+      type="button"
+      className={`bookmark-btn ${isBookmarked ? 'active' : ''}`}
+      onClick={() => onToggleBookmark(resource.id)}
+      title={isBookmarked ? (isAlbanian ? 'Hiq nga të ruajturat' : 'Remove bookmark') : (isAlbanian ? 'Ruaje' : 'Bookmark')}
+      aria-pressed={isBookmarked}
+    >
+      <Bookmark size={view === 'list' ? 17 : 16} fill={isBookmarked ? "hsl(var(--primary))" : "none"} />
+    </button>
+  );
+  const deleteButton = onDelete && (
+    <button
+      type="button"
+      className="icon-btn-destructive"
+      style={view === 'list' ? { padding: '0.35rem' } : { width: '36px', height: '36px', borderRadius: '10px' }}
+      onClick={() => onDelete(resource)}
+      title={isAlbanian ? 'Fshij materialin' : 'Delete material'}
+      aria-label={isAlbanian ? `Fshij ${resource.title}` : `Delete ${resource.title}`}
+    >
+      <Trash2 size={view === 'list' ? 16 : 15} />
+    </button>
+  );
+  const info = [contextLabel, resource.author].filter(Boolean).join(' • ');
 
   if (view === 'list') {
     return (
-      <motion.div 
+      <motion.div
         className="resource-list-item glass bouncy"
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        whileHover={{ x: 6 }}
-        layout
       >
-        <div className="res-icon-wrap">{getIcon(resource.type)}</div>
+        <div className="res-icon-wrap">{typeIcon(resource.type)}</div>
         <div className="res-main">
           <h4>{resource.title}</h4>
-          <p>{resource.category} • {resource.author}</p>
+          <p>{info}</p>
         </div>
         <div className="res-meta">
-          <span>{resource.size}</span>
-          <span className="dot">•</span>
-          <span>{resource.date}</span>
+          <span>{resource.date || ''}</span>
         </div>
         <div className="res-actions">
-          <button 
-            type="button" 
-            className={`bookmark-btn ${resource.isBookmarked ? 'active' : ''}`}
-            onClick={() => onToggleBookmark(resource.id)}
-            title={resource.isBookmarked ? "Remove Bookmark" : "Bookmark Resource"}
-          >
-            <Bookmark size={17} fill={resource.isBookmarked ? "hsl(var(--primary))" : "none"} />
-          </button>
-          <button 
-            type="button" 
-            className="res-action-btn"
-            onClick={() => onDownload(resource)}
-            title={resource.type === 'Link' ? "Open Resource" : "Download File"}
-          >
-            {resource.type === 'Link' ? <ExternalLink size={18} /> : <Download size={18} />}
-          </button>
-          {onDelete && (
-            <button
-              type="button"
-              className="icon-btn-destructive"
-              style={{ padding: '0.35rem' }}
-              onClick={() => onDelete(resource.id)}
-              title="Delete Resource"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
+          {bookmarkButton}
+          {openButton}
+          {deleteButton}
         </div>
       </motion.div>
     );
   }
 
   return (
-    <motion.div 
+    <motion.div
       className="resource-card glass bouncy"
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4 }}
-      layout
     >
       <div className="resource-header">
         <div className="res-icon-box" style={{ background: `hsla(var(${resource.type === 'PDF' ? '--destructive' : '--primary'}), 0.12)` }}>
-          {getIcon(resource.type)}
+          {typeIcon(resource.type)}
         </div>
         <div className="res-header-right">
-          <button 
-            type="button" 
-            className={`bookmark-btn ${resource.isBookmarked ? 'active' : ''}`}
-            onClick={() => onToggleBookmark(resource.id)}
-            title={resource.isBookmarked ? "Remove Bookmark" : "Bookmark"}
-          >
-            <Bookmark size={16} fill={resource.isBookmarked ? "hsl(var(--primary))" : "none"} />
-          </button>
-          <div className="res-rating">
-            <Star size={13} fill="hsl(var(--mood-neutral))" color="hsl(var(--mood-neutral))" />
-            <span>{resource.stars}</span>
-          </div>
+          {bookmarkButton}
         </div>
       </div>
-      
+
       <div className="resource-body">
         <span className="res-type-label">{resource.type}</span>
         <h3>{resource.title}</h3>
-        <p className="res-info">{resource.category} • {resource.author}</p>
+        <p className="res-info">{info}</p>
       </div>
 
       <div className="resource-footer">
         <div className="res-size">
           <Clock size={13} />
-          <span>{resource.size}</span>
+          <span>{resource.date || '—'}</span>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-          <button 
-            type="button" 
-            className="res-btn bouncy glass"
-            onClick={() => onDownload(resource)}
-            title={resource.type === 'Link' ? "Open Resource" : "Download File"}
-          >
-            {resource.type === 'Link' ? <ExternalLink size={17} /> : <Download size={17} />}
-          </button>
-          {onDelete && (
-            <button
-              type="button"
-              className="icon-btn-destructive"
-              style={{ width: '36px', height: '36px', borderRadius: '10px' }}
-              onClick={() => onDelete(resource.id)}
-              title="Delete Resource"
-            >
-              <Trash2 size={15} />
-            </button>
-          )}
+          {openButton}
+          {deleteButton}
         </div>
       </div>
     </motion.div>
@@ -201,146 +157,185 @@ const ResourceCard = ({ resource, view, onToggleBookmark, onDownload, onDelete }
 };
 
 const Resources = ({ userRole = 'student' }) => {
-  const canEditResources = ['admin', 'teacher', 'dept_head'].includes(userRole);
+  const canAddResources = ['admin', 'teacher', 'dept_head'].includes(userRole);
+  const isAdmin = userRole === 'admin';
   const { activeSchoolId, currentUser } = useAuth();
+  const { classesList = [], classGroups = [] } = useSchoolData();
   const { t, isAlbanian } = useLanguage();
-  const [resources, setResources] = useState(INITIAL_RESOURCES);
-  const [activeCategory, setActiveCategory] = useState('All');
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
+  const [resourceState, setResourceState] = useState({ schoolId: null, items: [], error: null });
+  const [bookmarkState, setBookmarkState] = useState({ key: '', ids: [] });
+  const [activeScope, setActiveScope] = useState('all');
   const [activeType, setActiveType] = useState('All Types');
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   const [view, setView] = useState('grid');
   const [search, setSearch] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [downloadNotice, setDownloadNotice] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [resourceToDelete, setResourceToDelete] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
 
-  // Real-time Firestore sync
+  // Real-time school library.
   useEffect(() => {
-    if (!activeSchoolId) return;
-    const colRef = collection(db, 'schools', activeSchoolId, 'resources');
-    const unsub = onSnapshot(colRef, (snapshot) => {
-      const items = [];
-      snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
-      setResources(items);
-    }, (err) => console.warn('Resources sync notice:', err.message));
-    return () => unsub();
+    if (!activeSchoolId) return undefined;
+    const schoolId = activeSchoolId;
+    return onSnapshot(collection(db, 'schools', schoolId, 'resources'), (snapshot) => {
+      setResourceState({ schoolId, items: snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), error: null });
+    }, (err) => setResourceState({ schoolId, items: [], error: err }));
   }, [activeSchoolId]);
+  const resources = useMemo(() => (resourceState.schoolId === activeSchoolId ? resourceState.items : []), [resourceState, activeSchoolId]);
+  const resourcesLoaded = resourceState.schoolId === activeSchoolId;
 
-  // Dropdown Filter State
-  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
-  const [classDropdownSearch, setClassDropdownSearch] = useState('');
-  const classDropdownRef = useRef(null);
-  const classSearchInputRef = useRef(null);
+  // Bookmarks are private to each person (users/{uid}/resourceBookmarks/{schoolId}).
+  const bookmarkKey = currentUser?.uid && activeSchoolId ? `${currentUser.uid}|${activeSchoolId}` : '';
+  useEffect(() => {
+    if (!bookmarkKey) return undefined;
+    return onSnapshot(doc(db, 'users', currentUser.uid, 'resourceBookmarks', activeSchoolId),
+      (snapshot) => setBookmarkState({ key: bookmarkKey, ids: Array.isArray(snapshot.data()?.resourceIds) ? snapshot.data().resourceIds.map(String) : [] }),
+      () => setBookmarkState({ key: bookmarkKey, ids: [] }));
+  }, [bookmarkKey, currentUser?.uid, activeSchoolId]);
+  const bookmarkIds = useMemo(() => new Set(bookmarkState.key === bookmarkKey ? bookmarkState.ids : []), [bookmarkState, bookmarkKey]);
 
-  // Close dropdown on outside click
+  const courseById = useMemo(() => new Map(classesList.map(course => [String(course.id), course])), [classesList]);
+  const contextLabel = (resource) => {
+    const course = resource.courseId ? courseById.get(String(resource.courseId)) : null;
+    const group = resource.classGroupId ? groupsById.get(String(resource.classGroupId)) : null;
+    return [course?.name, group && `${isAlbanian ? 'Klasa' : 'Class'} ${group.label}`].filter(Boolean).join(' · ') || resource.category || (isAlbanian ? 'E gjithë shkolla' : 'Whole school');
+  };
+
+  // Filter menu built from the school's real courses and classes.
+  const [isScopeOpen, setIsScopeOpen] = useState(false);
+  const [scopeSearch, setScopeSearch] = useState('');
+  const scopeRef = useRef(null);
+  const scopeSearchRef = useRef(null);
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (classDropdownRef.current && !classDropdownRef.current.contains(e.target)) {
-        setIsClassDropdownOpen(false);
-      }
+      if (scopeRef.current && !scopeRef.current.contains(e.target)) setIsScopeOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Auto focus input
   useEffect(() => {
-    if (isClassDropdownOpen && classSearchInputRef.current) {
-      classSearchInputRef.current.focus();
+    if (isScopeOpen) scopeSearchRef.current?.focus();
+  }, [isScopeOpen]);
+
+  const scopeGroups = useMemo(() => [
+    { category: isAlbanian ? 'Përgjithshme' : 'General', items: [
+      { id: 'all', label: isAlbanian ? 'Të gjitha materialet' : 'All materials', desc: isAlbanian ? 'E gjithë biblioteka' : 'The whole library' },
+      { id: 'school', label: isAlbanian ? 'E gjithë shkolla' : 'Whole school', desc: isAlbanian ? 'Pa lëndë ose klasë' : 'Not tied to a course or class' },
+    ] },
+    ...(classesList.length ? [{ category: isAlbanian ? 'Lëndët' : 'Courses', items: classesList.map(course => ({
+      id: `course:${course.id}`, label: course.name, desc: [course.code, course.classGroupId && groupsById.get(String(course.classGroupId)) && `${isAlbanian ? 'Klasa' : 'Class'} ${groupsById.get(String(course.classGroupId)).label}`, course.teacher].filter(Boolean).join(' • '),
+    })) }] : []),
+    ...(classGroups.length ? [{ category: isAlbanian ? 'Klasat' : 'Classes', items: classGroups.map(group => ({
+      id: `class:${group.id}`, label: `${isAlbanian ? 'Klasa' : 'Class'} ${group.label}`, desc: group.homeroomTeacherName || '',
+    })) }] : []),
+  ], [classesList, classGroups, groupsById, isAlbanian]);
+  const currentScope = scopeGroups.flatMap(group => group.items).find(item => item.id === activeScope) || scopeGroups[0].items[0];
+  const filteredScopeGroups = useMemo(() => {
+    const query = scopeSearch.trim().toLowerCase();
+    if (!query) return scopeGroups;
+    return scopeGroups.map(group => ({ ...group, items: group.items.filter(item => `${item.label} ${item.desc}`.toLowerCase().includes(query)) }))
+      .filter(group => group.items.length > 0);
+  }, [scopeGroups, scopeSearch]);
+
+  const matchesScope = (resource) => {
+    if (activeScope === 'all') return true;
+    if (activeScope === 'school') return !resource.courseId && !resource.classGroupId;
+    if (activeScope.startsWith('course:')) return String(resource.courseId || '') === activeScope.slice(7);
+    if (activeScope.startsWith('class:')) {
+      const groupId = activeScope.slice(6);
+      // A class's materials include those of the courses linked to it.
+      return String(resource.classGroupId || '') === groupId ||
+        String(courseById.get(String(resource.courseId || ''))?.classGroupId || '') === groupId;
     }
-  }, [isClassDropdownOpen]);
+    return true;
+  };
 
-  // Current selected option
-  const currentClassOption = useMemo(() => {
-    for (const group of RESOURCE_CLASS_GROUPS) {
-      const match = group.items.find(item => item.id === activeCategory);
-      if (match) return match;
-    }
-    return RESOURCE_CLASS_GROUPS[0].items[0];
-  }, [activeCategory]);
+  const query = search.trim().toLowerCase();
+  const filteredResources = resources
+    .filter(r => matchesScope(r) &&
+      (activeType === 'All Types' || r.type === activeType) &&
+      (!bookmarkedOnly || bookmarkIds.has(String(r.id))) &&
+      (!query || [r.title, r.author, contextLabel(r)].some(value => String(value || '').toLowerCase().includes(query))))
+    .sort((a, b) => String(b.createdAtMs || b.id).localeCompare(String(a.createdAtMs || a.id)));
 
-  // Filtered dropdown items
-  const filteredClassGroups = useMemo(() => {
-    if (!classDropdownSearch.trim()) return RESOURCE_CLASS_GROUPS;
-    const query = classDropdownSearch.toLowerCase();
-    return RESOURCE_CLASS_GROUPS.map(group => ({
-      ...group,
-      items: group.items.filter(item => 
-        item.label.toLowerCase().includes(query) || 
-        item.desc.toLowerCase().includes(query)
-      )
-    })).filter(group => group.items.length > 0);
-  }, [classDropdownSearch]);
-
-  // Form State
-  const [newResource, setNewResource] = useState({
-    title: '',
-    category: 'Mathematics',
-    type: 'PDF',
-    size: '2.5 MB',
-    author: 'Faculty Member'
-  });
+  const canDelete = (resource) => isAdmin || (canAddResources && resource.createdByUid && resource.createdByUid === currentUser?.uid);
 
   const handleToggleBookmark = async (id) => {
-    const res = resources.find(r => r.id === id);
-    if (!res || !activeSchoolId) return;
-    const nextVal = !res.isBookmarked;
-    setResources(prev => prev.map(r => r.id === id ? { ...r, isBookmarked: nextVal } : r));
+    if (!currentUser?.uid || !activeSchoolId) return;
+    const key = String(id);
     try {
-      await updateDoc(doc(db, 'schools', activeSchoolId, 'resources', String(id)), {
-        isBookmarked: nextVal
-      });
+      await setDoc(doc(db, 'users', currentUser.uid, 'resourceBookmarks', activeSchoolId), {
+        resourceIds: bookmarkIds.has(key) ? arrayRemove(key) : arrayUnion(key),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
     } catch (e) {
       console.warn('Could not update bookmark:', e.message);
     }
   };
 
-  const handleDeleteResource = async (id) => {
-    if (!activeSchoolId) return;
-    try {
-      await deleteDoc(doc(db, 'schools', activeSchoolId, 'resources', String(id)));
-    } catch (e) {
-      console.warn('Could not delete resource:', e.message);
-    }
-  };
-
-  const handleDownload = (res) => {
-    setDownloadNotice(`Accessing "${res.title}"...`);
-    setTimeout(() => setDownloadNotice(null), 3000);
+  const openAdd = () => {
+    const scopedCourse = activeScope.startsWith('course:') ? activeScope.slice(7) : '';
+    const scopedClass = activeScope.startsWith('class:') ? activeScope.slice(6) : '';
+    setForm({ ...EMPTY_FORM, courseId: scopedCourse, classGroupId: scopedClass, author: currentUser?.displayName || '' });
+    setFormError('');
+    setIsAddOpen(true);
   };
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
-    if (!newResource.title.trim() || !activeSchoolId) return;
+    if (!activeSchoolId || saving) return;
+    if (!form.title.trim()) { setFormError(isAlbanian ? 'Shkruani titullin.' : 'Enter a title.'); return; }
+    const link = normalizeWebLink(form.url);
+    if (!link.url) {
+      setFormError(link.error
+        ? (isAlbanian ? 'Përdorni një lidhje interneti, p.sh. https://drive.google.com/…' : 'Use a web link, for example https://drive.google.com/…')
+        : (isAlbanian ? 'Shtoni lidhjen ku gjendet materiali (Google Drive, OneDrive, YouTube…).' : 'Add the link where the material lives (Google Drive, OneDrive, YouTube…).'));
+      return;
+    }
     const resId = `res_${Date.now()}`;
+    const now = Date.now();
     const added = {
       id: resId,
-      title: newResource.title.trim(),
-      category: newResource.category,
-      type: newResource.type,
-      size: newResource.size || '1.5 MB',
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      author: newResource.author || currentUser?.displayName || 'Faculty Member',
-      stars: 5.0,
-      isBookmarked: false,
+      title: form.title.trim().slice(0, 200),
+      type: form.type,
+      url: link.url,
+      courseId: form.courseId && courseById.has(form.courseId) ? form.courseId : '',
+      classGroupId: form.classGroupId && groupsById.has(form.classGroupId) ? form.classGroupId : '',
+      author: (form.author || currentUser?.displayName || '').trim().slice(0, 120),
+      date: new Date(now).toLocaleDateString(isAlbanian ? 'sq-AL' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      createdAtMs: now,
+      createdByUid: currentUser?.uid || '',
       createdAt: serverTimestamp()
     };
+    setSaving(true);
     try {
       await setDoc(doc(db, 'schools', activeSchoolId, 'resources', resId), added);
-    } catch (e) {
-      console.warn('Could not save resource to Firestore:', e.message);
+      setIsAddOpen(false);
+      setForm(EMPTY_FORM);
+    } catch (err) {
+      setFormError(err.message || (isAlbanian ? 'Materiali nuk u ruajt.' : 'The material could not be saved.'));
+    } finally {
+      setSaving(false);
     }
-    setIsAddOpen(false);
-    setNewResource({ title: '', category: 'Mathematics', type: 'PDF', size: '2.5 MB', author: 'Faculty Member' });
   };
 
-  const filteredResources = resources.filter(r => {
-    const matchCat = activeCategory === 'All' || r.category === activeCategory;
-    const matchType = activeType === 'All Types' || r.type === activeType;
-    const matchSearch = r.title.toLowerCase().includes(search.toLowerCase()) || r.author.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchType && matchSearch;
-  });
+  const confirmDelete = async () => {
+    if (!resourceToDelete || !activeSchoolId) return;
+    try {
+      await deleteDoc(doc(db, 'schools', activeSchoolId, 'resources', String(resourceToDelete.id)));
+      setResourceToDelete(null);
+      setDeleteError('');
+    } catch (err) {
+      setDeleteError(err.message || (isAlbanian ? 'Materiali nuk u fshi.' : 'The material could not be deleted.'));
+    }
+  };
 
   return (
-    <motion.div 
+    <motion.div
       className="resources-page"
       variants={containerVariants}
       initial="hidden"
@@ -349,76 +344,62 @@ const Resources = ({ userRole = 'student' }) => {
       <motion.header className="page-header" variants={itemVariants}>
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 className="gradient-text">
               {t('resources.title', 'Resource Hub')}
-              <Library size={32} style={{ color: 'hsl(var(--primary))' }} />
+              <Library size={30} className="page-title-icon" aria-hidden="true" />
             </h1>
             <span className="count-pill glass">{resources.length} {t('resources.materials', 'Materials')}</span>
           </div>
           <p>{t('resources.subtitle', 'Access study materials, curriculum guides, video lectures, and syllabi.')}</p>
         </div>
         <div className="header-actions">
-          {canEditResources && <button className="btn-primary" onClick={() => setIsAddOpen(true)}>
+          {canAddResources && <button className="btn-primary" onClick={openAdd}>
             <Plus size={16} /> {t('resources.addMaterial', 'Add Material')}
           </button>}
           <div className="view-toggle glass">
-            <button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} title="Grid View">
+            <button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} title={isAlbanian ? 'Pamje me karta' : 'Grid view'} aria-pressed={view === 'grid'}>
               <LayoutGrid size={18} />
             </button>
-            <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} title="List View">
+            <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} title={isAlbanian ? 'Pamje me listë' : 'List view'} aria-pressed={view === 'list'}>
               <List size={18} />
             </button>
           </div>
         </div>
       </motion.header>
 
-      {/* Notification Toast */}
-      {downloadNotice && (
-        <motion.div 
-          className="download-toast glass"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-        >
-          <Check size={16} color="hsl(var(--mood-happy))" />
-          <span>{downloadNotice}</span>
-        </motion.div>
-      )}
-
-      {/* Search & Filter Bar */}
       <motion.div className="resources-toolbar glass" variants={itemVariants}>
         <div className="toolbar-top-row">
           <div className="res-search glass">
             <Search size={18} />
-            <input 
-              type="text" 
-              placeholder={t('resources.searchPlaceholder', 'Search materials, authors, topics...')} 
+            <input
+              type="text"
+              placeholder={isAlbanian ? 'Kërko materiale, autorë, lëndë…' : 'Search materials, authors, courses…'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label={isAlbanian ? 'Kërko materiale' : 'Search materials'}
             />
-            {search && <button className="clear-btn" onClick={() => setSearch('')}><X size={14} /></button>}
+            {search && <button className="clear-btn" onClick={() => setSearch('')} aria-label={isAlbanian ? 'Pastro' : 'Clear'}><X size={14} /></button>}
           </div>
 
-          {/* Class Filter Dropdown */}
-          <div className="resource-class-filter-container" ref={classDropdownRef}>
-            <button 
-              type="button" 
-              className={`resource-class-trigger glass ${isClassDropdownOpen ? 'active' : ''}`}
-              onClick={() => setIsClassDropdownOpen(!isClassDropdownOpen)}
+          <div className="resource-class-filter-container" ref={scopeRef}>
+            <button
+              type="button"
+              className={`resource-class-trigger glass ${isScopeOpen ? 'active' : ''}`}
+              onClick={() => setIsScopeOpen(!isScopeOpen)}
+              aria-haspopup="listbox"
+              aria-expanded={isScopeOpen}
             >
               <div className="trigger-left">
                 <BookOpen size={16} className="trigger-icon" />
-                <span className="trigger-label-muted">{isAlbanian ? 'Lënda:' : 'Class:'}</span>
-                <strong className="trigger-value">
-                  {isAlbanian && currentClassOption.id === 'All' ? 'Të Gjitha Lëndët & Klasat' : currentClassOption.label}
-                </strong>
+                <span className="trigger-label-muted">{isAlbanian ? 'Për:' : 'For:'}</span>
+                <strong className="trigger-value">{currentScope.label}</strong>
               </div>
-              <ChevronDown size={16} className={`chevron-arrow ${isClassDropdownOpen ? 'open' : ''}`} />
+              <ChevronDown size={16} className={`chevron-arrow ${isScopeOpen ? 'open' : ''}`} />
             </button>
 
             <AnimatePresence>
-              {isClassDropdownOpen && (
-                <motion.div 
+              {isScopeOpen && (
+                <motion.div
                   className="searchable-dropdown-popover glass"
                   initial={{ opacity: 0, y: 8, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -427,60 +408,43 @@ const Resources = ({ userRole = 'student' }) => {
                 >
                   <div className="dropdown-search-box">
                     <Search size={15} className="dropdown-search-icon" />
-                    <input 
-                      ref={classSearchInputRef}
-                      type="text" 
-                      placeholder={isAlbanian ? 'Kërko lëndët, kurset, apo fushat...' : 'Search classes, subjects, or courses...'} 
-                      value={classDropdownSearch}
-                      onChange={(e) => setClassDropdownSearch(e.target.value)}
+                    <input
+                      ref={scopeSearchRef}
+                      type="text"
+                      placeholder={isAlbanian ? 'Kërko lëndët ose klasat…' : 'Search courses or classes…'}
+                      value={scopeSearch}
+                      onChange={(e) => setScopeSearch(e.target.value)}
                     />
-                    {classDropdownSearch && (
-                      <button 
-                        type="button" 
-                        className="dropdown-search-clear"
-                        onClick={() => setClassDropdownSearch('')}
-                      >
+                    {scopeSearch && (
+                      <button type="button" className="dropdown-search-clear" onClick={() => setScopeSearch('')} aria-label={isAlbanian ? 'Pastro' : 'Clear'}>
                         <X size={14} />
                       </button>
                     )}
                   </div>
 
-                  <div className="dropdown-options-list">
-                    {filteredClassGroups.length === 0 ? (
+                  <div className="dropdown-options-list" role="listbox" aria-label={isAlbanian ? 'Materialet për' : 'Materials for'}>
+                    {filteredScopeGroups.length === 0 ? (
                       <div className="dropdown-empty-state">
-                        <span>{isAlbanian ? 'Nuk u gjetën lëndë ose kurse përputhëse' : 'No matching classes or courses found'}</span>
+                        <span>{isAlbanian ? 'Nuk u gjet lëndë ose klasë' : 'No matching course or class'}</span>
                       </div>
                     ) : (
-                      filteredClassGroups.map(group => (
-                        <div key={group.category} className="dropdown-group">
-                          <div className="dropdown-group-title">
-                            {isAlbanian ? (
-                              group.category === 'General Overview' ? 'Përmbledhje e Përgjithshme' :
-                              group.category === 'Academic Classes & Courses' ? 'Lëndët & Kurset Akademike' : group.category
-                            ) : group.category}
-                          </div>
+                      filteredScopeGroups.map(group => (
+                        <div key={group.category} className="dropdown-group" role="group" aria-label={group.category}>
+                          <div className="dropdown-group-title">{group.category}</div>
                           {group.items.map(item => (
-                            <button 
-                              key={item.id} 
+                            <button
+                              key={item.id}
                               type="button"
-                              className={`dropdown-option-row ${activeCategory === item.id ? 'active' : ''}`}
-                              onClick={() => {
-                                setActiveCategory(item.id);
-                                setIsClassDropdownOpen(false);
-                                setClassDropdownSearch('');
-                              }}
+                              role="option"
+                              aria-selected={activeScope === item.id}
+                              className={`dropdown-option-row ${activeScope === item.id ? 'active' : ''}`}
+                              onClick={() => { setActiveScope(item.id); setIsScopeOpen(false); setScopeSearch(''); }}
                             >
                               <div className="option-info">
-                                <span className="option-name">
-                                  {isAlbanian && item.id === 'All' ? 'Të Gjitha Lëndët & Klasat' : item.label}
-                                </span>
-                                <span className="option-desc">
-                                  {isAlbanian && item.id === 'All' ? 'Libraria e plotë e materialeve' : item.desc}
-                                </span>
+                                <span className="option-name">{item.label}</span>
+                                {item.desc && <span className="option-desc">{item.desc}</span>}
                               </div>
-                              {activeCategory === item.id && (
-                                <Check size={16} className="option-check" />
-                              )}
+                              {activeScope === item.id && <Check size={16} className="option-check" />}
                             </button>
                           ))}
                         </div>
@@ -493,150 +457,201 @@ const Resources = ({ userRole = 'student' }) => {
           </div>
         </div>
 
-        {/* Format Selector Pills */}
         <div className="format-pills-row">
           <span className="format-label">{isAlbanian ? 'Formati:' : 'Format:'}</span>
           {FORMAT_TYPES.map(fmt => (
-            <button 
+            <button
               key={fmt}
               type="button"
               className={`format-pill ${activeType === fmt ? 'active' : ''}`}
               onClick={() => setActiveType(fmt)}
             >
-              {isAlbanian && fmt === 'All Types' ? 'Të Gjitha Llojet' : fmt}
+              {fmt === 'All Types' ? (isAlbanian ? 'Të Gjitha Llojet' : 'All Types') : fmt}
             </button>
           ))}
+          <button type="button" className={`format-pill ${bookmarkedOnly ? 'active' : ''}`} onClick={() => setBookmarkedOnly(value => !value)} aria-pressed={bookmarkedOnly}>
+            <Bookmark size={12} /> {isAlbanian ? 'Të ruajturat' : 'Bookmarked'}
+          </button>
         </div>
       </motion.div>
 
-      {/* Resources Feed */}
+      {resourceState.error && resourcesLoaded && (
+        <div className="res-notice is-error" role="alert">{isAlbanian ? 'Materialet nuk mund të ngarkohen. Kontrolloni lejet.' : 'Materials could not be loaded. Check your access.'}</div>
+      )}
+
       <motion.div className={view === 'grid' ? 'resources-grid' : 'resources-list'} variants={itemVariants}>
         <AnimatePresence mode="popLayout">
           {filteredResources.map(res => (
-            <ResourceCard 
-              key={res.id} 
-              resource={res} 
-              view={view} 
+            <ResourceCard
+              key={res.id}
+              resource={res}
+              view={view}
+              contextLabel={contextLabel(res)}
+              isBookmarked={bookmarkIds.has(String(res.id))}
               onToggleBookmark={handleToggleBookmark}
-              onDownload={handleDownload}
-              onDelete={canEditResources ? handleDeleteResource : undefined}
+              onDelete={canDelete(res) ? (resource) => { setDeleteError(''); setResourceToDelete(resource); } : undefined}
+              isAlbanian={isAlbanian}
             />
           ))}
         </AnimatePresence>
-        
+
         {filteredResources.length === 0 && (
           <motion.div className="empty-resources glass" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <Filter size={44} />
-            <h3>{isAlbanian ? 'Nuk u gjetën materiale' : 'No resources found'}</h3>
-            <p>{isAlbanian ? 'Provoni të rregulloni kërkimin ose filtrin e formatit.' : 'Try adjusting your search query or format filter.'}</p>
+            <h3>{!resourcesLoaded ? (isAlbanian ? 'Po ngarkohen materialet…' : 'Loading materials…') : resources.length === 0 ? (isAlbanian ? 'Ende nuk ka materiale' : 'No materials yet') : (isAlbanian ? 'Nuk u gjetën materiale' : 'No materials found')}</h3>
+            <p>{resources.length === 0
+              ? (canAddResources ? (isAlbanian ? 'Shtoni materialin e parë me lidhjen e tij.' : 'Add the first material with its link.') : '')
+              : (isAlbanian ? 'Provoni të rregulloni kërkimin ose filtrat.' : 'Try adjusting your search or filters.')}</p>
           </motion.div>
         )}
       </motion.div>
 
-      {/* ── MODAL: Add Resource ── */}
+      {/* ── MODAL: Add Material ── */}
       <AnimatePresence>
         {isAddOpen && (
-          <div className="modal-overlay" onClick={() => setIsAddOpen(false)}>
-            <motion.div 
+          <div className="modal-overlay" onClick={() => !saving && setIsAddOpen(false)}>
+            <motion.div
               className="modal-content"
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
               onClick={e => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="res-add-title"
             >
               <div className="modal-header">
-                <h3>{isAlbanian ? 'Shto Material Studimi' : 'Add Study Material'}</h3>
-                <p className="modal-subtitle">{isAlbanian ? 'Publikoni fletë pune, ligjërata me video, silabuse, ose materiale leximi.' : 'Publish a worksheet, video link, syllabus, or reading guide.'}</p>
-                <button type="button" className="icon-btn-close" onClick={() => setIsAddOpen(false)} aria-label="Close">
+                <h3 id="res-add-title">{isAlbanian ? 'Shto Material Studimi' : 'Add Study Material'}</h3>
+                <p className="modal-subtitle">{isAlbanian ? 'Ndani një lidhje për fletë pune, video, prezantime ose udhëzues.' : 'Share a link to a worksheet, video, slides or reading guide.'}</p>
+                <button type="button" className="icon-btn-close" onClick={() => setIsAddOpen(false)} aria-label={isAlbanian ? 'Mbyll' : 'Close'} disabled={saving}>
                   <X size={16} />
                 </button>
               </div>
 
-              <form onSubmit={handleAddSubmit} className="modal-form">
+              <form onSubmit={handleAddSubmit} className="modal-form" noValidate>
+                {formError && <div className="res-notice is-error" role="alert"><AlertTriangle size={15} /> {formError}</div>}
                 <div className="input-group">
-                  <label>{isAlbanian ? 'Titulli i Materialit' : 'Material Title'}</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder={isAlbanian ? 'p.sh. Udhëzues Studimi për Kapitullin 4 në Kimi' : 'e.g. Chapter 4 Chemistry Study Guide'} 
-                    value={newResource.title}
-                    onChange={e => setNewResource({ ...newResource, title: e.target.value })}
+                  <label htmlFor="res-title">{isAlbanian ? 'Titulli i Materialit' : 'Material Title'}</label>
+                  <input
+                    id="res-title"
+                    type="text"
+                    required
+                    maxLength={200}
+                    placeholder={isAlbanian ? 'p.sh. Udhëzues për Kapitullin 4 në Kimi' : 'e.g. Chapter 4 Chemistry Study Guide'}
+                    value={form.title}
+                    onChange={e => setForm({ ...form, title: e.target.value })}
                   />
                 </div>
 
+                <div className="input-group">
+                  <label htmlFor="res-url">{isAlbanian ? 'Lidhja e materialit' : 'Link to the material'}</label>
+                  <input
+                    id="res-url"
+                    type="url"
+                    required
+                    placeholder="https://drive.google.com/…"
+                    value={form.url}
+                    onChange={e => setForm({ ...form, url: e.target.value })}
+                  />
+                  <small>{isAlbanian ? 'Google Drive, OneDrive, YouTube ose çdo faqe interneti. Sigurohuni që nxënësit kanë qasje.' : 'Google Drive, OneDrive, YouTube or any web page. Make sure students have access.'}</small>
+                </div>
+
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Kategoria' : 'Category'}</label>
-                    <select 
-                      value={newResource.category} 
-                      onChange={e => setNewResource({ ...newResource, category: e.target.value })}
-                      className="custom-form-select"
-                    >
-                      {CATEGORIES.filter(c => c !== 'All').map(c => {
-                        const catTrans = {
-                          'Mathematics': 'Matematikë',
-                          'Science': 'Shkencë',
-                          'Literature': 'Letërsi',
-                          'History': 'Histori',
-                          'Arts': 'Arte',
-                          'Computer Science': 'Shkenca Kompjuterike'
-                        };
-                        return (
-                          <option key={c} value={c}>
-                            {isAlbanian && catTrans[c] ? catTrans[c] : c}
-                          </option>
-                        );
-                      })}
+                    <label htmlFor="res-course">{isAlbanian ? 'Lënda (opsionale)' : 'Course (optional)'}</label>
+                    <select id="res-course" className="custom-form-select" value={form.courseId}
+                      onChange={e => {
+                        const course = courseById.get(e.target.value);
+                        setForm({ ...form, courseId: e.target.value, classGroupId: course?.classGroupId && groupsById.has(String(course.classGroupId)) ? String(course.classGroupId) : form.classGroupId });
+                      }}>
+                      <option value="">{isAlbanian ? 'Asnjë lëndë' : 'No course'}</option>
+                      {classesList.map(course => <option key={course.id} value={String(course.id)}>{course.name}{course.code ? ` (${course.code})` : ''}</option>)}
                     </select>
                   </div>
-
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Lloji i Formatit' : 'Format Type'}</label>
-                    <select 
-                      value={newResource.type} 
-                      onChange={e => setNewResource({ ...newResource, type: e.target.value })}
-                      className="custom-form-select"
-                    >
-                      <option value="PDF">{isAlbanian ? 'Dokument PDF' : 'PDF Document'}</option>
-                      <option value="Video">{isAlbanian ? 'Ligjëratë Video' : 'Video Lecture'}</option>
-                      <option value="Link">{isAlbanian ? 'Vegëz Interaktive Web' : 'Interactive Web Link'}</option>
-                      <option value="Doc">{isAlbanian ? 'Dokument Word / Tekst' : 'Word / Text Doc'}</option>
+                    <label htmlFor="res-class">{isAlbanian ? 'Klasa (opsionale)' : 'Class (optional)'}</label>
+                    <select id="res-class" className="custom-form-select" value={form.classGroupId} onChange={e => setForm({ ...form, classGroupId: e.target.value })}>
+                      <option value="">{isAlbanian ? 'Të gjitha klasat' : 'All classes'}</option>
+                      {classGroups.map(group => <option key={group.id} value={group.id}>{isAlbanian ? 'Klasa' : 'Class'} {group.label}</option>)}
                     </select>
                   </div>
                 </div>
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Autori / Mësimdhënësi' : 'Author / Teacher'}</label>
-                    <input 
-                      type="text" 
-                      placeholder={isAlbanian ? 'p.sh. Dr. Sarah Smith' : 'e.g. Dr. Sarah Smith'}
-                      value={newResource.author}
-                      onChange={e => setNewResource({ ...newResource, author: e.target.value })}
-                    />
+                    <label htmlFor="res-type">{isAlbanian ? 'Lloji' : 'Type'}</label>
+                    <select
+                      id="res-type"
+                      value={form.type}
+                      onChange={e => setForm({ ...form, type: e.target.value })}
+                      className="custom-form-select"
+                    >
+                      <option value="PDF">{isAlbanian ? 'Dokument PDF' : 'PDF Document'}</option>
+                      <option value="Video">{isAlbanian ? 'Video' : 'Video'}</option>
+                      <option value="Slides">{isAlbanian ? 'Prezantim' : 'Slides'}</option>
+                      <option value="Doc">{isAlbanian ? 'Dokument Word / Tekst' : 'Word / Text Doc'}</option>
+                      <option value="Link">{isAlbanian ? 'Faqe interneti' : 'Web page'}</option>
+                    </select>
                   </div>
 
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Madhësia / Kohëzgjatja' : 'File Size / Duration'}</label>
-                    <input 
-                      type="text" 
-                      placeholder={isAlbanian ? 'p.sh. 3.2 MB ose 18:40' : 'e.g. 3.2 MB or 18:40'}
-                      value={newResource.size}
-                      onChange={e => setNewResource({ ...newResource, size: e.target.value })}
+                    <label htmlFor="res-author">{isAlbanian ? 'Autori / Mësimdhënësi' : 'Author / Teacher'}</label>
+                    <input
+                      id="res-author"
+                      type="text"
+                      maxLength={120}
+                      value={form.author}
+                      onChange={e => setForm({ ...form, author: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="modal-footer-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setIsAddOpen(false)}>
+                  <button type="button" className="btn-secondary" onClick={() => setIsAddOpen(false)} disabled={saving}>
                     {isAlbanian ? 'Anulo' : 'Cancel'}
                   </button>
-                  <button type="submit" className="btn-primary">
-                    {isAlbanian ? 'Publiko Materialin' : 'Publish Material'}
+                  <button type="submit" className="btn-primary" disabled={saving}>
+                    {saving ? (isAlbanian ? 'Duke ruajtur…' : 'Saving…') : (isAlbanian ? 'Publiko Materialin' : 'Publish Material')}
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: Delete Material ── */}
+      <AnimatePresence>
+        {resourceToDelete && (
+          <div className="modal-overlay" onClick={() => setResourceToDelete(null)}>
+            <motion.div
+              className="modal-content"
+              style={{ maxWidth: '440px' }}
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              onClick={e => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="res-delete-title"
+            >
+              <div className="modal-header">
+                <h3 id="res-delete-title">{isAlbanian ? 'Fshij materialin?' : 'Delete material?'}</h3>
+                <p className="modal-subtitle">{resourceToDelete.title}</p>
+                <button type="button" className="icon-btn-close" onClick={() => setResourceToDelete(null)} aria-label={isAlbanian ? 'Mbyll' : 'Close'}>
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="modal-form">
+                <p>{isAlbanian ? 'Materiali hiqet nga biblioteka për të gjithë. Skedari në lidhje nuk preket.' : 'The material is removed from the library for everyone. The linked file itself is not touched.'}</p>
+                {deleteError && <div className="res-notice is-error" role="alert">{deleteError}</div>}
+                <div className="modal-footer-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setResourceToDelete(null)}>{isAlbanian ? 'Anulo' : 'Cancel'}</button>
+                  <button type="button" className="btn-destructive" onClick={confirmDelete}><Trash2 size={15} /> {isAlbanian ? 'Fshij' : 'Delete'}</button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

@@ -3,7 +3,9 @@ import { Crown, School as SchoolIcon, Users } from 'lucide-react';
 import { Avatar } from '../Avatar';
 import { Badge, CopyButton, Dialog, EmptyState } from './shared';
 import { formatDateTime, formatNumber, relativeTime, roleLabel } from '../../features/platformAdmin/format';
-import { userSchoolIds } from '../../features/platformAdmin/metrics';
+import { compareIsoDesc, userSchoolIds } from '../../features/platformAdmin/metrics';
+
+const MEMBER_LIST_LIMIT = 100;
 
 function Fact({ label, value, hint }) {
   return (
@@ -93,7 +95,8 @@ export function SchoolDetailDialog({ school, users, activity, now, rangeLabel, o
       user,
       role: user.memberships.find(item => item.schoolId === school.id)?.role || (user.createdSchools?.includes(school.id) ? 'admin' : null),
     }))
-    .sort((a, b) => (b.user.lastSeenAt || '').localeCompare(a.user.lastSeenAt || '')), [users, school.id]);
+    .sort((a, b) => compareIsoDesc(a.user.lastSeenAt, b.user.lastSeenAt)), [users, school.id]);
+  const shownMembers = members.slice(0, MEMBER_LIST_LIMIT);
   const roles = Object.entries(school.members.byRole).sort((a, b) => b[1] - a[1]);
 
   return (
@@ -101,7 +104,8 @@ export function SchoolDetailDialog({ school, users, activity, now, rangeLabel, o
       <div className="padm-facts">
         <Fact label="Active members" value={formatNumber(school.members.active)} />
         <Fact label={`Active · ${rangeLabel.toLowerCase()}`} value={formatNumber(activity?.activeMembers || 0)} />
-        <Fact label="Classes" value={school.classes === null ? '—' : formatNumber(school.classes)} />
+        <Fact label="Courses" value={school.courses == null ? '—' : formatNumber(school.courses)} />
+        <Fact label="Classes" value={school.classGroups == null ? '—' : formatNumber(school.classGroups)} />
         <Fact label="Lesson plans" value={school.lessonPlans === null ? '—' : formatNumber(school.lessonPlans)} />
         <Fact label="Last activity" value={relativeTime(activity?.lastActiveAt, now)} hint={formatDateTime(activity?.lastActiveAt)} />
         <Fact label="Creator" value={school.creatorEmail || '—'} hint={school.creatorExists ? undefined : 'Creator account no longer exists'} />
@@ -117,7 +121,7 @@ export function SchoolDetailDialog({ school, users, activity, now, rangeLabel, o
       <h4 className="padm-section-title">Members by last seen</h4>
       {members.length ? (
         <ul className="padm-list">
-          {members.map(({ user, role }) => (
+          {shownMembers.map(({ user, role }) => (
             <li key={user.uid}>
               <button type="button" className="padm-list-row" onClick={() => onOpenUser(user.uid)}>
                 <Avatar src={user.photoURL} name={user.name} size={32} />
@@ -132,6 +136,9 @@ export function SchoolDetailDialog({ school, users, activity, now, rangeLabel, o
         </ul>
       ) : (
         <EmptyState icon={Users} title="No active members" />
+      )}
+      {members.length > shownMembers.length && (
+        <p className="padm-footnote">Showing the {formatNumber(shownMembers.length)} most recently seen of {formatNumber(members.length)} members. Search the Accounts view by school name to see everyone.</p>
       )}
     </Dialog>
   );

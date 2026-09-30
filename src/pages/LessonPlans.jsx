@@ -150,7 +150,7 @@ function Section({ id, title, subtitle, children, open, onToggle }) {
 function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser = {}, language = 'en', onLanguageChange, scheduledLesson = null, onScheduledLessonConsumed }) {
   const t = (key, values) => translate(language, key, values);
   const ct = (value) => translateCatalogValue(language, value);
-  const { staffList } = useSchoolData();
+  const { staffList, classGroups = [], classesList = [] } = useSchoolData();
   const { 
     activeSchoolId, 
     activeSchool, 
@@ -483,6 +483,14 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     archived: plans.filter((plan) => plan.status === 'archived').length,
   };
   const classes = unique([...plans.map((plan) => plan.classLabel), ...(preferences.assignedClasses || [])]);
+  // The school's real classes, the teacher's own (taught courses and homeroom) first.
+  const myUid = String(authUser?.uid || currentUser?.uid || '');
+  const schoolClassLabels = unique([
+    ...classesList.filter((course) => course.classGroupId && String(course.teacherId || '') === myUid)
+      .map((course) => classGroups.find((group) => group.id === course.classGroupId)?.label),
+    ...classGroups.filter((group) => String(group.homeroomTeacherId || '') === myUid).map((group) => group.label),
+    ...classGroups.map((group) => group.label),
+  ].filter(Boolean));
   const subjects = unique([...plans.map((plan) => plan.subject), ...SUBJECTS.map((subject) => subject.name)]);
   const topicMatches = topics.filter((topic) => (!topic.classLabel || topic.classLabel === activePlan?.classLabel) && (!topic.subject || topic.subject === activePlan?.subject));
   const reusableFor = (type) => reusable.filter((entry) => entry.type === type);
@@ -627,7 +635,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           <Field label={t('settings.academicYear')}><input value={settingsDraft.academicYear || ''} onChange={(event) => setSettingsDraft({ ...settingsDraft, academicYear: event.target.value })} placeholder={t('settings.exampleAcademicYear')} /></Field>
           <Field label={t('settings.duration')}><input type="number" min="1" max="240" value={settingsDraft.duration || ''} onChange={(event) => setSettingsDraft({ ...settingsDraft, duration: event.target.value })} placeholder="45" /></Field>
           <label className="lesson-check-row"><input type="checkbox" checked={Boolean(settingsDraft.rememberLastUsed)} onChange={(event) => setSettingsDraft({ ...settingsDraft, rememberLastUsed: event.target.checked })} /> {t('settings.rememberLastUsed')}</label>
-          <datalist id="lesson-assigned-classes">{(settingsDraft.assignedClasses || []).map((value) => <option key={value} value={value} />)}</datalist>
+          <datalist id="lesson-assigned-classes">{unique([...(settingsDraft.assignedClasses || []), ...schoolClassLabels]).map((value) => <option key={value} value={value} />)}</datalist>
         </div>
         <div className="lesson-settings-footer">
           <button 
@@ -694,7 +702,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       <div className="lesson-settings-side">
         <div className="lesson-settings-card glass"><div className="lesson-settings-heading"><span><BookOpen size={20} /></span><div><h2>{t('settings.topicHeading')}</h2><p>{t('settings.topicDescription')}</p></div></div>
           <div className="lesson-settings-fields"><Field label={t('settings.topic')}><input value={topicDraft.title} onChange={(event) => setTopicDraft({ ...topicDraft, title: event.target.value })} placeholder={t('settings.topicPlaceholder')} /></Field>
-            <Field label={t('editor.class')}><input value={topicDraft.classLabel} onChange={(event) => setTopicDraft({ ...topicDraft, classLabel: event.target.value })} placeholder={t('settings.exampleClass')} /></Field>
+            <Field label={t('editor.class')}><input list="lesson-assigned-classes" value={topicDraft.classLabel} onChange={(event) => setTopicDraft({ ...topicDraft, classLabel: event.target.value })} placeholder={t('settings.exampleClass')} /></Field>
             <Field label={t('editor.subject')}><select value={topicDraft.subject} onChange={(event) => setTopicDraft({ ...topicDraft, subject: event.target.value })}><option value="">{t('settings.selectSubject')}</option>{listSubjects({ schoolSubjects }).map((subject) => <option key={subject.name} value={subject.name}>{ct(subject.name)}</option>)}</select></Field>
             <Field label={t('settings.topicOutcome')}><textarea value={topicDraft.outcome} onChange={(event) => setTopicDraft({ ...topicDraft, outcome: event.target.value })} rows="3" placeholder={t('settings.topicOutcomePlaceholder')} /></Field>
             <button type="button" className="btn-secondary" onClick={() => { if (!topicDraft.title.trim()) return notify(t('validation.topicRequired')); if (!topicDraft.subject) return notify(t('validation.topicSubjectRequired')); try { const newTop = { ...topicDraft, id: makeId() }; repository.saveTopic(newTop); if (activeSchoolId) { setDoc(doc(db, 'schools', activeSchoolId, 'topics', String(newTop.id)), newTop, { merge: true }).catch(() => {}); } setTopicDraft({ title: '', classLabel: '', subject: '', outcome: '' }); refresh(); notify(t('notice.topicSaved')); } catch { notify(t('validation.saveFailed')); } }}><Plus size={16} /> {t('settings.saveTopic')}</button>
@@ -735,7 +743,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           />
           <Section id="lesson-basics" title={t('editor.basicsTitle')} subtitle={t('editor.basicsSubtitle')} open={expanded.basics} onToggle={() => toggleSection('basics')}>
             <div className="lesson-form-grid"><Field label={t('editor.date')}><input type="date" value={activePlan.date || ''} onChange={(event) => updatePlan({ date: event.target.value })} /></Field>
-              <Field label={t('editor.class')}><input list="lesson-class-list" value={activePlan.classLabel || ''} onChange={(event) => changeClass(event.target.value)} placeholder={t('settings.exampleClass')} /><datalist id="lesson-class-list">{unique([...(preferences.assignedClasses || []), preferences.defaultClass]).map((value) => <option key={value} value={value} />)}</datalist></Field>
+              <Field label={t('editor.class')}><input list="lesson-class-list" value={activePlan.classLabel || ''} onChange={(event) => changeClass(event.target.value)} placeholder={t('settings.exampleClass')} /><datalist id="lesson-class-list">{unique([...(preferences.assignedClasses || []), preferences.defaultClass, ...schoolClassLabels]).filter(Boolean).map((value) => <option key={value} value={value} />)}</datalist></Field>
               <Field label={t('editor.subject')}><SubjectPicker value={activePlan.subject || ''} onChange={changeSubject} classLabel={activePlan.classLabel} schoolSubjects={schoolSubjects} /></Field>
               <Field label={t('editor.lessonUnit')} className="lesson-grid-wide"><input value={activePlan.lessonUnit || ''} onChange={(event) => updatePlan({ lessonUnit: event.target.value })} placeholder={t('editor.lessonUnitPlaceholder')} autoFocus /></Field>
             </div>

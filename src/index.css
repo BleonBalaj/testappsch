@@ -178,6 +178,75 @@ a {
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ── Page headers ──────────────────────────────────────────
+   One definition for every page title block. Page stylesheets must not
+   redefine .page-header, .header-left or .title-group: all CSS ships in one
+   bundle, so a page-level rule restyles every other page too. */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  margin: 0;
+}
+
+.page-header .header-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.page-header .title-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.page-header h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: clamp(1.75rem, 2.4vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.page-header .page-title-icon {
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+.page-header .header-left > p {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.page-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.count-pill {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  color: hsl(var(--primary));
+  border: 1px solid hsla(var(--primary), 0.3);
+  white-space: nowrap;
+}
+
 .bouncy:hover {
   transform: scale(1.05);
 }

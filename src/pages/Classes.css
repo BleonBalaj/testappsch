@@ -1,7 +1,7 @@
 .classes-page {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 1.5rem;
 }
 
 .classes-controls-bar {
@@ -652,4 +652,74 @@
 .btn-destructive:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Courses / Classes switch ── */
+.classes-view-switch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem;
+  border-radius: 18px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+}
+
+[data-theme='light'] .classes-view-switch {
+  background: #ffffff;
+  border: 1px solid hsla(270, 20%, 88%, 1);
+}
+
+.classes-view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.classes-view-tab:hover {
+  background: hsla(var(--foreground), 0.05);
+  color: hsl(var(--foreground));
+}
+
+.classes-view-tab.active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground, 0 0% 100%));
+  box-shadow: 0 4px 14px hsla(var(--primary), 0.35);
+}
+
+.classes-view-tab:not(.active) .tab-pill-counter {
+  background: hsla(var(--foreground), 0.1);
+  color: hsl(var(--muted-foreground));
+}
+
+.classes-view-hint {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0 0.5rem;
+  font-size: 0.82rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.class-link-badge {
+  color: hsl(var(--primary));
+  border-color: hsla(var(--primary), 0.35);
+  background: hsla(var(--primary), 0.1);
+}
+
+.class-link-badge.is-open {
+  color: hsl(var(--muted-foreground));
+  border-color: hsla(var(--border), 0.5);
+  background: hsla(var(--background), 0.6);
 }

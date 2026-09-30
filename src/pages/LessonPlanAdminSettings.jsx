@@ -5,6 +5,7 @@ import { translateCatalogValue } from '../features/lessonPlans/i18n';
 import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
+import { useSchoolData } from '../context/SchoolDataContext';
 import './LessonPlanAdminSettings.css';
 
 const copy = {
@@ -178,6 +179,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
   const idPrefix = useId();
   const deleteTrigger = useRef(null);
   const { activeSchoolId } = useAuth();
+  const { classGroups = [] } = useSchoolData();
   const [subjects, setSubjects] = useState(() => repository.listSubjectMappings());
   const [stages, setStages] = useState(() => repository.listStageMappings());
   const [subjectDraft, setSubjectDraft] = useState(EMPTY_SUBJECT);
@@ -456,7 +458,8 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
             </label>
             <label className="lp-admin-field">
               <span>{t(stageDraft.scope === 'grade' ? 'gradeSingular' : 'classSingular')}</span>
-              <input value={stageDraft.target} onChange={(event) => setStageDraft({ ...stageDraft, target: event.target.value })} placeholder={t(stageDraft.scope === 'grade' ? 'gradePlaceholder' : 'classPlaceholder')} required />
+              <input list={stageDraft.scope === 'class' ? `${idPrefix}-school-classes` : undefined} value={stageDraft.target} onChange={(event) => setStageDraft({ ...stageDraft, target: event.target.value })} placeholder={t(stageDraft.scope === 'grade' ? 'gradePlaceholder' : 'classPlaceholder')} required />
+              <datalist id={`${idPrefix}-school-classes`}>{classGroups.map((group) => <option key={group.id} value={group.label} />)}</datalist>
             </label>
             <label className="lp-admin-field lp-admin-field-wide">
               <span>{t('stage')}</span>

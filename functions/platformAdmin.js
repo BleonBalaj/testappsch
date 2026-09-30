@@ -5,7 +5,9 @@ import { HttpsError } from 'firebase-functions/v2/https';
 // decides what to render, and Firestore rules grant this email nothing extra.
 export const PLATFORM_ADMIN_EMAILS = Object.freeze(['admin@bleon.com']);
 
-export const USER_ROW_LIMIT = 10000;
+// Rows sent to the browser, which searches, filters and sorts them locally.
+// Totals and health checks always cover every account.
+export const USER_ROW_LIMIT = 50000;
 const SAMPLE_LIMIT = 12;
 const COUNT_CONCURRENCY = 8;
 const WRITE_CHUNK = 400;
@@ -117,6 +119,12 @@ export function buildPlatformSnapshot({
   for (const school of schools) if (school.creatorUid && authById.has(school.creatorUid)) schoolAccessUids.add(school.creatorUid);
 
   const aiByUid = new Map(aiUsage.map(item => [item.uid, Number.isInteger(item.used) && item.used > 0 ? item.used : 0]));
+  const createdByUid = new Map();
+  for (const school of schools) {
+    if (!school.creatorUid) continue;
+    if (!createdByUid.has(school.creatorUid)) createdByUid.set(school.creatorUid, []);
+    createdByUid.get(school.creatorUid).push(school.id);
+  }
 
   const users = authUsers.map(user => {
     const email = normalizeEmail(user.email) || null;
@@ -136,12 +144,14 @@ export function buildPlatformSnapshot({
       lastSeenAt: laterIso(lastSignInAt, toIso(user.metadata?.lastRefreshTime)),
       hasProfile: profileIds.has(user.uid),
       memberships: membershipsByUid.get(user.uid) || [],
-      createdSchools: schools.filter(school => school.creatorUid === user.uid).map(school => school.id),
+      createdSchools: createdByUid.get(user.uid) || [],
       aiGenerations: aiByUid.get(user.uid) || 0,
       isPlatformAdmin: isPlatformAdminEmail(email),
     };
   });
-  users.sort((a, b) => (b.lastSeenAt || '').localeCompare(a.lastSeenAt || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
+  // ISO strings compare correctly as plain strings, which is much faster than localeCompare at scale.
+  const isoDesc = (x, y) => ((x || '') < (y || '') ? 1 : (x || '') > (y || '') ? -1 : 0);
+  users.sort((a, b) => isoDesc(a.lastSeenAt, b.lastSeenAt) || isoDesc(a.createdAt, b.createdAt));
 
   const schoolRows = schools.map(school => {
     const stats = memberStats.get(school.id);
@@ -155,7 +165,8 @@ export function buildPlatformSnapshot({
       createdAt: toIso(school.createdAt),
       academicYear: typeof school.academicYear === 'string' ? school.academicYear : null,
       members: stats,
-      classes: Number.isInteger(counts.classes) ? counts.classes : null,
+      courses: Number.isInteger(counts.courses) ? counts.courses : null,
+      classGroups: Number.isInteger(counts.classGroups) ? counts.classGroups : null,
       lessonPlans: Number.isInteger(counts.lessonPlans) ? counts.lessonPlans : null,
     };
   });
@@ -166,10 +177,10 @@ export function buildPlatformSnapshot({
 
   const missingProfiles = authUsers.filter(user => !profileIds.has(user.uid));
   const withoutSchool = authUsers.filter(user => !user.disabled && !schoolAccessUids.has(user.uid) && !isPlatformAdminEmail(user.email));
-  const withoutAdmin = schools.filter(school => {
-    if (school.creatorUid && authById.has(school.creatorUid)) return false;
-    return !memberships.some(item => item.schoolId === school.id && item.role === 'admin' && item.status === 'active' && authById.has(item.uid));
-  });
+  const schoolsWithActiveAdmin = new Set(memberships
+    .filter(item => item.role === 'admin' && item.status === 'active' && authById.has(item.uid))
+    .map(item => item.schoolId));
+  const withoutAdmin = schools.filter(school => !(school.creatorUid && authById.has(school.creatorUid)) && !schoolsWithActiveAdmin.has(school.id));
   const emptySchools = schools.filter(school => memberStats.get(school.id).active === 0 && !(school.creatorUid && authById.has(school.creatorUid)));
   const conversationIndexPending = conversationIndex?.completedAt ? [] : [{ id: 'conversations', label: 'Conversation access index has not been built yet' }];
 
@@ -277,15 +288,18 @@ async function loadPlatformData(db, auth) {
   const existing = new Set(schools.map(school => school.id));
   const perSchool = await mapLimit(allIds, COUNT_CONCURRENCY, async schoolId => {
     const ref = db.collection('schools').doc(schoolId);
-    const [members, classes, lessonPlans] = await Promise.all([
+    const exists = existing.has(schoolId);
+    const [members, courses, classGroups, lessonPlans] = await Promise.all([
       ref.collection('members').select('role', 'status', 'name', 'email').get(),
-      existing.has(schoolId) ? ref.collection('classes').count().get() : null,
-      existing.has(schoolId) ? ref.collection('lessonPlans').count().get() : null,
+      exists ? ref.collection('classes').count().get() : null,
+      exists ? ref.collection('classGroups').count().get() : null,
+      exists ? ref.collection('lessonPlans').count().get() : null,
     ]);
     return {
       schoolId,
       memberships: members.docs.map(doc => ({ schoolId, uid: doc.id, ...doc.data() })),
-      counts: classes && lessonPlans ? { classes: classes.data().count, lessonPlans: lessonPlans.data().count } : null,
+      // "classes" is the course collection; homeroom classes live in classGroups.
+      counts: exists ? { courses: courses.data().count, classGroups: classGroups.data().count, lessonPlans: lessonPlans.data().count } : null,
     };
   });
   return {

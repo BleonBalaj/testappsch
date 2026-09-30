@@ -19,7 +19,7 @@ import './Settings.css';
 
 const PERMISSIBLE_MODULES = [
   { id: 'schedule', label: 'Class Timetable', desc: 'Daily schedule and period timetable', icon: Calendar },
-  { id: 'classes', label: 'Courses & Classes', desc: 'Curriculum classes and course rosters', icon: Book },
+  { id: 'classes', label: 'Courses & Classes', desc: 'Courses, classes (e.g. 10A) and their rosters', icon: Book },
   { id: 'lesson-plans', label: 'Lesson Planning', desc: 'Lesson preparation & curriculum stages', icon: BookOpen },
   { id: 'tasks', label: 'Tasks & Homework', desc: 'Personal task manager and to-do lists', icon: CheckSquare },
   { id: 'messages', label: 'Campus Messages', desc: 'Direct messaging and announcement channels', icon: MessageSquare },
@@ -767,7 +767,7 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
               <strong>Active Portal: {currentRole === 'student' ? t('nav.student') : currentRole === 'teacher' ? t('nav.teacher') : t('nav.admin')}</strong>
               <p>
                 {currentRole === 'student' 
-                  ? 'Access to enrolled classes, gradebook, transcripts, and personal tasks.'
+                  ? 'Access to enrolled courses, gradebook, transcripts, and personal tasks.'
                   : currentRole === 'teacher'
                   ? 'Access to lesson planning, gradebook, class notes, and student rosters.'
                   : 'Access to school-wide governance, curriculum policies, and staff invitations.'}
@@ -1239,7 +1239,7 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
                   <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))' }}>
                     {isAlbanian 
                       ? 'Përcaktoni nëse mësimdhënësit kanë të drejtë të modifikojnë dhe fshijnë lëndët nga katalogu i shkollës.'
-                      : 'Control whether teachers can edit course information and delete classes from the catalog.'}
+                      : 'Control whether teachers can edit course information and delete courses from the catalog.'}
                   </p>
                 </div>
 
@@ -1250,11 +1250,11 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
                         <Edit3 size={18} />
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <strong>{isAlbanian ? 'Përpunimi & Fshirja e Lëndëve' : 'Edit & Delete Classes'}</strong>
+                        <strong>{isAlbanian ? 'Përpunimi & Fshirja e Lëndëve' : 'Edit & Delete Courses'}</strong>
                         <p>
                           {isAlbanian 
-                            ? 'Lejon mësimdhënësit të ndryshojnë emrin e lëndës, arsimtarin, sallën, orarin dhe të fshijnë lëndët' 
-                            : 'Allow teachers to edit class name, teacher, schedule, room, and delete classes'}
+                            ? 'Lejon mësimdhënësit të ndryshojnë emrin e lëndës, arsimtarin, klasën, sallën, orarin dhe të fshijnë lëndët. Klasat (10A…) i menaxhojnë administratorët.' 
+                            : 'Allow teachers to edit a course\'s name, teacher, class, schedule and room, and delete courses. Classes (10A…) are managed by administrators.'}
                         </p>
                       </div>
                     </div>
@@ -1277,8 +1277,8 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
                         <strong>{isAlbanian ? 'Përpunimi & Fshirja e Nxënësve' : 'Edit & Delete Students'}</strong>
                         <p>
                           {isAlbanian 
-                            ? 'Lejon mësimdhënësit të modifikojnë profilin e nxënësve, lëndët e caktuara dhe të fshijnë nxënës' 
-                            : 'Allow teachers to edit student profiles, course enrollments, and delete students'}
+                            ? 'Lejon mësimdhënësit të modifikojnë profilin e nxënësve, klasën, lëndët e caktuara dhe të fshijnë nxënës' 
+                            : 'Allow teachers to edit student profiles, their class and course enrollments, and delete students'}
                         </p>
                       </div>
                     </div>

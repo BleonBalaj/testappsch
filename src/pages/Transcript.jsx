@@ -4,20 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { enrolledCoursesForStudent } from '../features/enrollment';
+import { classGroupsById, studentClassLabel } from '../features/classGroups';
 import { courseResult } from '../features/gradebook/schoolResults';
 import { useCourseRecords } from '../features/gradebook/useCourseRecords';
 import './Transcript.css';
 
 const Transcript = ({ userRole = 'student' }) => {
   const { currentUser, activeSchool, activeSchoolId } = useAuth();
-  const { studentsList, classesList, classesLoaded } = useSchoolData();
+  const { myStudentRecord: student, classesList, classesLoaded, classGroups = [] } = useSchoolData();
   const { isAlbanian } = useLanguage();
   const [search, setSearch] = useState('');
-  const student = useMemo(() => studentsList.find(item =>
-    String(item.id) === String(currentUser?.uid) ||
-    (item.uid && String(item.uid) === String(currentUser?.uid)) ||
-    (item.email && item.email.toLowerCase() === currentUser?.email?.toLowerCase())
-  ), [studentsList, currentUser?.uid, currentUser?.email]);
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
   const courses = useMemo(() => enrolledCoursesForStudent(student, classesList), [student, classesList]);
   const { records, loading, error } = useCourseRecords(activeSchoolId, courses);
   const allRows = useMemo(() => courses.map(course => ({
@@ -70,7 +67,7 @@ const Transcript = ({ userRole = 'student' }) => {
         </div>
         <div className="student-credentials-grid">
           <div className="cred-field"><span className="cred-label">{isAlbanian ? 'Nxënësi' : 'Student'}</span><span className="cred-val highlight">{student?.name || currentUser?.displayName || '—'}</span></div>
-          <div className="cred-field"><span className="cred-label">{isAlbanian ? 'Klasa' : 'Class'}</span><span className="cred-val">{student?.grade || '—'}</span></div>
+          <div className="cred-field"><span className="cred-label">{isAlbanian ? 'Klasa' : 'Class'}</span><span className="cred-val">{studentClassLabel(student, groupsById) || '—'}</span></div>
           <div className="cred-field"><span className="cred-label">{isAlbanian ? 'Lëndë me nota' : 'Graded courses'}</span><span className="cred-val">{loading || !classesLoaded ? '—' : graded.length}</span></div>
           <div className="cred-field"><span className="cred-label">{isAlbanian ? 'Mesatarja e lëndëve me nota' : 'Average of graded courses'}</span><span className="cred-val">{loading || !classesLoaded || average === null ? '—' : `${average}%`}</span></div>
         </div>

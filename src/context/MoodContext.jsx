@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './AuthContext';
+import { MOODS, localDateKey } from '../features/moods';
 
 const MoodContext = createContext();
 
@@ -49,9 +50,12 @@ export const MoodProvider = ({ children }) => {
   }, [currentUser?.uid]);
 
   const addMoodEntry = async (mood, note = '') => {
-    const cleanMood = mood || 'happy';
+    // Only a mood the person picked is recorded; nothing defaults to "happy".
+    if (!MOODS.includes(mood)) return;
+    const cleanMood = mood;
     const cleanNote = typeof note === 'string' ? note.trim() : (note ? String(note).trim() : '');
-    const today = new Date().toISOString().split('T')[0];
+    // The person's own calendar day, not UTC (which is a day behind after midnight in Kosovo).
+    const today = localDateKey();
     const newEntry = { 
       id: today, 
       date: today, 
@@ -102,7 +106,7 @@ export const MoodProvider = ({ children }) => {
   };
 
   const getTodayMood = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateKey();
     return moodHistory.find(item => item.date === today);
   };
 

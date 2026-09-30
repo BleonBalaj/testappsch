@@ -10,7 +10,19 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { isStudentEnrolledInCourse } from '../features/enrollment';
 import { parseWeeklySchedule } from '../features/courseSchedule';
+import { stageForClass } from '../features/lessonPlans/catalog';
+import { classGroupsById, homeroomTeacherInfo } from '../features/classGroups';
+import { useStudentCounts } from '../features/students/studentData';
+import ClassGroupsView from '../components/classGroups/ClassGroupsView';
+import ClassGroupForm from '../components/classGroups/ClassGroupForm';
 import './Classes.css';
+
+const VIEW_STORAGE_KEY = 'lumi-classes-view';
+const readStoredView = () => {
+  try { return localStorage.getItem(VIEW_STORAGE_KEY) === 'groups' ? 'groups' : 'courses'; } catch { return 'courses'; }
+};
+const courseCountSpec = course => ({ kind: 'course', value: String(course.id), classGroupId: course.classGroupId ? String(course.classGroupId) : '' });
+const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 export const INITIAL_CLASSES = [];
 
@@ -59,6 +71,7 @@ const ClassCard = ({
   isEnrolled, 
   isAlbanian,
   studentCount,
+  classLabel,
   canManage,
   onEdit,
   onDelete
@@ -84,7 +97,7 @@ const ClassCard = ({
             <h3>{classInfo.name}</h3>
             {userRole === 'student' && (
               enrolled ? (
-                <span className="class-enroll-badge enrolled" title={isAlbanian ? "Jeni të regjistruar në këtë lëndë" : "You are enrolled in this class"}>
+                <span className="class-enroll-badge enrolled" title={isAlbanian ? "Jeni të regjistruar në këtë lëndë" : "You are enrolled in this course"}>
                   <Check size={11} /> {isAlbanian ? 'I Regjistruar' : 'Enrolled'}
                 </span>
               ) : (
@@ -94,12 +107,12 @@ const ClassCard = ({
               )
             )}
             {(userRole === 'teacher' || userRole === 'dept_head') && isLead && (
-              <span className="class-enroll-badge instructor" title={isAlbanian ? "Ju jeni mësimdhënësi për këtë kurs" : "You are the lead instructor for this course"}>
-                {isAlbanian ? 'Lënda Ime' : 'My Class'}
+              <span className="class-enroll-badge instructor" title={isAlbanian ? "Ju jeni mësimdhënësi i kësaj lënde" : "You are the lead instructor for this course"}>
+                {isAlbanian ? 'Lënda Ime' : 'My Course'}
               </span>
             )}
           </div>
-          <p>{classInfo.code} • {classInfo.teacher}</p>
+          <p>{[classInfo.code, classInfo.teacher].filter(Boolean).join(' • ')}</p>
         </div>
 
         {canManage && (
@@ -133,6 +146,9 @@ const ClassCard = ({
       </div>
 
       <div className="class-meta-row">
+        <span className={`class-room-badge class-link-badge ${classLabel ? '' : 'is-open'}`} title={classLabel ? (isAlbanian ? 'Të gjithë nxënësit e kësaj klase janë të regjistruar' : 'Every student of this class is enrolled') : (isAlbanian ? 'Nxënësit shtohen një nga një' : 'Students are added one by one')}>
+          <GraduationCap size={12} /> {classLabel ? `${isAlbanian ? 'Klasa' : 'Class'} ${classLabel}` : (isAlbanian ? 'Lëndë e hapur' : 'Open course')}
+        </span>
         {classInfo.room && <span className="class-room-badge"><MapPin size={12} /> {classInfo.room}</span>}
         {classInfo.schedule && <span className="class-schedule-badge"><Clock size={12} /> {classInfo.schedule}</span>}
         {Number(classInfo.credits) > 0 && <span className="class-stage-badge">{classInfo.credits} {isAlbanian ? 'kredi' : 'credits'}</span>}
@@ -155,28 +171,43 @@ const ClassCard = ({
         </div>
         <div className="stat">
           <Users size={16} />
-          <span>{studentCount} {isAlbanian ? 'Nxënës' : 'Students'}</span>
+          <span>{studentCount === undefined ? '…' : studentCount} {isAlbanian ? 'Nxënës' : studentCount === 1 ? 'Student' : 'Students'}</span>
         </div>
       </div>
     </motion.div>
   );
 };
 
-const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
+const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotification, viewRequest = null }) => {
   const { 
     staffList = [], 
-    studentsList = [], 
     classesList = [], 
+    classGroups = [],
+    myStudentRecord,
+    studentsVersion,
     addClass,
     updateClass,
     deleteClass,
     rolePermissions
   } = useSchoolData();
-  const { currentUser } = useAuth();
-  const { language, t, isAlbanian } = useLanguage();
+  const { currentUser, activeSchoolId } = useAuth();
+  const { t, isAlbanian } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
+  const [courseClassFilter, setCourseClassFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [groupForm, setGroupForm] = useState(null); // { mode: 'create' } | { mode: 'edit', group }
+  const [view, setView] = useState(() => viewRequest?.view || readStoredView());
+  const [handledViewRequest, setHandledViewRequest] = useState(viewRequest);
+  if (viewRequest && viewRequest !== handledViewRequest) {
+    setHandledViewRequest(viewRequest);
+    setView(viewRequest.view);
+  }
+  const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
+  const chooseView = next => {
+    setView(next);
+    try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* Preference only. */ }
+  };
   
   // Default tab for student and teacher is 'my-classes', for admin is 'all-classes'
   const [activeTab, setActiveTab] = useState(() => (userRole === 'admin' ? 'all-classes' : 'my-classes'));
@@ -195,6 +226,9 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
   const canCreateClass = isAdmin || (isTeacher && (rolePermissions?.teacher?.classes ?? true));
   const teacherCanEditDelete = (rolePermissions?.teacher?.canEditDeleteClasses ?? true);
   const canManageClass = isAdmin || (isTeacher && canCreateClass && teacherCanEditDelete);
+  // Moving students between classes is a student edit, so it follows those permissions.
+  const canEditStudentMembership = isAdmin || (isTeacher && (rolePermissions?.teacher?.students ?? true) && (rolePermissions?.teacher?.canEditDeleteStudents ?? true));
+  const showGroups = userRole !== 'student' && view === 'groups';
 
   // New Class Form State
   const [newClassName, setNewClassName] = useState('');
@@ -206,6 +240,8 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
   const [newClassCredits, setNewClassCredits] = useState('');
   const [newClassColor, setNewClassColor] = useState('--primary');
   const [newClassCurriculumStage, setNewClassCurriculumStage] = useState('Shkalla III');
+  const [newClassGroupId, setNewClassGroupId] = useState('');
+  const [newStageTouched, setNewStageTouched] = useState(false);
   const [formError, setFormError] = useState('');
 
   // Edit Class Form State
@@ -220,8 +256,10 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
     color: '--primary',
     curriculumStage: 'Shkalla III',
     credits: '',
-    description: ''
+    description: '',
+    classGroupId: ''
   });
+  const [editStageTouched, setEditStageTouched] = useState(false);
   const [editFormError, setEditFormError] = useState('');
 
   // Delete Class Confirmation State
@@ -240,20 +278,22 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       color: cls.color || '--primary',
       curriculumStage: cls.curriculumStage || 'Shkalla III',
       credits: cls.credits ?? '',
-      description: cls.description || ''
+      description: cls.description || '',
+      classGroupId: cls.classGroupId && groupsById.has(String(cls.classGroupId)) ? String(cls.classGroupId) : ''
     });
+    setEditStageTouched(Boolean(cls.curriculumStage));
     setEditFormError('');
-  }, [staffList, currentUser]);
+  }, [staffList, currentUser, groupsById]);
 
   const handleSaveEditClass = async (e) => {
     e.preventDefault();
     if (!editingClass) return;
     if (!editForm.name.trim()) {
-      setEditFormError(isAlbanian ? 'Ju lutem shënoni titullin e kursit.' : 'Please enter the course title.');
+      setEditFormError(isAlbanian ? 'Ju lutem shënoni titullin e lëndës.' : 'Please enter the course title.');
       return;
     }
     if (!editForm.code.trim()) {
-      setEditFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm.' : 'Course code is required.');
+      setEditFormError(isAlbanian ? 'Kodi i lëndës është i detyrueshëm.' : 'Course code is required.');
       return;
     }
     if (editForm.credits !== '' && (!Number.isFinite(Number(editForm.credits)) || Number(editForm.credits) <= 0)) {
@@ -285,7 +325,9 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       color: editForm.color || '--primary',
       curriculumStage: editForm.curriculumStage || 'Shkalla III',
       credits: editForm.credits === '' ? null : Number(editForm.credits),
-      description: (editForm.description || '').trim()
+      description: (editForm.description || '').trim(),
+      classGroupId: editForm.classGroupId || '',
+      classLabel: groupsById.get(String(editForm.classGroupId))?.label || ''
     };
 
     try {
@@ -339,13 +381,8 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
     );
   }, [staffList, currentUser]);
 
-  const currentStudent = useMemo(() => {
-    return studentsList.find(s => 
-      s.id === currentUser?.uid || 
-      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-      (s.studentId && s.studentId === currentUser?.uid)
-    );
-  }, [studentsList, currentUser]);
+  const currentStudent = myStudentRecord;
+  const myClassGroup = currentStudent?.classGroupId ? groupsById.get(String(currentStudent.classGroupId)) : null;
 
   // Robust teacher matching
   const isClassTaughtByMe = useCallback((c) => {
@@ -411,26 +448,34 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
     return classesList;
   }, [classesList, effectiveTab, isTeacher, isClassTaughtByMe, isClassEnrolledByMe]);
 
-  // Classes filtered by search & department
+  const courseClassLabel = useCallback(course => (course?.classGroupId ? groupsById.get(String(course.classGroupId))?.label : '') || '', [groupsById]);
+
+  // Classes filtered by search, department and class
   const filteredClasses = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return tabFilteredClasses.filter(c => {
       const matchesDept = selectedDept === 'All' || c.department === selectedDept;
-      const matchesSearch = 
-        (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (c.code || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (c.teacher || '').toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesDept && matchesSearch;
+      const label = courseClassLabel(c);
+      const matchesClass = courseClassFilter === 'all' ||
+        (courseClassFilter === 'open' ? !label : String(c.classGroupId || '') === courseClassFilter && Boolean(label));
+      const matchesSearch = !query ||
+        [c.name, c.code, c.teacher, label].some(value => String(value || '').toLowerCase().includes(query));
+      return matchesDept && matchesClass && matchesSearch;
     });
-  }, [tabFilteredClasses, selectedDept, searchQuery]);
+  }, [tabFilteredClasses, selectedDept, searchQuery, courseClassFilter, courseClassLabel]);
+
+  // Student counts come from the server, one aggregation per visible course.
+  const countSpecs = useMemo(() => filteredClasses.map(courseCountSpec), [filteredClasses]);
+  const studentCounts = useStudentCounts(activeSchoolId, view === 'courses' ? countSpecs : [], studentsVersion);
 
   const handleCreateClass = async (e) => {
     e.preventDefault();
     if (!newClassName.trim()) {
-      setFormError(isAlbanian ? 'Ju lutem shënoni titullin e kursit.' : 'Please enter the course title.');
+      setFormError(isAlbanian ? 'Ju lutem shënoni titullin e lëndës.' : 'Please enter the course title.');
       return;
     }
     if (!newClassCode.trim()) {
-      setFormError(isAlbanian ? 'Kodi i kursit është i detyrueshëm (p.sh. CS-101, CHEM-302).' : 'Course code is required (e.g. CS-101, CHEM-302).');
+      setFormError(isAlbanian ? 'Kodi i lëndës është i detyrueshëm (p.sh. CS-101, CHEM-302).' : 'Course code is required (e.g. CS-101, CHEM-302).');
       return;
     }
     if (newClassCredits !== '' && (!Number.isFinite(Number(newClassCredits)) || Number(newClassCredits) <= 0)) {
@@ -447,6 +492,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
 
     const teacherName = newClassTeacher || staffList[0]?.name || currentStaff?.name || currentUser?.displayName || '';
     const selectedStaff = staffList.find(staff => staff.name === teacherName);
+    const linkedGroup = newClassGroupId ? groupsById.get(String(newClassGroupId)) : null;
     const newClass = {
       name: newClassName.trim(),
       code: newClassCode.trim().toUpperCase(),
@@ -461,6 +507,8 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       credits: newClassCredits === '' ? null : Number(newClassCredits),
       color: newClassColor || '--primary',
       curriculumStage: newClassCurriculumStage || 'Shkalla III',
+      classGroupId: linkedGroup?.id || '',
+      classLabel: linkedGroup?.label || '',
       weights: { Homework: 20, Engagement: 15, Quiz: 20, Exam: 30, Project: 15 },
       gradingSettings: { homeworkMinusValue: 1, engagementPlusValue: 1, engagementMinusValue: 1 },
       students: 0,
@@ -479,24 +527,38 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       setNewClassRoom('');
       setNewClassSchedule('');
       setNewClassCurriculumStage('Shkalla III');
+      setNewClassGroupId('');
+      setNewStageTouched(false);
+      addNotification?.('success', isAlbanian ? `Lënda "${newClass.name}" u krijua.` : `Course "${newClass.name}" created.`);
     } catch (error) {
-      setFormError(error.message || (isAlbanian ? 'Kursi nuk u ruajt.' : 'Course could not be saved.'));
+      setFormError(error.message || (isAlbanian ? 'Lënda nuk u ruajt.' : 'Course could not be saved.'));
     }
   };
 
-  const handleExportClasses = () => {
-    const listToExport = effectiveTab === 'my-classes' ? tabFilteredClasses : classesList;
-    const headers = 'ID,Course Name,Code,Department,Teacher,Room,Schedule,Credits,Students,Progress,Status\n';
-    const rows = listToExport.map(c => 
-      `"${c.id}","${c.name}","${c.code}","${c.department}","${c.teacher}","${c.room || ''}","${c.schedule || ''}","${c.credits ?? ''}",${studentsList.filter(student => isStudentEnrolledInCourse(student, c)).length},${c.progress}%,"${c.enrolled ? 'Enrolled' : 'Open'}"`
-    ).join('\n');
-    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+  const downloadCsv = (fileName, header, rows) => {
+    const content = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
+    const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `NoesisHorizon_${userRole === 'admin' ? 'CurriculumCatalog' : (effectiveTab === 'my-classes' ? 'MyClasses' : 'AllCourses')}_${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = fileName;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportClasses = () => {
+    const date = new Date().toISOString().slice(0, 10);
+    if (view === 'groups') {
+      downloadCsv(`Classes_${date}.csv`,
+        ['Class', 'Grade level', 'Section', 'Homeroom teacher', 'Room', 'Linked courses'],
+        classGroups.map(group => [group.label, group.gradeLevel, group.section, homeroomTeacherInfo(group, staffList).name, group.room,
+          classesList.filter(course => String(course.classGroupId || '') === String(group.id)).length]));
+      return;
+    }
+    downloadCsv(`${userRole === 'admin' ? 'CurriculumCatalog' : (effectiveTab === 'my-classes' ? 'MyCourses' : 'AllCourses')}_${date}.csv`,
+      ['ID', 'Course Name', 'Code', 'Class', 'Department', 'Teacher', 'Room', 'Schedule', 'Credits', 'Students'],
+      filteredClasses.map(c => [c.id, c.name, c.code, courseClassLabel(c), c.department, c.teacher, c.room, c.schedule, c.credits ?? '',
+        studentCounts.get(courseCountSpec(c)) ?? '']));
   };
 
   return (
@@ -509,30 +571,69 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
       <motion.header className="page-header" variants={cardItemVariants}>
         <div className="header-left">
           <div className="title-group">
-            <h1 className="gradient-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 className="gradient-text">
               {t('classes.title')}
-              <Book size={32} style={{ color: 'hsl(var(--primary))' }} />
+              <Book size={30} className="page-title-icon" aria-hidden="true" />
             </h1>
             <span className="count-pill glass">
-              {`${filteredClasses.length} ${t('common.total')}`}
+              {showGroups
+                ? `${classGroups.length} ${isAlbanian ? 'klasa' : classGroups.length === 1 ? 'class' : 'classes'}`
+                : `${filteredClasses.length} ${isAlbanian ? 'lëndë' : filteredClasses.length === 1 ? 'course' : 'courses'}`}
             </span>
           </div>
-          <p>{t('classes.subtitle')}</p>
+          <p>{showGroups
+            ? (isAlbanian ? 'Klasat (p.sh. 10A) me mësimdhënësin kujdestar, nxënësit dhe lëndët e tyre.' : 'Classes (for example 10A) with their homeroom teacher, students and courses.')
+            : t('classes.subtitle')}</p>
         </div>
         <div className="header-actions">
           <button type="button" className="btn-secondary glass" onClick={handleExportClasses}>
             <Download size={16} />
-            {userRole === 'student' ? (isAlbanian ? 'Eksporto Orarin' : 'Export Schedule') : (isAlbanian ? 'Eksporto CSV' : 'Export CSV')}
+            {isAlbanian ? 'Eksporto CSV' : 'Export CSV'}
           </button>
-          {canCreateClass && (
+          {!showGroups && canCreateClass && (
             <button type="button" className="btn-primary" onClick={() => setIsAddModalOpen(true)}>
               <Plus size={18} />
               {t('classes.addClass')}
             </button>
           )}
+          {showGroups && isAdmin && (
+            <button type="button" className="btn-primary" onClick={() => setGroupForm({ mode: 'create' })}>
+              <Plus size={18} />
+              {isAlbanian ? 'Krijo Klasë' : 'Create Class'}
+            </button>
+          )}
         </div>
       </motion.header>
 
+      {userRole !== 'student' && (
+        <motion.div className="classes-view-switch" role="tablist" aria-label={isAlbanian ? 'Lëndët ose klasat' : 'Courses or classes'} variants={cardItemVariants}>
+          <button type="button" role="tab" aria-selected={!showGroups} className={`classes-view-tab ${!showGroups ? 'active' : ''}`} onClick={() => chooseView('courses')}>
+            <BookOpen size={16} />
+            <span>{isAlbanian ? 'Lëndët' : 'Courses'}</span>
+            <span className="tab-pill-counter">{classesList.length}</span>
+          </button>
+          <button type="button" role="tab" aria-selected={showGroups} className={`classes-view-tab ${showGroups ? 'active' : ''}`} onClick={() => chooseView('groups')}>
+            <GraduationCap size={16} />
+            <span>{isAlbanian ? 'Klasat' : 'Classes'}</span>
+            <span className="tab-pill-counter">{classGroups.length}</span>
+          </button>
+          <span className="classes-view-hint">{showGroups
+            ? (isAlbanian ? 'Klasa: grupi i nxënësve me kujdestarin. Nuk ka orar.' : 'Class: a group of students with a homeroom teacher. No timetable.')
+            : (isAlbanian ? 'Lënda: mësohet sipas orarit, me mësimdhënës dhe orë.' : 'Course: a subject on the timetable, with a teacher and times.')}</span>
+        </motion.div>
+      )}
+
+      {showGroups ? (
+        <ClassGroupsView
+          userRole={userRole}
+          canEditMembership={canEditStudentMembership}
+          onOpenCourse={onClassSelect}
+          onOpenSchedule={onOpenSchedule}
+          onRequestCreate={() => setGroupForm({ mode: 'create' })}
+          onRequestEdit={group => setGroupForm({ mode: 'edit', group })}
+          addNotification={addNotification}
+        />
+      ) : (<>
       {/* Role-Based Tabs (My Classes vs All Classes) - ONLY for Students and Teachers */}
       {userRole !== 'admin' && (
         <motion.div className="classes-nav-tabs-bar glass" variants={cardItemVariants}>
@@ -543,7 +644,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               onClick={() => setActiveTab('my-classes')}
             >
               <BookOpen size={16} />
-              <span>{isTeacher ? (isAlbanian ? 'Kurset e Mia Mësimdhënëse' : 'My Teaching Classes') : (isAlbanian ? 'Lëndët e Mia të Regjistruara' : 'My Classes')}</span>
+              <span>{isTeacher ? (isAlbanian ? 'Lëndët që Jap' : 'Courses I Teach') : (isAlbanian ? 'Lëndët e Mia' : 'My Courses')}</span>
               <span className="tab-pill-counter">{myClassesCount}</span>
             </button>
             <button
@@ -552,7 +653,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               onClick={() => setActiveTab('all-classes')}
             >
               <Layers size={16} />
-              <span>{isAlbanian ? 'Të Gjitha Lëndët' : 'All Classes'}</span>
+              <span>{isAlbanian ? 'Të Gjitha Lëndët' : 'All Courses'}</span>
               <span className="tab-pill-counter">{classesList.length}</span>
             </button>
           </div>
@@ -562,7 +663,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
             {effectiveTab === 'my-classes' ? (
               <span>
                 {isTeacher
-                  ? (isAlbanian ? 'Po shfaqen kurset që ligjëroni ju' : 'Showing classes you teach')
+                  ? (isAlbanian ? 'Po shfaqen lëndët që jepni ju' : 'Showing courses you teach')
                   : (isAlbanian ? 'Po shfaqen lëndët ku jeni të regjistruar' : 'Showing courses you are enrolled in')}
               </span>
             ) : (
@@ -580,14 +681,14 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               <GraduationCap size={22} />
             </div>
             <div>
-              <h4>{isAlbanian ? (currentUser?.name ? `Orari i Regjistrimit të ${currentUser.name}` : 'Orari Im i Regjistrimit') : (currentUser?.name ? `${currentUser.name}'s Enrolled Schedule` : 'My Enrolled Schedule')}</h4>
+              <h4>{myClassGroup ? `${isAlbanian ? 'Klasa' : 'Class'} ${myClassGroup.label}` : (isAlbanian ? 'Ende pa klasë' : 'No class assigned yet')}</h4>
               <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? (isAlbanian ? 'Lëndë Aktive e Regjistruar' : 'Active Subject Enrolled') : (isAlbanian ? 'Lëndë Aktive të Regjistruara' : 'Active Subjects Enrolled')}</p>
             </div>
           </div>
           <div className="strip-stats">
             <div className="strip-stat-item">
-              <span className="strip-stat-label">{isAlbanian ? 'Statusi i Regjistrimit' : 'Enrolled Status'}</span>
-              <strong className="strip-stat-val text-success">{isAlbanian ? 'Në Rregull' : 'Good Standing'}</strong>
+              <span className="strip-stat-label">{isAlbanian ? 'Kujdestari' : 'Homeroom teacher'}</span>
+              <strong className="strip-stat-val">{myClassGroup ? homeroomTeacherInfo(myClassGroup, staffList, isAlbanian).name : '—'}</strong>
             </div>
           </div>
         </motion.div>
@@ -601,8 +702,8 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               <BookOpen size={22} />
             </div>
             <div>
-              <h4>{currentUser?.displayName || currentUser?.name ? (isAlbanian ? `Kurset Mësimdhënëse të ${currentUser.displayName || currentUser.name}` : `${currentUser.displayName || currentUser.name}'s Teaching Schedule`) : (isAlbanian ? 'Kurset e Mia Mësimdhënëse' : 'My Teaching Schedule')}</h4>
-              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? (isAlbanian ? 'Kurs Aktiv Mësimdhënës' : 'Active Course Taught') : (isAlbanian ? 'Kurse Aktive Mësimdhënëse' : 'Active Courses Taught')}</p>
+              <h4>{currentUser?.displayName || currentUser?.name ? (isAlbanian ? `Lëndët që jep ${currentUser.displayName || currentUser.name}` : `${currentUser.displayName || currentUser.name}'s Teaching Schedule`) : (isAlbanian ? 'Lëndët që Jap' : 'My Teaching Schedule')}</h4>
+              <p>{tabFilteredClasses.length} {tabFilteredClasses.length === 1 ? (isAlbanian ? 'Lëndë Aktive që Jepni' : 'Active Course Taught') : (isAlbanian ? 'Lëndë Aktive që Jepni' : 'Active Courses Taught')}</p>
             </div>
           </div>
           <div className="strip-stats">
@@ -642,6 +743,14 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               {isAlbanian ? dept.labelSq : dept.labelEn}
             </button>
           ))}
+          {classGroups.length > 0 && (
+            <select className="custom-form-select cg-grade-filter" value={courseClassFilter} onChange={event => setCourseClassFilter(event.target.value)}
+              aria-label={isAlbanian ? 'Filtro sipas klasës' : 'Filter by class'}>
+              <option value="all">{isAlbanian ? 'Të gjitha klasat' : 'All classes'}</option>
+              <option value="open">{isAlbanian ? 'Lëndë të hapura (pa klasë)' : 'Open courses (no class)'}</option>
+              {classGroups.map(group => <option key={group.id} value={group.id}>{isAlbanian ? 'Klasa' : 'Class'} {group.label}</option>)}
+            </select>
+          )}
         </div>
       </motion.div>
 
@@ -658,7 +767,8 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 isTaughtByMe={isClassTaughtByMe(classItem)}
                 isEnrolled={isClassEnrolledByMe(classItem)}
                 isAlbanian={isAlbanian}
-                studentCount={studentsList.filter(student => isStudentEnrolledInCourse(student, classItem)).length}
+                studentCount={studentCounts.get(courseCountSpec(classItem))}
+                classLabel={courseClassLabel(classItem)}
                 canManage={canManageClass}
                 onEdit={handleOpenEdit}
                 onDelete={(cls) => setClassToDelete(cls)}
@@ -679,19 +789,19 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 {effectiveTab === 'my-classes'
                   ? (isAlbanian
                       ? (userRole === 'teacher'
-                          ? 'Nuk ka kurse që ligjëroni që përputhen me kërkimin tuaj. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.'
+                          ? 'Asnjë nga lëndët që jepni nuk përputhet me kërkimin tuaj. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.'
                           : 'Nuk ka lëndë që përputhen me kërkimin tuaj në listën tuaj të regjistrimeve. Provoni të kaloni te "Të Gjitha Lëndët" për të shfletuar katalogun.')
-                      : 'No classes match your search in your personal list. Try switching to "All Classes" to browse other subjects.')
+                      : 'No courses match your search in your list. Switch to "All Courses" to browse other subjects.')
                   : (isAlbanian
                       ? 'Nuk ka lëndë që përputhen me kriteret aktuale të kërkimit ose filtrin e departamentit.'
-                      : 'No classes match your current search criteria or department filter.')}
+                      : 'No courses match your search or filters.')}
               </p>
               {effectiveTab === 'my-classes' ? (
                 <button type="button" className="btn-secondary glass btn-sm" onClick={() => setActiveTab('all-classes')}>
-                  {isAlbanian ? 'Shfleto Të Gjitha Lëndët' : 'Browse All Classes'}
+                  {isAlbanian ? 'Shfleto Të Gjitha Lëndët' : 'Browse All Courses'}
                 </button>
               ) : (
-                <button type="button" className="btn-secondary glass btn-sm" onClick={() => { setSearchQuery(''); setSelectedDept('All'); }}>
+                <button type="button" className="btn-secondary glass btn-sm" onClick={() => { setSearchQuery(''); setSelectedDept('All'); setCourseClassFilter('all'); }}>
                   {isAlbanian ? 'Pastro Filtrat' : 'Clear Filters'}
                 </button>
               )}
@@ -699,6 +809,19 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
           )}
         </AnimatePresence>
       </div>
+      </>)}
+
+      <AnimatePresence>
+        {groupForm && (
+          <ClassGroupForm
+            key={groupForm.group?.id || 'new-class'}
+            mode={groupForm.mode}
+            group={groupForm.group}
+            onClose={() => setGroupForm(null)}
+            addNotification={addNotification}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── MODAL: Add New Course ── */}
       <AnimatePresence>
@@ -713,7 +836,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>{isAlbanian ? 'Shto Kurs të Ri' : 'Add New Course'}</h3>
+                <h3>{isAlbanian ? 'Shto Lëndë të Re' : 'Add New Course'}</h3>
                 <p className="modal-subtitle">
                   {isAlbanian ? 'Krijoni një lëndë mësimore dhe caktoni mësimdhënësin kryesor.' : 'Create a curriculum subject and assign a lead instructor.'}
                 </p>
@@ -741,7 +864,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 <div className="form-grid-2">
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Titulli i Kursit' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Titulli i Lëndës' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                     </label>
                     <input 
                       type="text" 
@@ -754,7 +877,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
 
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Kodi i Kursit' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Kodi i Lëndës' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'hsl(var(--primary))', marginLeft: '0.35rem' }}>
                         ({isAlbanian ? 'I Detyrueshëm' : 'Required'})
                       </span>
@@ -836,7 +959,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 </div>
 
                 <div className="input-group">
-                  <label htmlFor="new-course-credits">{isAlbanian ? 'Kredite të Kursit' : 'Course Credits'}</label>
+                  <label htmlFor="new-course-credits">{isAlbanian ? 'Kreditet e Lëndës' : 'Course Credits'}</label>
                   <input
                     id="new-course-credits"
                     type="number"
@@ -849,10 +972,33 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 </div>
 
                 <div className="input-group">
+                  <label htmlFor="new-course-class">{isAlbanian ? 'Klasa' : 'Class'}</label>
+                  <select
+                    id="new-course-class"
+                    value={newClassGroupId}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setNewClassGroupId(next);
+                      const label = groupsById.get(next)?.label;
+                      if (label && !newStageTouched) setNewClassCurriculumStage(stageForClass(label) || newClassCurriculumStage);
+                    }}
+                    className="custom-form-select"
+                  >
+                    <option value="">{isAlbanian ? 'Lëndë e hapur (nxënësit shtohen një nga një)' : 'Open course (add students one by one)'}</option>
+                    {classGroups.map(group => <option key={group.id} value={group.id}>{isAlbanian ? 'Klasa' : 'Class'} {group.label}</option>)}
+                  </select>
+                  <small>{newClassGroupId
+                    ? (isAlbanian ? 'Të gjithë nxënësit e kësaj klase regjistrohen automatikisht, edhe ata që shtohen më vonë.' : 'Every student of this class is enrolled automatically, including students added later.')
+                    : classGroups.length
+                      ? (isAlbanian ? 'Zgjidhni një klasë kur lënda mësohet për një klasë të caktuar.' : 'Choose a class when the course is taught to one class.')
+                      : (isAlbanian ? 'Krijoni klasat te "Klasat" për t\u0027i lidhur me lëndët.' : 'Create classes under "Classes" to link them to courses.')}</small>
+                </div>
+
+                <div className="input-group">
                   <label>{isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}</label>
                   <select
                     value={newClassCurriculumStage}
-                    onChange={(e) => setNewClassCurriculumStage(e.target.value)}
+                    onChange={(e) => { setNewClassCurriculumStage(e.target.value); setNewStageTouched(true); }}
                     className="custom-form-select"
                   >
                     {CURRICULUM_STAGES.map(stage => (
@@ -886,7 +1032,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                     {isAlbanian ? 'Anulo' : 'Cancel'}
                   </button>
                   <button type="submit" className="btn-primary">
-                    {isAlbanian ? 'Krijo Kursin' : 'Create Course'}
+                    {isAlbanian ? 'Krijo Lëndën' : 'Create Course'}
                   </button>
                 </div>
               </form>
@@ -908,10 +1054,10 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>{isAlbanian ? 'Ndrysho Detajet e Kursit' : 'Edit Course Details'}</h3>
+                <h3>{isAlbanian ? 'Ndrysho Detajet e Lëndës' : 'Edit Course Details'}</h3>
                 <p className="modal-subtitle">
                   {isAlbanian 
-                    ? 'Modifikoni emrin e kursit, mësimdhënësin kryesor, orarin dhe sallën.' 
+                    ? 'Modifikoni emrin e lëndës, mësimdhënësin kryesor, orarin dhe sallën.' 
                     : 'Modify course name, lead instructor, schedule, room, and attributes.'}
                 </p>
                 <button type="button" className="icon-btn-close" onClick={() => setEditingClass(null)} aria-label="Close">
@@ -938,7 +1084,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 <div className="form-grid-2">
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Titulli i Kursit' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Titulli i Lëndës' : 'Course Title'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                     </label>
                     <input 
                       type="text" 
@@ -951,7 +1097,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
 
                   <div className="input-group">
                     <label>
-                      {isAlbanian ? 'Kodi i Kursit' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
+                      {isAlbanian ? 'Kodi i Lëndës' : 'Course Code'} <span style={{ color: 'hsl(var(--destructive))', fontWeight: 800 }}>*</span>
                     </label>
                     <input 
                       type="text" 
@@ -1030,10 +1176,32 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                 </div>
 
                 <div className="input-group">
+                  <label htmlFor="edit-course-class">{isAlbanian ? 'Klasa' : 'Class'}</label>
+                  <select
+                    id="edit-course-class"
+                    value={editForm.classGroupId || ''}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      const label = groupsById.get(next)?.label;
+                      setEditForm({ ...editForm, classGroupId: next, ...(label && !editStageTouched ? { curriculumStage: stageForClass(label) || editForm.curriculumStage } : {}) });
+                    }}
+                    className="custom-form-select"
+                  >
+                    <option value="">{isAlbanian ? 'Lëndë e hapur (nxënësit shtohen një nga një)' : 'Open course (add students one by one)'}</option>
+                    {classGroups.map(group => <option key={group.id} value={group.id}>{isAlbanian ? 'Klasa' : 'Class'} {group.label}</option>)}
+                  </select>
+                  <small>{(editForm.classGroupId || '') !== String(editingClass.classGroupId || '')
+                    ? (isAlbanian ? 'Ndryshimi i klasës ndryshon se cilët nxënës janë të regjistruar automatikisht. Notat e ruajtura nuk fshihen.' : 'Changing the class changes which students are enrolled automatically. Saved grades are kept.')
+                    : editForm.classGroupId
+                      ? (isAlbanian ? 'Të gjithë nxënësit e kësaj klase janë të regjistruar automatikisht.' : 'Every student of this class is enrolled automatically.')
+                      : (isAlbanian ? 'Nxënësit shtohen një nga një te regjistri i lëndës.' : 'Students are added one by one in the course roster.')}</small>
+                </div>
+
+                <div className="input-group">
                   <label>{isAlbanian ? 'Shkalla e Kurrikulës' : 'Curriculum Stage'}</label>
                   <select
                     value={editForm.curriculumStage || 'Shkalla III'}
-                    onChange={(e) => setEditForm({ ...editForm, curriculumStage: e.target.value })}
+                    onChange={(e) => { setEditForm({ ...editForm, curriculumStage: e.target.value }); setEditStageTouched(true); }}
                     className="custom-form-select"
                   >
                     {CURRICULUM_STAGES.map(stage => (
@@ -1046,7 +1214,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
 
                 <div className="form-grid-2">
                   <div className="input-group">
-                    <label>{isAlbanian ? 'Kredite të Kursit' : 'Course Credits'}</label>
+                    <label>{isAlbanian ? 'Kreditet e Lëndës' : 'Course Credits'}</label>
                     <input 
                       type="number" 
                       min="0.1"
@@ -1107,7 +1275,7 @@ const Classes = ({ onClassSelect, userRole = 'student', addNotification }) => {
                   {isAlbanian ? 'Fshij Lëndën' : 'Delete Course'}
                 </h3>
                 <p className="modal-subtitle">
-                  {isAlbanian ? 'Konfirmoni heqjen e këtij kursi nga kurrikula shkollore.' : 'Confirm removal of this course from the school curriculum.'}
+                  {isAlbanian ? 'Konfirmoni heqjen e kësaj lënde nga kurrikula shkollore.' : 'Confirm removal of this course from the school curriculum.'}
                 </p>
                 <button type="button" className="icon-btn-close" onClick={() => !isDeleting && setClassToDelete(null)} aria-label="Close">
                   <X size={16} />

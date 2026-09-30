@@ -6,6 +6,7 @@ import { Avatar } from '../Avatar';
 import { Badge, Card, Delta, EmptyState, StatTile } from './shared';
 import { RecencyChart, SignupChart } from './Charts';
 import { formatDateTime, formatNumber, formatPercent, relativeTime, roleLabel } from '../../features/platformAdmin/format';
+import { compareIsoDesc } from '../../features/platformAdmin/metrics';
 
 const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2, ok: 3 };
 const SEVERITY_ICON = { critical: XCircle, warning: AlertTriangle, info: Info, ok: CheckCircle2 };
@@ -84,12 +85,12 @@ export default function OverviewView({
   const periodLabel = range.option.unit === 'month' ? '12 months' : `${range.option.count} days`;
   const recentlyActive = useMemo(() => snapshot.users.filter(user => user.lastSeenAt).slice(0, 8), [snapshot.users]);
   const newest = useMemo(
-    () => [...snapshot.users].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 8),
+    () => [...snapshot.users].sort((a, b) => compareIsoDesc(a.createdAt, b.createdAt)).slice(0, 8),
     [snapshot.users],
   );
   const topSchools = useMemo(() => snapshot.schools
     .map(school => ({ school, activity: activity.get(school.id) }))
-    .sort((a, b) => (b.activity?.activeMembers || 0) - (a.activity?.activeMembers || 0) || (b.activity?.lastActiveAt || '').localeCompare(a.activity?.lastActiveAt || ''))
+    .sort((a, b) => (b.activity?.activeMembers || 0) - (a.activity?.activeMembers || 0) || compareIsoDesc(a.activity?.lastActiveAt, b.activity?.lastActiveAt))
     .slice(0, 6), [snapshot.schools, activity]);
   const health = useMemo(() => [...snapshot.health].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]), [snapshot.health]);
   const issues = health.filter(check => check.severity !== 'ok').length;

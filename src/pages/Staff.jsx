@@ -13,6 +13,33 @@ import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import './Staff.css';
 
+const lower = value => String(value || '').trim().toLowerCase();
+
+// Courses a staff member teaches: by account id, then email, then name for older courses.
+function teachesCourse(staff, course) {
+  if (!staff || !course) return false;
+  if (course.teacherId) return String(course.teacherId) === String(staff.id);
+  if (course.teacherEmail && staff.email) return lower(course.teacherEmail) === lower(staff.email);
+  return Boolean(course.teacher) && lower(course.teacher) === lower(staff.name);
+}
+
+// Who takes over before a staff member is removed.
+function teachingWarning({ homerooms, courses }, isAlbanian) {
+  const labels = homerooms.map(group => group.label).join(', ');
+  if (isAlbanian) {
+    const parts = [
+      homerooms.length && `është kujdestar i ${homerooms.length === 1 ? 'klasës' : 'klasave'} ${labels}`,
+      courses.length && `jep ${courses.length} lëndë`,
+    ].filter(Boolean).join(' dhe ');
+    return `${parts.charAt(0).toUpperCase()}${parts.slice(1)}. Caktoni dikë tjetër te "Lëndët & Klasat".`;
+  }
+  const parts = [
+    homerooms.length && `are the homeroom teacher of ${labels}`,
+    courses.length && `teach ${courses.length} ${courses.length === 1 ? 'course' : 'courses'}`,
+  ].filter(Boolean).join(' and ');
+  return `They ${parts}. Assign someone else in "Courses & Classes".`;
+}
+
 // Helper for rendering role icon
 export const getRoleIcon = (iconName, size = 14) => {
   switch (iconName) {
@@ -44,7 +71,7 @@ const itemVariants = {
   }
 };
 
-const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectProfile, onMessage, currentUser }) => {
+const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectProfile, onMessage, currentUser, teaching, isAlbanian }) => {
   const badgeColor = roleInfo?.color || '270 35% 42%';
 
   const displayStaffName = useMemo(() => {
@@ -99,12 +126,22 @@ const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectPro
           <div className="staff-meta">
             <div className="meta-item">
               <BookOpen size={14} />
-              <span>{staff.classes > 0 ? `${staff.classes} Classes` : staff.department}</span>
+              <span>{teaching.courses.length > 0
+                ? `${teaching.courses.length} ${isAlbanian ? 'lëndë' : teaching.courses.length === 1 ? 'course' : 'courses'}`
+                : (staff.department || (isAlbanian ? 'Pa lëndë' : 'No courses'))}</span>
             </div>
-            <div className="meta-item">
-              <Clock size={14} />
-              <span>{staff.experience} Exp.</span>
-            </div>
+            {teaching.homerooms.length > 0 && (
+              <div className="meta-item">
+                <GraduationCap size={14} />
+                <span>{isAlbanian ? 'Kujdestar' : 'Homeroom'} {teaching.homerooms.map(group => group.label).join(', ')}</span>
+              </div>
+            )}
+            {staff.experience && (
+              <div className="meta-item">
+                <Clock size={14} />
+                <span>{staff.experience}</span>
+              </div>
+            )}
             {staff.room && (
               <div className="meta-item room-meta">
                 <MapPin size={14} />
@@ -160,7 +197,7 @@ const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectPro
 };
 
 const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
-  const { staffList, rolesList, addStaff, updateStaff, deleteStaff, addCustomRole, deleteCustomRole } = useSchoolData();
+  const { staffList, rolesList, classesList = [], classGroups = [], addStaff, updateStaff, deleteStaff, addCustomRole, deleteCustomRole } = useSchoolData();
   const { activeSchoolId, getIdTokenSafe, currentUser } = useAuth();
   const { language, t, isAlbanian } = useLanguage();
   const isAdmin = userRole === 'admin';
@@ -203,12 +240,18 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
     roleId: 'teacher',
     department: 'Mathematics',
     subject: '',
-    classes: 3,
-    experience: '5 years',
+    experience: '',
     room: '',
     bio: '',
     avatarSeed: ''
   });
+
+  // What each staff member teaches, from the real courses and classes.
+  const teachingByStaff = useMemo(() => new Map(staffList.map(member => [String(member.id), {
+    courses: classesList.filter(course => teachesCourse(member, course)),
+    homerooms: classGroups.filter(group => String(group.homeroomTeacherId || '') === String(member.id)),
+  }])), [staffList, classesList, classGroups]);
+  const teachingFor = member => teachingByStaff.get(String(member?.id)) || { courses: [], homerooms: [] };
 
   // New Custom Role Form State
   const [newRoleForm, setNewRoleForm] = useState({
@@ -240,9 +283,9 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
     return staffList.filter(s => {
       const query = searchTerm.toLowerCase();
       const matchesSearch = 
-        s.name.toLowerCase().includes(query) ||
+        (s.name || '').toLowerCase().includes(query) ||
         (s.staffId && s.staffId.toLowerCase().includes(query)) ||
-        s.email.toLowerCase().includes(query) ||
+        (s.email || '').toLowerCase().includes(query) ||
         (s.subject && s.subject.toLowerCase().includes(query)) ||
         (s.department && s.department.toLowerCase().includes(query));
 
@@ -271,8 +314,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
       const result = await addStaff({
         ...newStaffForm,
         staffId: customStaffId,
-        roleName: matchedRole?.name || 'Staff Member',
-        classes: Number(newStaffForm.classes) || 0
+        roleName: matchedRole?.name || 'Staff Member'
       });
 
       if (addNotification) {
@@ -293,8 +335,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
         roleId: 'teacher',
         department: 'Mathematics',
         subject: '',
-        classes: 3,
-        experience: '5 years',
+        experience: '',
         room: '',
         bio: '',
         avatarSeed: ''
@@ -319,8 +360,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
       await updateStaff(editingStaff.id, {
         ...editingStaff,
         staffId: editingStaff.staffId || `STF-${100 + editingStaff.id}`,
-        roleName: matchedRole?.name || editingStaff.roleName,
-        classes: Number(editingStaff.classes) || 0
+        roleName: matchedRole?.name || editingStaff.roleName
       });
       setEditingStaff(null);
       addNotification?.('success', isAlbanian ? 'Të dhënat dhe roli i stafit u ruajtën.' : 'Staff details and role saved.');
@@ -503,6 +543,8 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
                   onSelectProfile={(member) => setSelectedProfile(member)}
                   onMessage={() => onNavigate && onNavigate('messages')}
                   currentUser={currentUser}
+                  teaching={teachingFor(staff)}
+                  isAlbanian={isAlbanian}
                 />
               );
             })}
@@ -525,7 +567,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
               <div className="modal-header">
                 <h3>{isAlbanian ? 'Regjistro Anëtar të Stafit' : 'Register Staff Member'}</h3>
                 <p className="modal-subtitle">
-                  {isAlbanian ? 'Shtoni fakultet ose staf për të caktuar kurse dhe leje të personalizuara.' : 'Add faculty or staff to assign courses and custom permissions.'}
+                  {isAlbanian ? 'Shtoni fakultet ose staf për të caktuar lëndë dhe leje të personalizuara.' : 'Add faculty or staff to assign courses and custom permissions.'}
                 </p>
                 <button type="button" className="icon-btn-close" onClick={() => setIsAddStaffOpen(false)} aria-label="Close">
                   <X size={16} />
@@ -988,12 +1030,16 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
                     <strong>{selectedProfile.department || (isAlbanian ? 'Fakultet i Përgjithshëm' : 'General Faculty')}</strong>
                   </div>
                   <div className="p-stat glass">
-                    <span className="p-stat-label">Classes</span>
-                    <strong>{selectedProfile.classes} Courses</strong>
+                    <span className="p-stat-label">{isAlbanian ? 'Lëndët' : 'Courses'}</span>
+                    <strong>{teachingFor(selectedProfile).courses.length}</strong>
                   </div>
                   <div className="p-stat glass">
-                    <span className="p-stat-label">Tenure</span>
-                    <strong>{selectedProfile.experience}</strong>
+                    <span className="p-stat-label">{isAlbanian ? 'Kujdestar i klasës' : 'Homeroom class'}</span>
+                    <strong>{teachingFor(selectedProfile).homerooms.map(group => group.label).join(', ') || '—'}</strong>
+                  </div>
+                  <div className="p-stat glass">
+                    <span className="p-stat-label">{isAlbanian ? 'Përvoja' : 'Experience'}</span>
+                    <strong>{selectedProfile.experience || '—'}</strong>
                   </div>
                   <div className="p-stat glass">
                     <span className="p-stat-label">Office</span>
@@ -1077,6 +1123,11 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
                   {isAlbanian 
                     ? 'do të fshihet përgjithmonë nga kjo shkollë. Qasja e tyre e hyrjes do të revokohet menjëherë.' 
                     : 'will be permanently removed from this school. Their login access will be revoked immediately. If they have no other school memberships they will see a "not part of any school" screen on next login.'}
+                  {(teachingFor(staffToDelete).homerooms.length > 0 || teachingFor(staffToDelete).courses.length > 0) && (
+                    <p style={{ margin: '0.6rem 0 0', fontWeight: 600 }}>
+                      {teachingWarning(teachingFor(staffToDelete), isAlbanian)}
+                    </p>
+                  )}
                 </div>
                 <div className="modal-footer-actions">
                   <button

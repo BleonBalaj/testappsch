@@ -1729,3 +1729,49 @@
     height: 600px;
   }
 }
+
+.directory-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.selected-member-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.selected-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.35rem 0.25rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  background: hsla(var(--primary), 0.12);
+  border: 1px solid hsla(var(--primary), 0.3);
+}
+
+.selected-member-chip button {
+  display: inline-flex;
+  padding: 0.1rem;
+  border-radius: 6px;
+  color: inherit;
+}
+
+.add-member-input-row input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.add-member-input-row {
+  flex-wrap: wrap;
+}
+
+.add-member-input-row select {
+  flex: 1 1 160px;
+  min-width: 0;
+}

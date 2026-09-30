@@ -25,8 +25,14 @@ export function courseMatchesReference(course, reference) {
   return Boolean(legacy && code && clean(legacy[1]) === code);
 }
 
+/** A course linked to a class includes every student of that class. */
+export function isEnrolledThroughClass(student, course) {
+  return Boolean(student?.classGroupId && course?.classGroupId && String(student.classGroupId) === String(course.classGroupId));
+}
+
 export function isStudentEnrolledInCourse(student, course) {
   if (!student || !course) return false;
+  if (isEnrolledThroughClass(student, course)) return true;
   // The student directory is the current source of truth. Class-side IDs are
   // only a fallback for older records that have no assignedClasses field.
   if (Array.isArray(student.assignedClasses) || typeof student.assignedClasses === 'string') {
@@ -51,4 +57,21 @@ export function normalizeAssignedCourseIds(references = [], courses = []) {
     const course = courses.find(item => courseMatchesReference(item, reference));
     return course ? String(course.id) : referenceText(reference).trim();
   }).filter(Boolean))];
+}
+
+/**
+ * Course IDs to store on a student. Courses linked to the student's class are
+ * included automatically, so they are not stored; courses linked to a class the
+ * student is leaving are dropped with that class.
+ */
+export function explicitCourseAssignments(references, courses = [], classGroupId = '', previousClassGroupId = '') {
+  const byId = new Map(courses.map(course => [String(course.id), course]));
+  const next = String(classGroupId || '');
+  const previous = String(previousClassGroupId || '');
+  return normalizeAssignedCourseIds(references, courses).filter(id => {
+    const linked = String(byId.get(id)?.classGroupId || '');
+    if (!linked) return true;
+    if (next && linked === next) return false;
+    return !(previous && previous !== next && linked === previous);
+  });
 }

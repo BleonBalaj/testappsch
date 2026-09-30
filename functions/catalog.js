@@ -54,8 +54,9 @@ export function parseClassLabel(input) {
   }
   if (typeof input !== 'string' && typeof input !== 'number') return null;
   const raw = String(input).trim().replace(/^(?:klasa|class|grade)\s+/i, '').trim();
-  if (/^(?:p[eë]rgatitore|parap[eë]rgatitore|preparatory)$/i.test(raw)) {
-    return { grade: 0, gradeLabel: 'Përgatitore', section: '', classLabel: 'Përgatitore' };
+  const preparatory = raw.match(/^(?:p[eë]rgatitore|parap[eë]rgatitore|preparatory)(?:\s*(?:\/|[-–—]|\s)\s*([\p{L}\p{N}]+))?$/iu);
+  if (preparatory) {
+    return { grade: 0, gradeLabel: 'Përgatitore', section: preparatory[1] ?? '', classLabel: preparatory[1] ? raw : 'Përgatitore' };
   }
   const match = raw.match(/^((?:XII|XI|IX|VIII|VII|VI|IV|III|II|X|V|I)|(?:1[0-2]|[1-9]))(?:\s*(?:\/|[-–—]|\s)\s*([\p{L}\p{N}]+)|([A-Z]))?$/iu);
   if (!match) return null;

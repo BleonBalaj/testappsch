@@ -321,7 +321,16 @@ Passing emulator tests is **not** proof. These differences already broke product
 * **Secrets/IAM** (e.g. `GEMINI_API_KEY`) exist only in production; the emulator uses `functions/.secret.local`, which must never be committed.
 * **Browser caching**: Hosting serves pages with `no-cache` and hashed `/assets` as immutable (see `firebase.json` headers). Keep it that way.
 
-### 11.3 Before handing anything over
+### 11.3 Data model and scale rules
+* **Courses vs classes**: `schools/{id}/classes` holds **courses** (subjects on the timetable, with a teacher and schedule). `schools/{id}/classGroups` holds **classes** (homeroom groups such as 10A: grade level 0–12, section, homeroom teacher; no timetable). Only school admins manage classes.
+* A course may link to one class (`classGroupId`); every student of that class is then enrolled automatically (`isStudentEnrolledInCourse`). Stored `assignedClasses` hold only the other courses (`explicitCourseAssignments`).
+* A student's class is `classGroupId`; `grade` keeps the class label in step (server provisioning and `updateStudent` set it). Show labels with `studentClassLabel`.
+* **Never load the whole `students` collection** in the browser. A school can have tens of thousands. Use `src/features/students/studentData.js`: `useStudentDirectory` (paged / roster / search), `useCourseRoster`, `useClassRoster`, `useStudentRecord`, `useStudentSearch`, and `useStudentCounts` (server-side counts). The signed-in student's own record is `myStudentRecord` in `SchoolDataContext`.
+* Student search uses `searchTokens`/`nameLower`, written by `functions/provisionSchoolUser.js`, `updateStudent`, the self-rename in `AuthContext`, and the one-time `prepareSchoolDirectory` upgrade. `functions/studentSearch.js` and `src/features/students/studentSearch.js` must stay identical (a unit test enforces it). Queries rely on the indexes in `firestore.indexes.json`.
+* Small collections (staff, courses, classes, events) stay as live listeners in `SchoolDataContext`.
+* **CSS is one global bundle**: page stylesheets must scope their selectors. `.page-header`, `.header-left`, `.title-group` and `.count-pill` are defined once in `src/index.css`; never redefine them in a page file.
+
+### 11.4 Before handing anything over
 1. Run everything that applies: `npm test`, `npm run lint`, `npm run build`, `cd functions && npm test`, `npm run test:rules` (Firestore emulator).
 2. Exercise every changed flow end to end against the emulators (Auth + Firestore + Functions) in a real browser.
 3. Walk through §11.2 for the change and fix any production-only risk before handing over.
@@ -331,7 +340,7 @@ Passing emulator tests is **not** proof. These differences already broke product
    * Keep existing page architecture; add, don't restructure, unless asked.
 5. Unexpected server errors must reach the UI with their real message (`functions/callableErrors.js`), never a bare `INTERNAL`.
 
-### 11.4 Handing over
+### 11.5 Handing over
 * Give complete, exact steps for the owner's setup: merge the pull request → `git pull` → `npm install` if dependencies changed → `cmd.exe /c "npx firebase-tools deploy"` → any post-deploy steps (for example the `/admin` **Fix now** repairs).
 * Tell the owner how to confirm the new version is live, e.g. `.firebase/hosting.ZGlzdA.cache` lists the new `assets/` files, or the changed page shows the change.
 * The owner's live Firebase project and logs are not reachable from cloud sandboxes. State plainly what could not be verified, and add safeguards (clear error messages, logging) for it.
