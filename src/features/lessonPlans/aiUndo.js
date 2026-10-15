@@ -1,12 +1,12 @@
 import { GENERATED_LESSON_FIELDS } from '../../services/lessonAiContext.js';
 
-const AI_EDITED_FIELDS = [...GENERATED_LESSON_FIELDS, 'period', 'status'];
+const AI_EDITED_FIELDS = [...GENERATED_LESSON_FIELDS, 'period', 'status', 'aiReference'];
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const copy = (value) => structuredClone(value);
 
 export function makeLessonAiUndoSnapshot(before, after, { schoolId, accountId }) {
   const changes = Object.fromEntries(AI_EDITED_FIELDS.flatMap((field) =>
-    same(before[field], after[field]) ? [] : [[field, { before: copy(before[field]), after: copy(after[field]) }]]));
+    same(before[field], after[field]) ? [] : [[field, { before: copy(field === 'aiReference' ? before[field] ?? null : before[field]), after: copy(after[field]) }]]));
   return {
     version: 1,
     planId: before.id,

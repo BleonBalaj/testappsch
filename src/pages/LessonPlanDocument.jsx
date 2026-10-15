@@ -1,5 +1,5 @@
 import React from 'react';
-import { translate, translateCatalogValue } from '../features/lessonPlans/i18n';
+import { translate, translateCatalogValue } from '../features/lessonPlans/i18n.js';
 
 const present = (value) => String(value ?? '').trim() || '—';
 const presentStage = (value, language) => language === 'en' ? present(value).replace(/^Shkalla\s+/i, 'Stage ') : present(value);
@@ -63,7 +63,6 @@ export default function LessonPlanDocument({ plan, language = 'sq', showSchoolNa
         <span><strong>{t('date')}</strong> {formattedDate}</span>
         <span><strong>{t('schoolYear')}</strong> {present(plan.academicYear)}</span>
         {plan.period && <span><strong>{t('period')}</strong> {plan.period}</span>}
-        {plan.duration && <span><strong>{t('duration')}</strong> {plan.duration} {t('minutes')}</span>}
       </div>
     </header>
 

@@ -23,10 +23,12 @@ import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../services/firebase';
 import { buildProfileBackfill } from '../features/userProfile';
 import { studentSearchFields } from '../features/students/studentSearch';
+import { requestVerifiedPasswordReset } from '../features/auth/passwordRecovery';
 
 const listMyInvitationsCallable = httpsCallable(functions, 'listMyInvitations');
 const acceptInvitationCallable = httpsCallable(functions, 'acceptSchoolInvitation');
 const declineInvitationCallable = httpsCallable(functions, 'declineSchoolInvitation');
+const verifyPasswordRecoveryCallable = httpsCallable(functions, 'checkPasswordRecoveryAccount');
 
 const AuthContext = createContext(null);
 
@@ -631,7 +633,10 @@ const DEFAULT_SCHOOL_ROLES = [
 
   // Forgot password
   const resetUserPassword = async (email) => {
-    return sendPasswordResetEmail(auth, email.trim());
+    return requestVerifiedPasswordReset(email, {
+      verifyAccount: verifyPasswordRecoveryCallable,
+      sendReset: value => sendPasswordResetEmail(auth, value),
+    });
   };
 
   // Sign out

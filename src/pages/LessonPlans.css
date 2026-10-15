@@ -700,6 +700,10 @@
   flex-wrap: wrap;
 }
 
+.lesson-ai-reference { display: flex; flex-direction: column; gap: .35rem; margin-top: 1.15rem; padding: .85rem 1rem; border-radius: 16px; background: hsla(var(--primary), .07); color: hsl(var(--muted-foreground)); font-size: .8rem; overflow-wrap: anywhere; }
+.lesson-ai-reference strong { color: hsl(var(--foreground)); }
+.lesson-ai-reference a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 3px; align-self: flex-start; }
+
 [data-theme='light'] .lesson-ai-footer {
   border-top-color: hsla(270, 20%, 88%, 1);
 }

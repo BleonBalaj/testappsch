@@ -93,12 +93,20 @@
   line-height: 1.15;
 }
 
-.brand-subtag {
-  font-size: 0.8rem;
+.login-brand-credit {
+  display: block;
+  font-size: 1.35rem;
   font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: 1.25;
   color: hsl(var(--muted-foreground));
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+}
+
+.password-recovery-error {
+  color: hsl(var(--destructive));
+  font-size: .9rem;
+  line-height: 1.4;
+  margin-top: .75rem;
 }
 
 /* Ambient glowing orbs behind the glass card to refract rich colors */

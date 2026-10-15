@@ -170,8 +170,8 @@ export function LessonAiAssistanceCard({
             </div>
             <p className="lesson-ai-desc">
               {isSq 
-                ? 'Përdor lëndën, klasën, njësinë dhe shënimet tuaja për të hartuar aktivitete e rezultate për këtë orë.'
-                : 'Uses your subject, class, unit, and existing notes to draft activities and outcomes for this lesson.'}
+                ? 'Përdor lëndën, klasën, njësinë dhe të gjitha shënimet tuaja. Kërkon edhe pjesë përkatëse nga libri i mësuesit i Dukagjinit për lëndën dhe klasën, kur janë të disponueshme.'
+                : 'Uses your subject, grade, unit, and all existing notes. Also checks for relevant passages in Dukagjini’s Albanian teacher guide for this subject and grade, when available.'}
             </p>
           </div>
         </div>
@@ -263,6 +263,15 @@ export function LessonAiAssistanceCard({
       )}
 
       {/* Footer Actions */}
+      {activePlan.aiReference && <div className="lesson-ai-reference" aria-live="polite">
+        <strong>{isSq ? 'Burimi për gjenerimin e fundit' : 'Reference for the last generation'}</strong>
+        {activePlan.aiReference.status === 'matched' ? <>
+          <span>{activePlan.aiReference.title} · {isSq ? 'Faqet e PDF-së' : 'PDF pages'} {(activePlan.aiReference.pages || []).join(', ')}</span>
+          {/^https:\/\/dukagjinibotime\.com\/libra\//.test(activePlan.aiReference.url || '') && <a href={activePlan.aiReference.url} target="_blank" rel="noopener noreferrer">{isSq ? 'Shiko librin te botuesi' : 'View the publisher’s guide'}</a>}
+        </> : <span>{activePlan.aiReference.status === 'unavailable'
+          ? (isSq ? 'Burimi i botuesit nuk ishte i disponueshëm. Drafti bazohet në kontekstin tuaj.' : 'The publisher’s source could not be read. The draft uses your entered context.')
+          : (isSq ? 'Nuk u gjet pjesë përkatëse për këtë lëndë, klasë dhe njësi. Drafti bazohet në kontekstin tuaj.' : 'No matching guide passage was found for this subject, grade, and unit. The draft uses your entered context.')}</span>}
+      </div>}
       <div className="lesson-ai-footer">
         {hasExistingContent && <label className="lesson-pdf-name-toggle">
           <input type="checkbox" checked={replaceExisting} disabled={isGenerating} onChange={(event) => setReplaceExisting(event.target.checked)} />

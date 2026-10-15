@@ -5,6 +5,13 @@ import { reportErrors } from './callableErrors.js';
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const permittedRoles = new Set(['admin', 'teacher', 'dept_head']);
 
+export const checkPasswordRecoveryAccount = onCall({
+  region: 'us-central1', invoker: 'public', timeoutSeconds: 30, maxInstances: 5,
+}, async request => {
+  const { checkRecoveryAccount } = await import('./passwordRecovery.js');
+  return checkRecoveryAccount(request);
+});
+
 export const getLessonAiUsage = onCall({ region: 'us-central1', invoker: 'public' }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in to view your AI usage.');
   const [{ getFirestore }, { getLessonAiQuota }] = await Promise.all([
@@ -81,7 +88,7 @@ export const generateLessonPlan = onCall({
   region: 'us-central1',
   invoker: 'public',
   secrets: [geminiApiKey],
-  timeoutSeconds: 120,
+  timeoutSeconds: 180,
   memory: '512MiB',
   maxInstances: 20,
 }, async (request) => {
@@ -99,7 +106,7 @@ export const generateLessonPlan = onCall({
   ]);
   adminApp.ensureDefaultApp();
   const { LessonAiQuotaError, reserveLessonAiQuota, completeLessonAiQuota, releaseLessonAiQuota } = quota;
-  const { buildLessonGenerationContext, generateLessonPlanCore } = lessonCore;
+  const { buildLessonGenerationContext, generateLessonPlanCore, translateTeacherGuideUnit } = lessonCore;
   const { createHash, randomUUID } = crypto;
   const db = getFirestore();
   const [school, membership] = await Promise.all([
@@ -126,7 +133,7 @@ export const generateLessonPlan = onCall({
 
   try {
     // Reject invalid input before reserving one of the account's generation slots.
-    buildLessonGenerationContext(planContext);
+    const generationContext = buildLessonGenerationContext(planContext);
     const requestId = typeof request.data?.requestId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.data.requestId)
       ? request.data.requestId : randomUUID();
     const contextHash = createHash('sha256').update(JSON.stringify({ schoolId, planContext })).digest('hex');
@@ -135,7 +142,11 @@ export const generateLessonPlan = onCall({
 
     let generated;
     try {
-      generated = await generateLessonPlanCore(planContext, apiKey);
+      const { getTeacherGuideContext, guideSourceSummary } = await import('./teacherGuides.js');
+      const signal = AbortSignal.timeout(160000);
+      const publisherReference = await getTeacherGuideContext(generationContext, { db, signal, translateUnit: context => translateTeacherGuideUnit(context, apiKey, { signal }) });
+      const fields = await generateLessonPlanCore(planContext, apiKey, { signal, publisherReference });
+      generated = { ...fields, aiReference: guideSourceSummary(publisherReference) };
     } catch (error) {
       try { await releaseLessonAiQuota(db, { uid, requestId, contextHash }); }
       catch (releaseError) { console.error('Could not release failed lesson AI reservation:', releaseError); }
@@ -146,7 +157,7 @@ export const generateLessonPlan = onCall({
   } catch (error) {
     if (error instanceof LessonAiQuotaError) throw new HttpsError(error.code, error.message, error.details);
     const message = String(error?.message || 'Lesson generation failed.');
-    if (/context is invalid|Add a subject|lesson unit is too broad|valid positive lesson period|class label with a grade/i.test(message)) {
+    if (/context is invalid|Add a subject|lesson unit is too broad|valid positive lesson period|class label with a grade|lesson duration between/i.test(message)) {
       throw new HttpsError('invalid-argument', message);
     }
     if (/too generic/i.test(message)) throw new HttpsError('failed-precondition', message);

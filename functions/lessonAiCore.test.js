@@ -47,6 +47,10 @@ const completeResult = {
   resources: 'Shirita thyesash të ndarë në të dymbëdhjetat dhe fletë me rrjete për krahasim.',
   crossCurricular: 'Art figurativ: ngjyrosja e pjesëve të një figure për të krahasuar 1/3 dhe 1/4.',
   methodology: 'Për 1/3 + 1/4, nxënësit gjejnë emëruesin 12 dhe shkruajnë 4/12 + 3/12 = 7/12. Mësuesi modelon pse këto thyesa janë të barasvlershme me shiritat e thyesave. Nxënësit më pas zgjedhin vetë emëruesin për 2/3 + 1/6, vizatojnë të dy sasitë dhe shpjegojnë si e kontrolluan rezultatin.',
+  lessonSequence: [
+    { title: 'Modelim', minutes: 15, activity: 'Mësuesi modelon pse këto thyesa janë të barasvlershme me shiritat e thyesave.' },
+    { title: 'Praktikë', minutes: 30, activity: 'Nxënësit më pas zgjedhin vetë emëruesin për 2/3 + 1/6, vizatojnë të dy sasitë dhe shpjegojnë si e kontrolluan rezultatin.' },
+  ],
   assessment: 'Mësuesi kontrollon nëse secili nxënës zgjedh një emërues të përbashkët, shkruan thyesat e barasvlershme dhe arsyeton shumën në vizatim.',
   homework: 'Llogarit 1/2 + 1/3 dhe 3/4 + 1/8; vizato një model për secilën shumë dhe shpjego emëruesin e përbashkët.',
 };
@@ -141,6 +145,10 @@ test('allows a short specific unit and no forced cross-curricular connection', (
     focusConcepts: ['plants', 'roots'],
     concreteExample: 'Students compare two plants and point to the roots of each one.',
     methodology: 'Students compare two plants and point to the roots of each one. The teacher models the parts of plants with real specimens. Students draw their own plant and label roots and leaves, then explain where the water enters.',
+    lessonSequence: [
+      { title: 'Model', minutes: 15, activity: 'The teacher models the parts of plants with real specimens.' },
+      { title: 'Practice', minutes: 30, activity: 'Students draw their own plant and label roots and leaves, then explain where the water enters.' },
+    ],
     crossCurricular: '',
   };
   assert.deepEqual(validateLessonGeneration(candidate, context), []);
@@ -155,4 +163,28 @@ test('surfaces API failures instead of producing a hard-coded generic plan', asy
   };
   await assert.rejects(generateLessonPlanCore(plan, 'test-key', { fetchImpl }), /API quota exceeded/);
   assert.equal(calls, 1);
+});
+
+test('rejects timing errors, partial invalid outcomes, and missing printed activities', () => {
+  const context = buildLessonGenerationContext(plan);
+  assert.ok(validateLessonGeneration({ ...completeResult, lessonSequence: [{ ...completeResult.lessonSequence[0], minutes: 5 }, completeResult.lessonSequence[1]] }, context).some(problem => problem.includes('duration')));
+  assert.ok(validateLessonGeneration({ ...completeResult, lessonOutcomes: [...completeResult.lessonOutcomes, 42] }, context).some(problem => problem.includes('lessonOutcomes')));
+  assert.ok(validateLessonGeneration({ ...completeResult, lessonSequence: [{ ...completeResult.lessonSequence[0], activity: 'An unrelated task that was never included in methodology.' }, completeResult.lessonSequence[1]] }, context).some(problem => problem.includes('printed plan')));
+  assert.throws(() => buildLessonGenerationContext({ ...plan, duration: '0' }), /lesson duration/);
+  assert.equal(buildLessonGenerationContext({ ...plan, duration: '90 min' }).durationMinutes, 90);
+});
+
+test('keeps lengthy teacher content and injects only the supplied publisher evidence', async () => {
+  const longNotes = 'Use paper circles and physical fraction strips. '.repeat(80);
+  assert.equal(buildLessonGenerationContext({ ...plan, methodology: longNotes }).existingTeacherContent.methodology, longNotes.trim());
+  const reference = { status: 'matched', title: 'MATEMATIKA 6', passages: [{ page: 14, text: 'A public pedagogical passage.' }] };
+  const result = await generateLessonPlanCore(plan, 'test-key', { publisherReference: reference, fetchImpl: async (_url, init) => {
+    const body = JSON.parse(init.body);
+    assert.match(body.contents[0].parts[0].text, /public pedagogical passage/);
+    assert.match(body.systemInstruction.parts[0].text, /unit-specific misconception/);
+    assert.match(body.systemInstruction.parts[0].text, /do not reproduce the publisher/);
+    return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(completeResult) }] } }] }));
+  } });
+  assert.equal(result.reflection, undefined);
+  assert.equal(result.publisherReference, undefined);
 });

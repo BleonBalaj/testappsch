@@ -14,6 +14,7 @@ export function mergeGeneratedLessonFields(current, generated, { replaceExisting
     const alreadyWritten = Array.isArray(value) ? value.some((item) => text(item)) : Boolean(text(value));
     if (replaceExisting || !alreadyWritten) next[field] = generated[field];
   }
+  if (generated.aiReference) next.aiReference = generated.aiReference;
   // Reflection records what actually happened; generation must never fabricate it.
   return next;
 }
@@ -27,7 +28,7 @@ export async function getLessonAiUsage() {
 export async function generateLessonPlanWithAI(planContext, { schoolId, signal, requestId } = {}) {
   if (!schoolId) throw new Error('Select a school before generating a lesson plan.');
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-  const generate = httpsCallable(functions, 'generateLessonPlan', { timeout: 130000 });
+  const generate = httpsCallable(functions, 'generateLessonPlan', { timeout: 190000 });
   const result = await generate({ schoolId, planContext, requestId });
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   return result.data;

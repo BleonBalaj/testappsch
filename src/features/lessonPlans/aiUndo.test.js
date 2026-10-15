@@ -26,3 +26,10 @@ test('undo never applies to another plan', () => {
   const snapshot = makeLessonAiUndoSnapshot({ id: 'plan-1', topic: '' }, { id: 'plan-1', topic: 'AI' }, { schoolId: 'school', accountId: 'user' });
   assert.deepEqual(buildLessonAiUndoPatch({ id: 'plan-2', topic: 'AI' }, snapshot).patch, {});
 });
+
+test('undo clears reference metadata with a cloud-safe null even after tab storage serialization', () => {
+  const before = { id: 'plan-1', resources: '' };
+  const after = { ...before, resources: 'Objects', aiReference: { status: 'matched', pages: [12] } };
+  const snapshot = JSON.parse(JSON.stringify(makeLessonAiUndoSnapshot(before, after, { schoolId: 'school', accountId: 'user' })));
+  assert.deepEqual(buildLessonAiUndoPatch(after, snapshot).patch, { resources: '', aiReference: null });
+});

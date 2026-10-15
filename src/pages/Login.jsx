@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, 
@@ -51,6 +51,9 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const forgotRequest = useRef(0);
 
   // Theme mode: 'dark', 'light', or 'system'
   const [currentTheme, setCurrentTheme] = useState(() => {
@@ -195,20 +198,35 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
   };
 
   // Password reset
+  const closeForgotModal = () => {
+    forgotRequest.current += 1;
+    setForgotLoading(false);
+    setIsForgotModalOpen(false);
+  };
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
-    const cleanForgotEmail = (forgotEmail || email).trim().toLowerCase();
-    if (!cleanForgotEmail) return;
-
+    if (forgotLoading) return;
+    const cleanForgotEmail = forgotEmail.trim().toLowerCase();
+    setForgotError('');
+    setForgotSubmitted(false);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanForgotEmail)) {
+      setForgotError('Please enter a valid email address.');
+      return;
+    }
+    const requestId = ++forgotRequest.current;
+    setForgotLoading(true);
     try {
       await resetUserPassword(cleanForgotEmail);
+      if (requestId !== forgotRequest.current) return;
+      setForgotEmail(cleanForgotEmail);
       setForgotSubmitted(true);
       if (addNotification) {
         addNotification('info', `Password recovery link dispatched to ${cleanForgotEmail} 💌`);
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to send password recovery email.');
-    }
+      if (requestId !== forgotRequest.current) return;
+      setForgotError(err.message || 'Failed to send password recovery email.');
+    } finally { if (requestId === forgotRequest.current) setForgotLoading(false); }
   };
 
   // Feature highlights
@@ -261,7 +279,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
             </div>
             <div className="brand-title-wrap">
               <h2 className="brand-title gradient-text">Noesis Horizon</h2>
-              <span className="brand-subtag">Modern Academic OS</span>
+              <span className="login-brand-credit">By Bleon Balaj</span>
             </div>
           </div>
 
@@ -507,6 +525,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
                     onClick={() => {
                       setForgotEmail(email);
                       setForgotSubmitted(false);
+                      setForgotError('');
                       setIsForgotModalOpen(true);
                     }}
                   >
@@ -641,7 +660,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
       {/* ──────── FORGOT PASSWORD MODAL (AGENTS.md Compliant) ──────── */}
       <AnimatePresence>
         {isForgotModalOpen && (
-          <div className="modal-overlay" onClick={() => setIsForgotModalOpen(false)}>
+          <div className="modal-overlay" onClick={closeForgotModal}>
             <motion.div 
               className="modal-content auth-dialog" 
               onClick={(e) => e.stopPropagation()}
@@ -659,7 +678,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
                 <button
                   type="button"
                   className="icon-btn-close"
-                  onClick={() => setIsForgotModalOpen(false)}
+                  onClick={closeForgotModal}
                   aria-label="Close"
                 >
                   <X size={16} />
@@ -671,13 +690,13 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
                   <CheckCircle2 size={42} style={{ color: 'hsl(var(--mood-happy))', margin: '0 auto 1rem' }} />
                   <h4 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Check Your Email</h4>
                   <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
-                    We have dispatched password reset instructions to <strong>{forgotEmail}</strong>.
+                    A password reset email has been requested for <strong>{forgotEmail}</strong>. Check your inbox and spam folder.
                   </p>
                   <button
                     type="button"
                     className="btn-primary"
                     style={{ marginTop: '1.5rem', width: '100%' }}
-                    onClick={() => setIsForgotModalOpen(false)}
+                    onClick={closeForgotModal}
                   >
                     Done
                   </button>
@@ -685,27 +704,33 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
               ) : (
                 <form onSubmit={handleForgotSubmit} className="modal-form">
                   <div className="input-group">
-                    <label>Account Email</label>
+                    <label htmlFor="password-recovery-email">Account Email</label>
                     <input
+                      id="password-recovery-email"
                       type="email"
                       required
                       placeholder="name@school.edu"
                       value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
+                      onChange={(e) => { setForgotEmail(e.target.value); setForgotError(''); }}
+                      disabled={forgotLoading}
+                      aria-invalid={Boolean(forgotError)}
+                      aria-describedby={forgotError ? 'password-recovery-error' : undefined}
                       autoFocus
                     />
                   </div>
+
+                  {forgotError && <p id="password-recovery-error" className="password-recovery-error" role="alert">{forgotError}</p>}
 
                   <div className="modal-footer-actions">
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() => setIsForgotModalOpen(false)}
+                      onClick={closeForgotModal}
                     >
                       Cancel
                     </button>
-                    <button type="submit" className="btn-primary">
-                      Send Reset Link
+                    <button type="submit" className="btn-primary" disabled={forgotLoading}>
+                      {forgotLoading ? 'Sending...' : 'Send Reset Link'}
                     </button>
                   </div>
                 </form>
