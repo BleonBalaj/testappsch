@@ -233,7 +233,7 @@ const StudentCard = ({ student, classesList, classesLoaded, groupsById, index, o
     >
       <div className="student-card-header">
         <div className="student-avatar-large">
-          <Avatar alt={student.name} />
+          <Avatar alt={student.name} size="100%" style={{ borderRadius: 'inherit' }} />
         </div>
         <div className="header-actions-right" onClick={e => e.stopPropagation()}>
           {isArchived ? (
