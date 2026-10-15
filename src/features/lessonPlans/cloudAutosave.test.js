@@ -1,6 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLessonCloudAutosave } from './cloudAutosave.js';
+import { setImmediate } from 'node:timers';
+
+test('app update waits for every cloud edit, including one queued during an earlier write', async () => {
+  const pending = [];
+  const writes = [];
+  const autosave = createLessonCloudAutosave({ delay: 60_000, onStatus() {}, write: plan => {
+    writes.push(plan.text);
+    return new Promise(resolve => pending.push(resolve));
+  } });
+  autosave.enqueue({ id: 'p1', text: 'first' }, 'school');
+  let complete = false;
+  const operation = autosave.flushAndWait().then(() => { complete = true; });
+  autosave.enqueue({ id: 'p1', text: 'latest' }, 'school');
+  assert.equal(complete, false);
+  pending.shift()();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(writes, ['first', 'latest']);
+  assert.equal(complete, false);
+  pending.shift()();
+  await operation;
+  assert.equal(complete, true);
+  assert.equal(autosave.hasUnconfirmed('school', 'p1'), false);
+});
+
+test('app update stops when a cloud save fails and retains the edit for retry', async () => {
+  let fail = true;
+  const autosave = createLessonCloudAutosave({ onStatus() {}, write: async () => { if (fail) throw new Error('offline'); } });
+  autosave.enqueue({ id: 'p1', text: 'keep this' }, 'school');
+  await assert.rejects(autosave.flushAndWait(), /offline/);
+  assert.equal(autosave.hasUnconfirmed('school', 'p1'), true);
+  fail = false;
+  await autosave.flushAndWait();
+  assert.equal(autosave.hasUnconfirmed('school', 'p1'), false);
+});
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 

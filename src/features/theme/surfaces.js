@@ -1,0 +1,20 @@
+// Real reading surfaces, not badges, buttons, charts, or exported documents.
+export const NATURE_SURFACES = [
+  '.stat-card', '.content-card', '.focus-card', '.bulletin-card', '.mood-widget',
+  '.student-card', '.staff-card', '.class-card', '.student-class-card', '.cg-card',
+  '.settings-section', '.resource-card', '.event-card-large', '.not-found-card',
+  '.students-controls-container', '.staff-controls-container', '.events-controls',
+  '.lesson-stat-card', '.lesson-list-panel', '.lesson-settings-card', '.lesson-editor-section',
+  '.lesson-ai-card', '.lesson-preview-panel', '.lesson-template-card', '.lp-admin-card',
+  '.co-widget', '.co-table', '.sov-widget', '.continuous-tracking-card',
+  '.week-selector-card', '.schedule-filters-container', '.schedule-unscheduled',
+  '.resources-toolbar', '.tasks-progress-wrap', '.mood-empty', '.chart-card',
+  '.login-auth-card', '.login-features-card', '.padm-card',
+  '.chart-section', '.history-section', '.co-header', '.sov-hero', '.rankings-list',
+  '.podium-base', '.task-card', '.tstat', '.lesson-editor-toolbar',
+  '.student-classes-summary-strip', '.official-transcript-sheet', '.students-empty-state',
+  '.empty-staff-state', '.empty-classes-card', '.empty-resources', '.empty-schedule-card',
+  '.empty-leaderboard', '.empty-state', '.role-summary-card', '.role-create-pane',
+  '.resource-list-item', '.overdue-banner', '.schedule-source-notice',
+  '.classes-view-switch', '.classes-controls-bar', '.classes-nav-tabs-bar',
+].join(', ');

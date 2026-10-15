@@ -1,3 +1,4 @@
+import { useThemeMode } from '../features/theme/useThemeMode';
 import { memo, useEffect, useMemo, useRef, useCallback } from 'react';
 
 const NUM_STARS = 200;
@@ -36,6 +37,7 @@ function getThemeStarConfig() {
 }
 
 const StarryBackground = memo(function StarryBackground() {
+  const nature = useThemeMode() === 'nature';
   const canvasRef   = useRef(null);
   const rafRef      = useRef(null);
   const configRef   = useRef(null);
@@ -98,7 +100,7 @@ const StarryBackground = memo(function StarryBackground() {
   }, [draw]);
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || nature) return;
 
     const refresh = () => {
       configRef.current = getThemeStarConfig();
@@ -151,9 +153,9 @@ const StarryBackground = memo(function StarryBackground() {
         rafRef.current = null;
       }
     };
-  }, [reduceMotion, scheduleDraw]);
+  }, [reduceMotion, nature, scheduleDraw]);
 
-  if (reduceMotion) return null;
+  if (reduceMotion || nature) return null;
 
   return (
     <canvas

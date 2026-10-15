@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, UserPlus, BookOpen, CalendarPlus, UserCheck, Megaphone, Check } from 'lucide-react';
+import { Plus, UserPlus, BookOpen, CalendarPlus, UserCheck, Check } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 import './QuickAction.css';
 
 const QuickAction = ({ _addNotification, onNavigate, userRole = 'admin', currentPath }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useLanguage();
   const isAdmin = userRole === 'admin';
 
   if (currentPath === 'messages') {
@@ -14,21 +16,21 @@ const QuickAction = ({ _addNotification, onNavigate, userRole = 'admin', current
   const isStudent = userRole === 'student';
 
   const actions = isStudent ? [
-    { id: 'tasks', icon: Check, label: 'My Personal Tasks', color: 'hsl(var(--primary))', target: 'tasks' },
-    { id: 'schedule', icon: CalendarPlus, label: 'Class Timetable', color: 'hsl(var(--accent))', target: 'schedule' },
-    { id: 'events', icon: CalendarPlus, label: 'Academic Calendar', color: 'hsl(var(--chart-1))', target: 'events' },
-    { id: 'class', icon: BookOpen, label: 'My Courses', color: 'hsl(var(--chart-2))', target: 'classes' },
+    { id: 'tasks', icon: Check, label: t('quickActions.personalTasks'), color: 'hsl(var(--primary))', target: 'tasks' },
+    { id: 'schedule', icon: CalendarPlus, label: t('quickActions.timetable'), color: 'hsl(var(--accent))', target: 'schedule' },
+    { id: 'events', icon: CalendarPlus, label: t('quickActions.academicCalendar'), color: 'hsl(var(--chart-1))', target: 'events' },
+    { id: 'class', icon: BookOpen, label: t('quickActions.myCourses'), color: 'hsl(var(--chart-2))', target: 'classes' },
   ] : [
-    { id: 'student', icon: UserPlus, label: 'Add Student', color: 'hsl(var(--primary))', target: 'students' },
+    { id: 'student', icon: UserPlus, label: t('quickActions.addStudent'), color: 'hsl(var(--primary))', target: 'students' },
     { 
       id: 'staff', 
       icon: UserCheck, 
-      label: isAdmin ? 'Add Staff Member' : 'Staff Directory', 
+      label: t(isAdmin ? 'quickActions.addStaff' : 'quickActions.staffDirectory'),
       color: 'hsl(var(--accent))', 
       target: 'staff' 
     },
-    { id: 'class', icon: BookOpen, label: 'Course Catalog', color: 'hsl(var(--chart-2))', target: 'classes' },
-    { id: 'event', icon: CalendarPlus, label: 'School Calendar', color: 'hsl(var(--chart-1))', target: 'events' },
+    { id: 'class', icon: BookOpen, label: t('quickActions.courseCatalog'), color: 'hsl(var(--chart-2))', target: 'classes' },
+    { id: 'event', icon: CalendarPlus, label: t('quickActions.schoolCalendar'), color: 'hsl(var(--chart-1))', target: 'events' },
   ];
 
   const handleAction = (action) => {
@@ -50,9 +52,10 @@ const QuickAction = ({ _addNotification, onNavigate, userRole = 'admin', current
               exit={{ opacity: 0 }}
               onClick={() => setIsOpen(false)}
             />
-            <div className="action-menu">
+            <div className="action-menu" role="group" aria-label={t('quickActions.title')}>
               {actions.map((action, i) => (
                 <motion.button
+                  type="button"
                   key={action.id}
                   className="action-btn glass bouncy"
                   initial={{ opacity: 0, y: 20, scale: 0.8 }}
@@ -73,11 +76,13 @@ const QuickAction = ({ _addNotification, onNavigate, userRole = 'admin', current
       </AnimatePresence>
 
       <motion.button 
+        type="button"
         className={`fab-btn bouncy ${isOpen ? 'open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        aria-label="Quick Actions"
+        aria-label={t(isOpen ? 'quickActions.close' : 'quickActions.title')}
+        aria-expanded={isOpen}
       >
         <motion.div
           animate={{ rotate: isOpen ? 45 : 0 }}

@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+const manifest = new URL('../public/version.json', import.meta.url);
+const release = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+if (!/^\d+\.\d+\.\d+$/.test(release.version)) throw new Error('Expected a semantic version in public/version.json');
+const parts = release.version.split('.').map(Number);
+parts[2]++;
+release.version = parts.join('.');
+release.buildDate = new Date().toISOString().slice(0, 10);
+release.requiresReload = process.argv.includes('--requires-reload');
+fs.writeFileSync(manifest, JSON.stringify(release, null, 2) + '\n');
+console.log(`Next release: ${release.version} (${release.buildDate}). Build and deploy together.`);

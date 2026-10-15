@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ThemeRuntime from './components/theme/ThemeRuntime';
+import { AppReleaseProvider } from './context/AppReleaseContext';
+import AppUpdateNotice from './components/AppUpdateNotice';
 import Sidebar from './components/Sidebar';
 import StarryBackground from './components/StarryBackground';
 import Dashboard from './pages/Dashboard';
@@ -31,7 +34,7 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MoodProvider } from './context/MoodContext';
 import { SchoolDataProvider, useSchoolData, DEFAULT_ROLE_PERMISSIONS } from './context/SchoolDataContext';
 import { TasksProvider } from './context/TasksContext';
-import { Calendar, Sparkles, School, Plus, LogOut } from 'lucide-react';
+import { Bell, Calendar, Sparkles, School, Plus, LogOut } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './services/firebase';
 import './App.css';
@@ -232,15 +235,6 @@ function AppContent() {
       window.removeEventListener('hashchange', handleUrlChange);
     };
   }, [openRoute]);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('lumi-theme');
-    if (savedTheme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-  }, []);
 
   // Reset scroll position on every page navigation (AGENTS.md)
   useEffect(() => {
@@ -516,7 +510,7 @@ function AppContent() {
       />
       <main className="main-content" ref={mainContentRef}>
         {currentPath !== 'messages' && (
-          <header className="main-header">
+          <header className="main-header app-header">
             <div className="header-search glass" onClick={() => setIsSearchOpen(true)}>
               <input 
                 type="text" 
@@ -530,9 +524,11 @@ function AppContent() {
                 type="button" 
                 className="notification-btn bouncy" 
                 onClick={() => addNotification('info', userRole === 'student' ? 'No urgent homework alerts today ✨' : 'No new alerts at this time ✨')} 
-                title="Notifications"
+                title={t('header.notifications')}
+                aria-label={t('header.notifications')}
               >
-                🔔
+                <span className="notification-emoji" aria-hidden="true">🔔</span>
+                <Bell size={19} className="notification-nature-icon" aria-hidden="true" />
               </button>
               <div className="date-display">
                 <Calendar size={15} className="date-icon" />
@@ -607,18 +603,22 @@ export default function App() {
   const adminRoute = useAdminRoute();
   return (
     <AuthProvider>
+      <ThemeRuntime />
       <LanguageProvider>
-        {adminRoute ? (
-          <PlatformAdminRoute view={adminRoute.view} />
-        ) : (
-          <SchoolDataProvider>
-            <TasksProvider>
-              <MoodProvider>
-                <AppContent />
-              </MoodProvider>
-            </TasksProvider>
-          </SchoolDataProvider>
-        )}
+        <AppReleaseProvider>
+          <AppUpdateNotice />
+          {adminRoute ? (
+            <PlatformAdminRoute view={adminRoute.view} />
+          ) : (
+            <SchoolDataProvider>
+              <TasksProvider>
+                <MoodProvider>
+                  <AppContent />
+                </MoodProvider>
+              </TasksProvider>
+            </SchoolDataProvider>
+          )}
+        </AppReleaseProvider>
       </LanguageProvider>
     </AuthProvider>
   );

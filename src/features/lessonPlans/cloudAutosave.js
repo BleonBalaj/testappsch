@@ -9,6 +9,8 @@ export function createLessonCloudAutosave({ write, onStatus, delay = 450 }) {
 
   function drain(key) {
     if (inFlight.has(key) || !pending.has(key)) return inFlight.get(key);
+    if (timers.has(key)) clearTimeout(timers.get(key));
+    timers.delete(key);
     const entry = pending.get(key);
     pending.delete(key);
     let operation;
@@ -59,6 +61,13 @@ export function createLessonCloudAutosave({ write, onStatus, delay = 450 }) {
   return {
     enqueue,
     flush,
+    async flushAndWait() {
+      // Include edits queued while an earlier write is being acknowledged.
+      while (pending.size || inFlight.size) {
+        flush();
+        await Promise.all([...inFlight.values()]);
+      }
+    },
     hasUnconfirmed: (schoolId, planId) => {
       const key = keyFor(schoolId, planId);
       return pending.has(key) || inFlight.has(key);

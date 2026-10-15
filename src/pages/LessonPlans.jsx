@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive, ArrowDown, ArrowLeft, ArrowUp, BookOpen, CalendarDays, Check,
   ChevronDown, Clock3, Copy, Download, FilePlus2, FileText, FolderArchive,
@@ -204,6 +204,16 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [reusable, setReusable] = useState(() => repository.listReusableEntries());
   const [schoolSubjects, setSchoolSubjects] = useState(() => repository.listSubjectMappings());
   const [activePlan, setActivePlan] = useState(null);
+  const pageRef = useRef(null);
+  const editorTitleRef = useRef(null);
+  // Opening a plan is navigation within this page. Reset both supported
+  // scroll owners once, never on edits/autosave updates to the same plan.
+  useLayoutEffect(() => {
+    if (view !== 'editor' || !activePlan?.id) return;
+    editorTitleRef.current?.focus({ preventScroll: true });
+    pageRef.current?.closest('.main-content')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [view, activePlan?.id]);
   const [printTarget, setPrintTarget] = useState(null);
   const [documentLanguage, setDocumentLanguage] = useState(() => localStorage.getItem('lumi-lesson-document-language') === 'en' ? 'en' : 'sq');
   const changeDocumentLanguage = (next) => { 
@@ -361,9 +371,11 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
 
   useEffect(() => {
     const flush = () => autosaveRef.current.flush();
+    const beforeUpdate = event => event.detail.waitUntil(autosaveRef.current.flushAndWait());
     window.addEventListener('pagehide', flush);
     window.addEventListener('online', flush);
-    return () => { window.removeEventListener('pagehide', flush); window.removeEventListener('online', flush); flush(); };
+    window.addEventListener('app:before-update', beforeUpdate);
+    return () => { window.removeEventListener('pagehide', flush); window.removeEventListener('online', flush); window.removeEventListener('app:before-update', beforeUpdate); flush(); };
   }, []);
 
   useEffect(() => {
@@ -499,7 +511,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const storageStatus = repository.getStorageStatus();
   const storageProblem = !storageStatus.personal.ok || !storageStatus.school.ok;
 
-  return <LessonLanguageContext.Provider value={language}><div lang={language === 'sq' ? 'sq' : 'en'} className="lesson-page">
+  return <LessonLanguageContext.Provider value={language}><div ref={pageRef} lang={language === 'sq' ? 'sq' : 'en'} className="lesson-page">
     {storageProblem && <div className="lesson-storage-warning" role="alert">{t('validation.saveFailed')}</div>}
     {message && <div className="lesson-toast" role="status"><Check size={16} />{message}</div>}
     {view !== 'editor' && <>
@@ -532,33 +544,17 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           {dateFilter === 'custom' && <><input aria-label={t('filter.fromDateAria')} type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /><input aria-label={t('filter.toDateAria')} type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></>}
         </div>
         {filtered.length ? <div className="lesson-plan-list">{filtered.map((plan) => <article className="lesson-plan-row" key={plan.id}>
-          <div 
-            className="lesson-plan-icon" 
-            onClick={() => openPlan(plan)} 
-            role="button" 
-            tabIndex={0} 
-            title={t('plans.edit')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlan(plan); } }}
-          >
+          <div className="lesson-plan-icon" aria-hidden="true">
             <BookOpen size={22} />
           </div>
           <div className="lesson-plan-main">
             <div className="lesson-plan-title">
-              <h3 
-                onClick={() => openPlan(plan)} 
-                role="button" 
-                tabIndex={0} 
-                title={t('plans.edit')}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlan(plan); } }}
-              >
+              <h3><button type="button" className="lesson-plan-open-button" onClick={() => openPlan(plan)} title={t('plans.edit')}>
                 {plan.lessonUnit || t('plans.untitledUnit')}
-              </h3>
+              </button></h3>
               <span className={`lesson-status lesson-status-${plan.status}`}>{t(`status.${plan.status}`)}</span>
             </div>
-            <p 
-              onClick={() => openPlan(plan)} 
-              title={t('plans.edit')}
-            >
+            <p>
               {[ct(plan.subject), plan.classLabel, plan.topic].filter(Boolean).join(' · ') || t('plans.completeDetails')}
             </p>
             <small>{dateLabel(plan.date, language)} · {t('plans.modified', { date: plan.updatedAt ? language === 'sq' ? dateInTimeZone(plan.updatedAt, SCHOOL_TIME_ZONE).split('-').reverse().slice(0, 2).join('.') : new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(plan.updatedAt)) : t('date.todayLower') })}</small>
@@ -722,7 +718,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
 
     {view === 'editor' && activePlan && <>
       <div className="lesson-editor-toolbar glass">
-        <div className="lesson-editor-toolbar-left"><button type="button" className="lesson-icon-button" onClick={leaveEditor} aria-label={t('editor.backAria')}><ArrowLeft size={20} /></button><div><h1>{activePlan.lessonUnit || t('editor.newPlanTitle')}</h1><span className={`lesson-save-state lesson-save-${saveState}`}>{t(`save.${saveState}`)}</span></div></div>
+        <div className="lesson-editor-toolbar-left"><button type="button" className="lesson-icon-button" onClick={leaveEditor} aria-label={t('editor.backAria')}><ArrowLeft size={20} /></button><div><h1 ref={editorTitleRef} tabIndex={-1}>{activePlan.lessonUnit || t('editor.newPlanTitle')}</h1><span className={`lesson-save-state lesson-save-${saveState}`}>{t(`save.${saveState}`)}</span></div></div>
         <div className="lesson-editor-toolbar-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={() => { autosaveRef.current.flush(activeSchoolId, activePlanRef.current?.id); setMobilePane('preview'); document.getElementById('lesson-preview')?.scrollIntoView({ block: 'nearest' }); }}><FileText size={16} /> {t('editor.preview')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)}><Printer size={16} /> {t('editor.print')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)} title={t('editor.pdfTitle')}><Download size={16} /> {t('editor.pdf')}</button></div>
       </div>
       <div className="lesson-editor-subbar"><div><span className={`lesson-status lesson-status-${activePlan.status}`}>{t(`status.${activePlan.status}`)}</span><span>{dateLabel(activePlan.date, language)} · {activePlan.classLabel || t('editor.noClass')}</span></div><div>
@@ -745,7 +741,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
             <div className="lesson-form-grid"><Field label={t('editor.date')}><input type="date" value={activePlan.date || ''} onChange={(event) => updatePlan({ date: event.target.value })} /></Field>
               <Field label={t('editor.class')}><input list="lesson-class-list" value={activePlan.classLabel || ''} onChange={(event) => changeClass(event.target.value)} placeholder={t('settings.exampleClass')} /><datalist id="lesson-class-list">{unique([...(preferences.assignedClasses || []), preferences.defaultClass, ...schoolClassLabels]).filter(Boolean).map((value) => <option key={value} value={value} />)}</datalist></Field>
               <Field label={t('editor.subject')}><SubjectPicker value={activePlan.subject || ''} onChange={changeSubject} classLabel={activePlan.classLabel} schoolSubjects={schoolSubjects} /></Field>
-              <Field label={t('editor.lessonUnit')} className="lesson-grid-wide"><input value={activePlan.lessonUnit || ''} onChange={(event) => updatePlan({ lessonUnit: event.target.value })} placeholder={t('editor.lessonUnitPlaceholder')} autoFocus /></Field>
+              <Field label={t('editor.lessonUnit')} className="lesson-grid-wide"><input value={activePlan.lessonUnit || ''} onChange={(event) => updatePlan({ lessonUnit: event.target.value })} placeholder={t('editor.lessonUnitPlaceholder')} /></Field>
             </div>
             <div className="lesson-derived-grid"><Field label={t('editor.curricularArea')} auto={!activePlan.areaManual}><div className="lesson-derived-input"><input value={activePlan.areaManual ? activePlan.curricularArea || '' : ct(activePlan.curricularArea || '')} onChange={(event) => updatePlan({ curricularArea: event.target.value, areaManual: true })} placeholder={t('editor.subjectNeededPlaceholder')} />{activePlan.areaManual && <button type="button" title={t('editor.restoreAutomaticTitle')} aria-label={t('editor.restoreAreaAria')} onClick={() => updatePlan({ curricularArea: getSubjectArea(activePlan.subject, { schoolSubjects, classLabel: activePlan.classLabel }), areaManual: false })}><RotateCcw size={14} /></button>}</div></Field>
               <Field label={t('editor.curriculumStage')} auto={!activePlan.stageManual}><div className="lesson-derived-input"><input value={activePlan.stageManual ? activePlan.curriculumStage || '' : stageLabel(activePlan.curriculumStage || '', language)} onChange={(event) => updatePlan({ curriculumStage: event.target.value, stageManual: true })} placeholder={t('editor.classNeededPlaceholder')} />{activePlan.stageManual && <button type="button" title={t('editor.restoreAutomaticTitle')} aria-label={t('editor.restoreStageAria')} onClick={() => updatePlan({ curriculumStage: stageForClass(activePlan.classLabel, { schoolStages: repository.listStageMappings() }), stageManual: false })}><RotateCcw size={14} /></button>}</div></Field>

@@ -31,10 +31,17 @@
 .lesson-filters > input[type=date] { max-width: 155px; }
 .lesson-search { display: flex; align-items: center; gap: .55rem; flex: 1 1 250px; color: hsl(var(--muted-foreground)); }
 .lesson-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: hsl(var(--foreground)); font: inherit; }
-.lesson-plan-list { display: flex; flex-direction: column; }
-.lesson-plan-row { display: grid; grid-template-columns: auto minmax(160px, 1fr) auto; gap: 1rem; align-items: center; padding: 1.1rem .4rem; border-bottom: 1px solid hsla(var(--foreground), .1); border-radius: 12px; transition: background 0.18s ease; }
-.lesson-plan-row:hover { background: hsla(var(--card), 0.35); }
-.lesson-plan-row:last-child { border-bottom: 0; padding-bottom: .15rem; }
+.lesson-plan-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.25rem; }
+.lesson-plan-row { position: relative; display: grid; grid-template-columns: auto minmax(160px, 1fr) auto; gap: 1rem; align-items: center; padding: 1.25rem 1.35rem; border: 1px solid hsla(var(--foreground), .1); border-radius: var(--radius); background: hsl(var(--background) / .5); box-shadow: 0 4px 16px hsl(var(--foreground) / .035); transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
+.lesson-plan-row:hover { background: hsl(var(--primary) / .065); border-color: hsl(var(--primary) / .3); box-shadow: 0 6px 20px hsl(var(--primary) / .075); }
+.lesson-plan-row:focus-within { border-color: hsl(var(--primary) / .55); outline: 2px solid hsl(var(--primary) / .18); outline-offset: 2px; }
+.lesson-plan-open-button { display: block; max-width: 100%; padding: 0; color: inherit; font: inherit; text-align: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Stretch the native title button across the card; keep action buttons above
+   that target so Print, Preview, Duplicate and Archive never open the editor. */
+.lesson-plan-open-button::after { content: ''; position: absolute; inset: 0; z-index: 1; border-radius: var(--radius); cursor: pointer; }
+.lesson-plan-open-button:focus-visible { outline: none; }
+.lesson-plan-row .lesson-plan-actions { position: relative; z-index: 2; pointer-events: none; }
+.lesson-plan-row .lesson-plan-actions button { pointer-events: auto; }
 .lesson-plan-icon { width: 46px; height: 46px; display: grid; place-items: center; background: hsla(var(--primary), .12); border: 1px solid hsla(var(--primary), .22); border-radius: 16px; color: hsl(var(--primary)); cursor: pointer; transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease; }
 .lesson-plan-icon:hover { transform: scale(1.08); background: hsla(var(--primary), .24); }
 .lesson-plan-main { min-width: 0; }

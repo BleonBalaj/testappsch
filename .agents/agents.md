@@ -344,7 +344,13 @@ Passing emulator tests is **not** proof. These differences already broke product
 * Give complete, exact steps for the owner's setup: merge the pull request → `git pull` → `npm install` if dependencies changed → `cmd.exe /c "npx firebase-tools deploy"` → any post-deploy steps (for example the `/admin` **Fix now** repairs).
 * Tell the owner how to confirm the new version is live, e.g. `.firebase/hosting.ZGlzdA.cache` lists the new `assets/` files, or the changed page shows the change.
 * The owner's live Firebase project and logs are not reachable from cloud sandboxes. State plainly what could not be verified, and add safeguards (clear error messages, logging) for it.
-* Work on a branch and open a pull request; once a pull request is merged, follow-up work goes in a new pull request.
+* Owner's review workflow: work in this primary checkout on `main` and leave edits uncommitted so they appear in GitHub Desktop's Changes list for review/discard. Do not automatically commit, push, or create another branch/worktree. A requested deployment does not authorize a Git commit or push.
+
+### 11.6 Theme and release maintenance
+* Nature is independent: its palette/material rules belong under `html.theme-nature` in `src/features/theme/nature-reference.css` and `nature.css`, in screen media only. Preserve other themes and all lesson-paper/print styles. See `docs/nature-theme.md` for the MomentumHorizon00 source provenance and renderer workflow.
+* The lesson-plan side-preview paper and native Print/Save as PDF must keep their existing white background, blue headings, fonts, contents, and geometry in every app theme. Do not retheme `.lesson-document` or replace its export implementation.
+* `public/version.json` is the release authority, embedded by Vite and read by the update checker. Run `npm run version:patch` once per completed runtime change set, then build and deploy the manifest/assets together. Do not bump on build/deploy retries.
+* Preserve explicit update confirmation and cloud-save acknowledgement before refresh. Do not force reload a user who is editing or whose pending saves failed.
 
 ---
 

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Login from './Login';
@@ -27,10 +27,6 @@ function FullScreenLoader({ label }) {
 export default function PlatformAdminRoute({ view }) {
   const { currentUser, authLoading } = useAuth();
   const [notifications, setNotifications] = useState([]);
-
-  useEffect(() => {
-    if (localStorage.getItem('lumi-theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  }, []);
 
   const addNotification = (type, message) => setNotifications(prev => [...prev, { id: Date.now(), type, message }]);
   const removeNotification = id => setNotifications(prev => prev.filter(item => item.id !== id));

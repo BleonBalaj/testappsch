@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { 
   LogOut, Shield, GraduationCap, BookOpen, 
-  Settings as SettingsIcon, Camera, Moon, Sun, Laptop,
+  Settings as SettingsIcon, Camera,
   Calendar, Book, CheckSquare, MessageSquare, Users, UserSquare2,
   Trophy, CalendarDays, Library, BarChart3, CheckCircle2, RotateCcw, Trash2,
   KeyRound, Lock, Info, Mail, Sparkles, User, Edit3, Upload, Image as ImageIcon
@@ -15,6 +15,9 @@ import { Avatar } from '../components/Avatar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useSchoolData, DEFAULT_ROLE_PERMISSIONS } from '../context/SchoolDataContext';
+import ThemePicker from '../components/theme/ThemePicker';
+import { AppVersionStatus } from '../components/AppUpdateNotice';
+import { useThemeMode } from '../features/theme/useThemeMode';
 import './Settings.css';
 
 const PERMISSIBLE_MODULES = [
@@ -104,10 +107,7 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
   const [animations, setAnimations] = useState(true);
   const [volume, setVolume] = useState(65);
 
-  // Theme mode: 'dark', 'light', or 'system'
-  const [themeMode, setThemeMode] = useState(() => {
-    return localStorage.getItem('lumi-theme-mode') || (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
-  });
+  const themeMode = useThemeMode();
 
   useEffect(() => {
     if (currentUser?.displayName) {
@@ -138,50 +138,6 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
       if (globalPreferences.volume !== undefined) setVolume(Number(globalPreferences.volume));
     }
   }, [globalPreferences]);
-
-  useEffect(() => {
-    const handleExternalTheme = (e) => {
-      const mode = e?.detail?.mode || localStorage.getItem('lumi-theme-mode') || (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
-      setThemeMode(mode);
-    };
-    window.addEventListener('themechange', handleExternalTheme);
-    return () => window.removeEventListener('themechange', handleExternalTheme);
-  }, []);
-
-  const handleApplyTheme = async (mode) => {
-    setThemeMode(mode);
-    localStorage.setItem('lumi-theme-mode', mode);
-
-    let isLight = false;
-    if (mode === 'system') {
-      isLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-    } else {
-      isLight = mode === 'light';
-    }
-
-    if (isLight) {
-      document.documentElement.setAttribute('data-theme', 'light');
-      localStorage.setItem('lumi-theme', 'light');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-      localStorage.setItem('lumi-theme', 'dark');
-    }
-
-    window.dispatchEvent(new CustomEvent('themechange', { detail: { mode, isLight } }));
-    window.dispatchEvent(new Event('userSettingsChanged'));
-
-    try {
-      if (currentUser?.uid) {
-        await updateGlobalPreferences({ theme: mode });
-      }
-    } catch (e) {
-      console.warn('Could not update global preferences:', e);
-    }
-
-    if (addNotification) {
-      addNotification('info', `Switched theme to ${mode.charAt(0).toUpperCase() + mode.slice(1)} ✨`);
-    }
-  };
 
   const handleTogglePreference = async (key, setter, state, label) => {
     const next = !state;
@@ -938,83 +894,9 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
             </div>
           </div>
 
-          {/* Real-time Theme Dock in Settings */}
           <div className="input-group" style={{ marginBottom: '1.25rem' }}>
             <label>{t('settings.interfaceTheme')}</label>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              background: 'hsla(var(--background), 0.5)',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '9999px',
-              padding: '0.35rem 0.5rem',
-              width: 'fit-content'
-            }}>
-              <button
-                type="button"
-                className={`theme-dock-btn ${themeMode === 'dark' ? 'active' : ''}`}
-                onClick={() => handleApplyTheme('dark')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  padding: '0.4rem 0.9rem',
-                  borderRadius: '9999px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: themeMode === 'dark' ? 'hsl(var(--primary))' : 'transparent',
-                  color: themeMode === 'dark' ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))'
-                }}
-              >
-                <Moon size={15} />
-                <span>{t('settings.dark')}</span>
-              </button>
-              <button
-                type="button"
-                className={`theme-dock-btn ${themeMode === 'light' ? 'active' : ''}`}
-                onClick={() => handleApplyTheme('light')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  padding: '0.4rem 0.9rem',
-                  borderRadius: '9999px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: themeMode === 'light' ? 'hsl(var(--primary))' : 'transparent',
-                  color: themeMode === 'light' ? '#ffffff' : 'hsl(var(--muted-foreground))'
-                }}
-              >
-                <Sun size={15} />
-                <span>{t('settings.light')}</span>
-              </button>
-              <button
-                type="button"
-                className={`theme-dock-btn ${themeMode === 'system' ? 'active' : ''}`}
-                onClick={() => handleApplyTheme('system')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  padding: '0.4rem 0.9rem',
-                  borderRadius: '9999px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: themeMode === 'system' ? 'hsl(var(--primary))' : 'transparent',
-                  color: themeMode === 'system' ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))'
-                }}
-              >
-                <Laptop size={15} />
-                <span>{t('settings.auto')}</span>
-              </button>
-            </div>
+            <ThemePicker />
           </div>
 
           <div className="toggles-list">
@@ -1167,9 +1049,7 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
                 <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'hsl(var(--muted-foreground))', display: 'block' }}>
                   {t('settings.platform')}
                 </span>
-                <strong style={{ fontSize: '0.98rem', color: 'hsl(var(--foreground))', display: 'block', marginTop: '0.15rem' }}>
-                  Noesis Horizon · v2.4.0
-                </strong>
+                <AppVersionStatus />
               </div>
             </div>
           </div>

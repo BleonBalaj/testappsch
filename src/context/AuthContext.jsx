@@ -1,3 +1,5 @@
+import { applyTheme } from '../features/theme/themeStore';
+import { writeNaturePhasePref, writeNatureSeason } from '../features/theme/nature-phase';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   onAuthStateChanged, 
@@ -269,18 +271,10 @@ export const AuthProvider = ({ children }) => {
         const data = docSnap.data();
         setGlobalPreferences(prev => ({ ...prev, ...data }));
         
-        // Sync theme with document attribute
-        if (data.theme) {
-          const isLight = data.theme === 'light';
-          if (isLight) {
-            document.documentElement.setAttribute('data-theme', 'light');
-            localStorage.setItem('lumi-theme', 'light');
-          } else {
-            document.documentElement.removeAttribute('data-theme');
-            localStorage.setItem('lumi-theme', 'dark');
-          }
-          localStorage.setItem('lumi-theme-mode', data.theme);
-        }
+        // Use the same resolver for local, system, and cloud-selected themes.
+        writeNaturePhasePref(data.nature?.phase || 'auto');
+        writeNatureSeason(data.nature?.season || 'auto');
+        if (data.theme) applyTheme(data.theme);
       }
     }, (err) => {
       console.warn('Notice listening to global preferences:', err.message);

@@ -1,0 +1,30 @@
+.app-theme-picker { min-width: 0; width: 100%; }
+.app-theme-options { display: flex; gap: .35rem; flex-wrap: wrap; border: 1px solid hsl(var(--input)); border-radius: 24px; background: hsl(var(--background) / .45); padding: .4rem; width: fit-content; max-width: 100%; }
+.app-theme-choice { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; padding: .65rem .85rem; min-height: 40px; background: transparent; border: 1px solid transparent; border-radius: 20px; font: inherit; font-size: .82rem; font-weight: 600; color: hsl(var(--muted-foreground)); cursor: pointer; }
+.app-theme-choice.active { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.app-theme-choice:focus-visible, .nature-controls button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.nature-controls { margin-top: .85rem; padding: 1rem; border: 1px solid hsl(var(--nature-heading) / .3); border-radius: 22px; background: hsl(var(--nature-dialog-tint) / .25); }
+.nature-controls-options { display: flex; flex-wrap: wrap; gap: .85rem; align-items: flex-end; }
+.nature-option-section { min-width: 0; }
+.nature-option-label { display: block; margin-bottom: .45rem; font-size: .78rem; font-weight: 600; }
+.nature-option-pill { display: inline-flex; padding: .2rem; border: 1px solid hsl(var(--nature-heading) / .35); border-radius: 20px; gap: .15rem; max-width: 100%; }
+.nature-option-pill button { border: 1px solid transparent; border-radius: 16px; background: transparent; color: hsl(var(--foreground)); padding: .5rem .6rem; min-height: 36px; font: inherit; font-size: .76rem; cursor: pointer; }
+.nature-option-pill button.active { background: hsl(var(--nature-heading) / .14); border-color: hsl(var(--nature-heading) / .28); }
+.nature-pause-button { display: inline-flex; gap: .5rem; align-items: center; justify-content: center; border-radius: 18px; padding: .6rem; min-height: 42px; border: 1px solid hsl(var(--nature-heading) / .35); background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: .78rem; }
+.nature-settings-hint { font-size: .78rem; color: hsl(var(--muted-foreground)); margin-top: .85rem; line-height: 1.55; }
+.theme-sync-error { margin-top: .6rem; font-size: .8rem; color: hsl(var(--destructive)); }
+.app-theme-picker.is-compact { align-self: flex-start; }
+.nature-controls.is-compact { width: fit-content; max-width: 100%; padding: .55rem; }
+.nature-controls.is-compact .nature-controls-options { flex-wrap: nowrap; gap: .35rem; align-items: center; }
+.nature-controls.is-compact .nature-option-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.nature-controls.is-compact .nature-option-pill button { font-size: .66rem; padding: .35rem .4rem; }
+.nature-controls.is-compact .nature-pause-button { min-width: 36px; min-height: 36px; padding: .4rem; flex-shrink: 0; }
+@media (max-width: 440px) {
+  .nature-controls.is-compact { padding: .35rem; }
+  .nature-controls.is-compact .nature-option-pill { padding: .1rem; gap: 0; }
+  .nature-controls.is-compact .nature-option-pill button { font-size: .58rem; padding: .3rem .22rem; }
+}
+@media print {
+  .app-theme-picker, .nature-scene-frame, .nature-top-fade, .nature-bottom-fade,
+  .nature-performance-notice { display: none !important; }
+}

@@ -1,0 +1,821 @@
+/*
+ * Nature theme.
+ * Every rule here is scoped to html.theme-nature, so no other theme is affected.
+ * The time-of-day sub-palette comes from html[data-nature-phase] = morning | golden | night,
+ * kept in sync by ThemeInitializer (first paint) and NatureBackground (live).
+ *
+ * Mirrors the meadow prototype: morning and golden are LIGHT (dark ink on
+ * frosted white / warm glass, data-theme-style="light"); night is DARK
+ * (pale ink on soft blue glass).
+ */
+
+/* ---------------------------------------------------------------- morning (base) */
+
+/* The public resume's pale trophy strokes disappear on daylight meadow glass.
+   Keep their geometry and stock-theme styling; give Nature a copper/gold ink. */
+html.theme-nature [data-nature-public-award-icon] {
+  --nature-award-ink: 28 62% 30%;
+  color: hsl(var(--nature-award-ink));
+  background-color: hsl(var(--nature-dialog-tint) / 0.8);
+  border-color: hsl(var(--nature-award-ink) / 0.3);
+}
+
+html.theme-nature[data-nature-phase="night"] [data-nature-public-award-icon] {
+  --nature-award-ink: 43 86% 73%;
+}
+
+html.theme-nature [data-nature-public-award-icon] svg {
+  color: inherit;
+  filter: none;
+}
+
+html.theme-nature {
+  --background: 196 45% 95%;
+  --foreground: 210 24% 16%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 210 24% 16%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 210 24% 16%;
+
+  --primary: 108 43% 25%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 120 24% 91%;
+  --secondary-foreground: 210 24% 16%;
+
+  --muted: 140 18% 93%;
+  --muted-foreground: 210 12% 36%;
+
+  --accent: 25 70% 30%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 4 72% 52%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 150 14% 84%;
+  --input: 150 14% 86%;
+  --ring: 108 43% 25%;
+
+  --chart-1: 104 48% 42%;
+  --chart-2: 32 92% 50%;
+  --chart-3: 205 65% 48%;
+  --chart-4: 45 90% 48%;
+  --chart-5: 338 60% 55%;
+
+  --mood-happy: 112 50% 42%;
+  --mood-neutral: 42 92% 48%;
+  --mood-sad: 205 55% 52%;
+
+  /* glass surfaces (raw rgba, not HSL triplets) */
+  --nature-glass: rgba(232, 245, 220, 0.34);
+  --nature-card-glass: rgba(226, 241, 216, 0.30);
+  --nature-glass-strong: rgba(255, 255, 255, 0.92);
+  --nature-glass-border: rgba(255, 255, 255, 0.55);
+  --nature-glass-highlight: rgba(255, 255, 255, 0.35);
+  --nature-glass-shadow: 0 10px 40px rgba(20, 40, 30, 0.18);
+  --nature-text-shadow: 0 1px 1px rgba(255, 255, 255, 0.45);
+  --nature-sky-text-shadow: 0 1px 10px rgba(255, 255, 255, 0.55);
+  --nature-icon-shadow: none;
+  --nature-header-background: 196 28% 85%;
+  --nature-header-opacity: 0.62;
+  --nature-header-primary: 106 30% 32%;
+  --nature-header-accent: 28 38% 35%;
+  --nature-heading: 108 43% 25%;
+  --nature-card-blur: blur(18px) saturate(105%);
+  --nature-fade-color: 176 20% 85%;
+  --nature-fade-opacity: 0.72;
+  --nature-dialog-surface: 116 26% 96%;
+  --nature-dialog-tint: 108 22% 92%;
+  --nature-dialog-border: 110 22% 78%;
+  --nature-control-surface: 112 24% 80%;
+  --nature-control-hover: 110 26% 74%;
+  --nature-control-border: 110 21% 68%;
+  --nature-control-opacity: 0.82;
+  --nature-control-foreground: 108 35% 24%;
+  --nature-action-surface: 116 32% 34%;
+  --nature-action-hover: 116 34% 29%;
+
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------- golden hour */
+html.theme-nature[data-nature-phase="golden"] {
+  --nature-card-glass: rgba(255, 244, 229, 0.18);
+  --nature-card-blur: blur(18px) saturate(140%);
+  --nature-header-opacity: 0.68;
+  --background: 30 75% 95%;
+  --foreground: 18 32% 16%;
+  --card: 30 100% 99%;
+  --card-foreground: 18 32% 16%;
+  --popover: 30 100% 99%;
+  --popover-foreground: 18 32% 16%;
+  --primary: 22 88% 44%;
+  --ring: 22 88% 44%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 30 70% 91%;
+  --secondary-foreground: 18 32% 16%;
+  --muted: 30 50% 92%;
+  --muted-foreground: 18 16% 36%;
+  --accent: 345 55% 48%;
+  --accent-foreground: 0 0% 100%;
+  --border: 28 45% 84%;
+  --input: 28 45% 86%;
+  --chart-1: 22 88% 50%;
+  --chart-2: 345 55% 55%;
+  --chart-3: 265 40% 55%;
+  --chart-4: 45 90% 48%;
+  --chart-5: 104 45% 42%;
+
+  --nature-glass: rgba(255, 240, 225, 0.30);
+  --nature-glass-strong: rgba(255, 248, 240, 0.93);
+  --nature-header-background: 30 48% 88%;
+  --nature-header-primary: 24 43% 35%;
+  --nature-header-accent: 345 32% 38%;
+  --nature-heading: 24 45% 32%;
+  --nature-fade-color: 32 36% 81%;
+  --nature-dialog-surface: 32 80% 96%;
+  --nature-dialog-tint: 25 58% 91%;
+  --nature-dialog-border: 28 36% 76%;
+  --nature-control-surface: 34 48% 76%;
+  --nature-control-hover: 32 50% 70%;
+  --nature-control-border: 30 40% 65%;
+  --nature-control-opacity: 0.78;
+  --nature-control-foreground: 24 48% 29%;
+  --nature-action-surface: 24 55% 40%;
+  --nature-action-hover: 24 57% 34%;
+}
+
+/* ---------------------------------------------------------------- night */
+html.theme-nature[data-nature-phase="night"] {
+  --nature-card-blur: blur(18px) saturate(160%);
+  --nature-header-opacity: 0.60;
+  --nature-fade-opacity: 0.66;
+  --background: 228 45% 9%;
+  --foreground: 228 100% 97%;
+  --card: 228 38% 14%;
+  --card-foreground: 228 100% 97%;
+  --popover: 228 40% 12%;
+  --popover-foreground: 228 100% 97%;
+  --primary: 74 86% 69%;
+  --primary-foreground: 228 50% 8%;
+  --secondary: 226 30% 24%;
+  --secondary-foreground: 228 60% 94%;
+  --muted: 226 26% 20%;
+  --muted-foreground: 226 30% 82%;
+  --accent: 210 85% 80%;
+  --accent-foreground: 228 50% 8%;
+  --destructive: 4 78% 64%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 226 30% 32%;
+  --input: 226 26% 24%;
+  --ring: 74 86% 69%;
+  --chart-1: 74 86% 65%;
+  --chart-2: 210 85% 72%;
+  --chart-3: 265 70% 75%;
+  --chart-4: 45 92% 66%;
+  --chart-5: 338 68% 72%;
+  --mood-happy: 112 55% 62%;
+  --mood-neutral: 45 92% 64%;
+  --mood-sad: 230 60% 74%;
+
+  --nature-glass: rgba(120, 140, 200, 0.16);
+  --nature-card-glass: rgba(110, 130, 200, 0.14);
+  --nature-glass-strong: rgba(22, 28, 60, 0.92);
+  --nature-glass-border: rgba(200, 215, 255, 0.22);
+  --nature-glass-shadow: 0 10px 40px rgba(0, 0, 20, 0.4);
+  --nature-text-shadow: 0 1px 8px rgba(0, 0, 20, 0.35);
+  --nature-sky-text-shadow: 0 1px 10px rgba(0, 0, 20, 0.5);
+  --nature-icon-shadow: drop-shadow(0 1px 6px rgba(0, 0, 20, 0.35));
+  --nature-header-background: 226 28% 24%;
+  --nature-header-primary: 74 37% 75%;
+  --nature-header-accent: 210 42% 78%;
+  --nature-heading: 74 40% 76%;
+  --nature-fade-color: 226 28% 26%;
+  --nature-dialog-surface: 226 30% 21%;
+  --nature-dialog-tint: 231 32% 17%;
+  --nature-dialog-border: 226 28% 39%;
+  --nature-control-surface: 227 25% 38%;
+  --nature-control-hover: 226 27% 44%;
+  --nature-control-border: 226 30% 45%;
+  --nature-control-opacity: 0.90;
+  --nature-control-foreground: 220 45% 92%;
+  --nature-action-surface: 74 40% 68%;
+  --nature-action-hover: 74 44% 74%;
+
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- seasons
+   Summer inherits every existing token unchanged. Autumn and Winter retain the
+   native glass material/geometry, with ink and surface tints for their scenery. */
+html.theme-nature[data-nature-season="autumn"] {
+  --background: 38 38% 93%;
+  --foreground: 25 29% 16%;
+  --card-foreground: 25 29% 16%;
+  --popover-foreground: 25 29% 16%;
+  --primary: 22 66% 32%;
+  --ring: 22 66% 32%;
+  --accent: 5 43% 36%;
+  --secondary: 36 35% 87%;
+  --secondary-foreground: 25 29% 16%;
+  --muted: 36 27% 89%;
+  --muted-foreground: 25 17% 35%;
+  --border: 30 28% 76%;
+  --input: 32 28% 80%;
+  --nature-glass: rgba(243, 223, 193, 0.36);
+  --nature-card-glass: rgba(241, 224, 198, 0.35);
+  --nature-glass-strong: rgba(250, 242, 226, 0.94);
+  --nature-header-background: 35 35% 81%;
+  --nature-header-primary: 22 46% 32%;
+  --nature-header-accent: 6 32% 35%;
+  --nature-heading: 22 49% 29%;
+  --nature-fade-color: 36 26% 78%;
+  --nature-dialog-surface: 37 50% 94%;
+  --nature-dialog-tint: 34 34% 88%;
+  --nature-dialog-border: 30 28% 70%;
+  --nature-control-surface: 35 34% 75%;
+  --nature-control-hover: 32 36% 69%;
+  --nature-control-border: 28 32% 61%;
+  --nature-control-foreground: 24 43% 25%;
+  --nature-action-surface: 23 48% 35%;
+  --nature-action-hover: 23 52% 30%;
+  --chart-1: 24 67% 43%;
+  --chart-2: 6 48% 47%;
+}
+
+html.theme-nature[data-nature-season="autumn"][data-nature-phase="golden"] {
+  --background: 30 45% 92%;
+  --primary: 18 73% 34%;
+  --ring: 18 73% 34%;
+  --accent: 351 45% 36%;
+  --nature-glass: rgba(250, 219, 180, 0.33);
+  --nature-card-glass: rgba(251, 226, 191, 0.28);
+  --nature-header-background: 29 46% 80%;
+  --nature-header-primary: 22 52% 31%;
+  --nature-header-accent: 351 34% 34%;
+  --nature-heading: 22 51% 28%;
+  --nature-fade-color: 30 35% 75%;
+}
+
+html.theme-nature[data-nature-season="autumn"][data-nature-phase="night"] {
+  --background: 223 28% 12%;
+  --foreground: 32 52% 94%;
+  --card-foreground: 32 52% 94%;
+  --popover-foreground: 32 52% 94%;
+  --primary: 35 76% 73%;
+  --primary-foreground: 223 30% 12%;
+  --ring: 35 76% 73%;
+  --accent: 16 65% 78%;
+  --accent-foreground: 223 30% 12%;
+  --secondary: 223 20% 25%;
+  --secondary-foreground: 32 52% 94%;
+  --muted: 223 20% 22%;
+  --muted-foreground: 32 24% 81%;
+  --border: 223 18% 37%;
+  --input: 223 20% 29%;
+  --nature-glass: rgba(110, 102, 125, 0.21);
+  --nature-card-glass: rgba(103, 98, 126, 0.20);
+  --nature-glass-strong: rgba(38, 39, 56, 0.94);
+  --nature-header-background: 222 20% 25%;
+  --nature-header-primary: 35 48% 77%;
+  --nature-header-accent: 16 44% 80%;
+  --nature-heading: 35 48% 77%;
+  --nature-fade-color: 222 19% 28%;
+  --nature-dialog-surface: 222 21% 23%;
+  --nature-dialog-tint: 222 22% 19%;
+  --nature-dialog-border: 222 20% 42%;
+  --nature-control-surface: 222 17% 38%;
+  --nature-control-hover: 222 19% 44%;
+  --nature-control-border: 30 25% 48%;
+  --nature-control-foreground: 32 45% 91%;
+  --nature-action-surface: 35 48% 68%;
+  --nature-action-hover: 35 50% 74%;
+}
+
+html.theme-nature[data-nature-season="winter"] {
+  --background: 211 32% 93%;
+  --foreground: 213 33% 17%;
+  --card-foreground: 213 33% 17%;
+  --popover-foreground: 213 33% 17%;
+  --primary: 207 47% 29%;
+  --ring: 207 47% 29%;
+  --accent: 265 28% 36%;
+  --secondary: 211 27% 85%;
+  --secondary-foreground: 213 33% 17%;
+  --muted: 211 26% 88%;
+  --muted-foreground: 214 18% 35%;
+  --border: 211 22% 75%;
+  --input: 211 24% 79%;
+  --nature-glass: rgba(198, 218, 237, 0.42);
+  --nature-card-glass: rgba(198, 218, 237, 0.38);
+  --nature-glass-strong: rgba(235, 243, 249, 0.95);
+  --nature-header-background: 211 30% 83%;
+  --nature-header-primary: 207 42% 31%;
+  --nature-header-accent: 263 24% 37%;
+  --nature-heading: 207 45% 28%;
+  --nature-fade-color: 210 24% 79%;
+  --nature-dialog-surface: 210 39% 95%;
+  --nature-dialog-tint: 210 30% 89%;
+  --nature-dialog-border: 210 25% 71%;
+  --nature-control-surface: 209 27% 76%;
+  --nature-control-hover: 209 29% 70%;
+  --nature-control-border: 210 27% 64%;
+  --nature-control-foreground: 210 44% 25%;
+  --nature-action-surface: 209 43% 35%;
+  --nature-action-hover: 209 46% 29%;
+  --chart-1: 203 55% 43%;
+  --chart-2: 265 35% 53%;
+}
+
+html.theme-nature[data-nature-season="winter"][data-nature-phase="golden"] {
+  --background: 326 22% 94%;
+  --primary: 256 30% 35%;
+  --ring: 256 30% 35%;
+  --accent: 22 54% 34%;
+  --nature-glass: rgba(227, 212, 230, 0.39);
+  --nature-card-glass: rgba(229, 216, 235, 0.34);
+  --nature-header-background: 323 24% 83%;
+  --nature-header-primary: 257 29% 35%;
+  --nature-header-accent: 23 43% 35%;
+  --nature-heading: 257 31% 32%;
+  --nature-fade-color: 319 19% 80%;
+}
+
+html.theme-nature[data-nature-season="winter"][data-nature-phase="night"] {
+  --background: 218 37% 12%;
+  --foreground: 209 65% 96%;
+  --card-foreground: 209 65% 96%;
+  --popover-foreground: 209 65% 96%;
+  --primary: 191 63% 79%;
+  --primary-foreground: 218 40% 12%;
+  --ring: 191 63% 79%;
+  --accent: 256 62% 84%;
+  --accent-foreground: 218 40% 12%;
+  --secondary: 216 29% 27%;
+  --secondary-foreground: 209 65% 96%;
+  --muted: 216 29% 23%;
+  --muted-foreground: 209 36% 82%;
+  --border: 215 25% 39%;
+  --input: 215 27% 28%;
+  --nature-glass: rgba(28, 46, 72, 0.56);
+  --nature-card-glass: rgba(28, 46, 72, 0.60);
+  --nature-glass-strong: rgba(29, 43, 65, 0.95);
+  --nature-header-background: 217 27% 27%;
+  --nature-header-primary: 191 43% 81%;
+  --nature-header-accent: 252 42% 83%;
+  --nature-heading: 191 43% 81%;
+  --nature-fade-color: 216 27% 32%;
+  --nature-dialog-surface: 215 28% 25%;
+  --nature-dialog-tint: 216 30% 21%;
+  --nature-dialog-border: 215 26% 44%;
+  --nature-control-surface: 214 27% 41%;
+  --nature-control-hover: 214 29% 47%;
+  --nature-control-border: 213 30% 51%;
+  --nature-control-foreground: 208 55% 92%;
+  --nature-action-surface: 192 41% 71%;
+  --nature-action-hover: 192 43% 77%;
+}
+
+/* ---------------------------------------------------------------- backdrop
+   Painted sky while the 3D meadow loads, and the whole background when
+   motion-heavy effects are disabled (reduced motion / save-data). */
+html.theme-nature body {
+  background: linear-gradient(180deg, #3b80d4 0%, #8cc3ee 38%, #e6f1f3 58%, #86cc4a 66%, #1b4512 100%) fixed;
+}
+
+html.theme-nature[data-nature-season="autumn"] body {
+  background: linear-gradient(180deg, #648ea9 0%, #c1d5d5 38%, #edddc5 58%, #cbb064 66%, #654122 100%) fixed;
+}
+html.theme-nature[data-nature-season="autumn"][data-nature-phase="golden"] body {
+  background: linear-gradient(180deg, #a888a4 0%, #e9b394 38%, #ffdab0 58%, #e3bd73 66%, #794b20 100%) fixed;
+}
+html.theme-nature[data-nature-season="autumn"][data-nature-phase="night"] body {
+  background: linear-gradient(180deg, #121b32 0%, #263754 38%, #4c526a 58%, #8f8066 66%, #302b26 100%) fixed;
+}
+html.theme-nature[data-nature-season="winter"] body {
+  background: linear-gradient(180deg, #6995b8 0%, #bed8e9 38%, #e8eff3 58%, #eef5fa 66%, #b9cad8 100%) fixed;
+}
+html.theme-nature[data-nature-season="winter"][data-nature-phase="golden"] body {
+  background: linear-gradient(180deg, #9d94b7 0%, #e8b6ba 38%, #fbe2d0 58%, #fcebe0 66%, #cdbbbf 100%) fixed;
+}
+html.theme-nature[data-nature-season="winter"][data-nature-phase="night"] body {
+  background: linear-gradient(180deg, #0b1530 0%, #243d65 38%, #647795 58%, #afc8e1 66%, #597493 100%) fixed;
+}
+
+/* Public forms retain their layout while revealing their saved Nature scene. */
+html.theme-nature [data-nature-public-surface] {
+  background-color: transparent;
+}
+html.theme-nature[data-nature-phase="golden"] body {
+  background: linear-gradient(180deg, #9c93bf 0%, #e7b0b0 38%, #fdd0a0 58%, #a9cf4c 66%, #2f4f12 100%) fixed;
+}
+html.theme-nature[data-nature-phase="night"] body {
+  background: linear-gradient(180deg, #060f2b 0%, #14245a 40%, #2a3f78 58%, #3a9f86 66%, #04241f 100%) fixed;
+}
+
+/* Summer Morning's cool opal glass, forest ink and warm copper reflect the
+   meadow's own morning palette. Every override has both season and phase. */
+html.theme-nature[data-nature-season="summer"][data-nature-phase="morning"] {
+  --primary: 143 36% 26%;
+  --ring: 143 36% 26%;
+  --accent: 28 57% 34%;
+  --nature-heading: 143 34% 25%;
+  --nature-glass: rgba(219, 235, 228, 0.34);
+  --nature-card-glass: rgba(221, 236, 229, 0.30);
+  --nature-glass-border: rgba(237, 248, 237, 0.56);
+  --nature-glass-highlight: rgba(249, 253, 239, 0.32);
+  --nature-glass-shadow: 0 10px 40px rgba(18, 48, 35, 0.18);
+  --nature-header-background: 179 23% 84%;
+  --nature-header-primary: 143 28% 30%;
+  --nature-header-accent: 29 38% 36%;
+  --nature-control-surface: 150 18% 79%;
+  --nature-control-hover: 149 21% 73%;
+  --nature-control-border: 147 18% 65%;
+  --nature-control-foreground: 145 30% 25%;
+  --nature-action-surface: 145 32% 33%;
+  --nature-action-hover: 145 36% 28%;
+  --nature-fade-color: 153 20% 82%;
+  --nature-fade-opacity: 0.64;
+}
+
+html.theme-nature[data-nature-season="summer"][data-nature-phase="morning"] body {
+  background: linear-gradient(180deg, #72a6bd 0%, #bfd7dd 42%, #f2ebd6 60%, #92af68 71%, #254d2e 100%) fixed;
+}
+
+/* ---------------------------------------------------------------- glass cards
+   Match the reference's glass/compact-card tints, 18px frost, saturation,
+   border and inset rim. Keep native app geometry and readable theme ink.
+   Only real cards blur the meadow; nested cards don't stack blur layers. */
+html.theme-nature [class~="bg-card"],
+html.theme-nature [class^="bg-card/"],
+html.theme-nature [class*=" bg-card/"] {
+  background-color: var(--nature-glass);
+  background-image: none;
+  border-color: var(--nature-glass-border);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.theme-nature [data-slot="card"],
+html.theme-nature [data-slot="daily-briefing-card"],
+html.theme-nature :is([class~="bg-card"], [class^="bg-card/"], [class*=" bg-card/"]):has(> [data-slot="card-title"]) {
+  background-color: var(--nature-card-glass);
+  background-image: none;
+  border-color: var(--nature-glass-border);
+  -webkit-backdrop-filter: var(--nature-card-blur);
+  backdrop-filter: var(--nature-card-blur);
+  --tw-shadow: var(--nature-glass-shadow), inset 0 1px 0 var(--nature-glass-highlight);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+/* Cool opal separates Summer Morning ink from the meadow without chalky white.
+   Keep the opacity, native frost and geometry; do not retint the page,
+   header, dialogs or login theme controls through root-level tokens. */
+html.theme-nature[data-nature-season="summer"][data-nature-phase="morning"]
+  :is([data-slot="card"], [data-slot="daily-briefing-card"], :is([class~="bg-card"], [class^="bg-card/"], [class*=" bg-card/"]):has(> [data-slot="card-title"])):not(:where([role="dialog"], [role="alertdialog"], [role="dialog"] *, [role="alertdialog"] *, [data-login-theme-selector])) {
+  --nature-card-glass: rgba(221, 236, 229, 0.48);
+  --foreground: 210 26% 14%;
+  --card-foreground: 210 26% 14%;
+  --muted-foreground: 210 14% 30%;
+  --nature-heading: 143 34% 25%;
+}
+
+/* Summer Golden: a warmer honey veil separates ink from the bright meadow.
+   Keep this on cards so headers, dialogs and login controls keep their tint. */
+html.theme-nature[data-nature-season="summer"][data-nature-phase="golden"]
+  :is([data-slot="card"], [data-slot="daily-briefing-card"], :is([class~="bg-card"], [class^="bg-card/"], [class*=" bg-card/"]):has(> [data-slot="card-title"])):not(:where([role="dialog"], [role="alertdialog"], [role="dialog"] *, [role="alertdialog"] *, [data-login-theme-selector])) {
+  --nature-card-glass: rgba(255, 234, 207, 0.30);
+  --nature-card-blur: blur(20px) saturate(130%);
+}
+
+html.theme-nature [data-dashboard-card="upcoming"] {
+  /* Keep the same material as other cards; only remove backdrop filtering.
+     This exception wins over the compiled generic titled-card selector. */
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Public profile hero has a stock-theme inline tint; Nature uses the same glass
+   as its sibling cards, including both banner and no-banner branches. */
+html.theme-nature [data-nature-profile-hero] {
+  background-color: var(--nature-card-glass) !important;
+}
+
+/* Only app-rendered public prose gets a reading surface; embedded HTML/PDF and
+   every non-Nature reader keep their existing presentation. */
+html.theme-nature [data-nature-publication-prose] {
+  background: var(--nature-card-glass);
+  border: 1px solid var(--nature-glass-border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  -webkit-backdrop-filter: var(--nature-card-blur);
+  backdrop-filter: var(--nature-card-blur);
+  box-shadow: var(--nature-glass-shadow), inset 0 1px 0 var(--nature-glass-highlight);
+}
+
+@media (min-width: 640px) {
+  html.theme-nature [data-nature-publication-prose] { padding: 2rem 2.5rem; }
+}
+
+html.theme-nature :is([data-slot="card"], [data-slot="daily-briefing-card"]) [data-slot="card"],
+html.theme-nature :is([data-slot="card"], [data-slot="daily-briefing-card"]) :is([class~="bg-card"], [class^="bg-card/"], [class*=" bg-card/"]):has(> [data-slot="card-title"]) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Mood history retains the native glass and readable ink, with a small wash
+   of the existing mood palette. Unknown moods keep the ordinary glass. */
+html.theme-nature [data-slot="card"][data-nature-mood="Happy"] {
+  --nature-mood-history-tint: var(--mood-happy);
+}
+html.theme-nature [data-slot="card"][data-nature-mood="Neutral"] {
+  --nature-mood-history-tint: var(--mood-neutral);
+}
+html.theme-nature [data-slot="card"][data-nature-mood="Sad"] {
+  --nature-mood-history-tint: var(--mood-sad);
+}
+html.theme-nature [data-slot="card"]:is([data-nature-mood="Happy"], [data-nature-mood="Neutral"], [data-nature-mood="Sad"]) {
+  --nature-mood-history-tint-opacity: 0.12;
+  background-image: linear-gradient(hsl(var(--nature-mood-history-tint) / var(--nature-mood-history-tint-opacity)), hsl(var(--nature-mood-history-tint) / var(--nature-mood-history-tint-opacity)));
+}
+html.theme-nature[data-nature-phase="night"] [data-slot="card"]:is([data-nature-mood="Happy"], [data-nature-mood="Neutral"], [data-nature-mood="Sad"]) {
+  --nature-mood-history-tint-opacity: 0.10;
+}
+
+/* the stock Card's heavy drop shadow -> soft ambient shadow + inner rim light */
+html.theme-nature .shadow-xl:not([class*=" shadow-primary"]):not([class^="shadow-primary"]):not([class*=" shadow-accent"]):not([class^="shadow-accent"]):not([class*=" shadow-destructive"]):not([class^="shadow-destructive"]) {
+  --tw-shadow: var(--nature-glass-shadow), inset 0 1px 0 var(--nature-glass-highlight);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+/* Popovers and menus use their stronger reading surface. */
+html.theme-nature [class~="bg-popover"] {
+  background-color: var(--nature-glass-strong);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* DialogContent uses bg-card; AlertDialog/Sheet use bg-background.
+   Role-based styling catches both and keeps background text out of forms.
+   Preserve explicitly transparent media/lightbox shells. The note overview
+   wraps a Card in a transparent shell; its reading surface is still a dialog. */
+html.theme-nature :is([role="dialog"], [role="alertdialog"]):not([class~="bg-transparent"]),
+html.theme-nature [role="dialog"] [data-slot="card"][data-nature-note-overview] {
+  background-color: hsl(var(--nature-dialog-surface));
+  background-image: linear-gradient(145deg, hsl(var(--nature-dialog-surface)), hsl(var(--nature-dialog-tint)));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--nature-dialog-border));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Softer phase-tinted controls blend with their cards. Keep semantic icon
+   colors, destructive actions, native focus rings and disabled feedback. */
+
+/* The Accomplishments link's amber ink fades into the daylight meadow.
+   Use Nature's readable control ink without changing its pill or other themes. */
+html.theme-nature [data-nature-accomplishments] {
+  color: hsl(var(--nature-control-foreground));
+}
+
+/* Login's two option pills show the surrounding glass through their outlines.
+   Do not add another opaque/white layer or another backdrop filter. */
+html.theme-nature [data-login-nature-controls] [role="tablist"] {
+  background-color: transparent;
+  border: 1px solid hsl(var(--nature-heading) / 0.35);
+  color: hsl(var(--foreground));
+}
+html.theme-nature [data-login-nature-controls] [role="tab"] {
+  background-color: transparent;
+  color: hsl(var(--foreground));
+  box-shadow: none;
+}
+html.theme-nature [data-login-nature-controls] [role="tab"]:hover:not(:disabled):not([data-state="active"]) {
+  background-color: hsl(var(--nature-heading) / 0.10);
+}
+html.theme-nature [data-login-nature-controls] [role="tab"][data-state="active"] {
+  background-color: hsl(var(--nature-heading) / 0.14);
+  box-shadow: inset 0 0 0 1px hsl(var(--nature-heading) / 0.28);
+}
+
+html.theme-nature :is(button, a)[class~="bg-background"]:not(:hover):not([class~="text-destructive"]):not([class~="text-destructive-foreground"]),
+html.theme-nature :is(button, a)[class~="bg-secondary"]:not(:hover):not([class~="text-destructive"]):not([class~="text-destructive-foreground"]) {
+  background-color: hsl(var(--nature-control-surface) / var(--nature-control-opacity));
+  color: hsl(var(--nature-control-foreground));
+  border-color: hsl(var(--nature-control-border) / 0.55);
+}
+html.theme-nature :is(button, a):is([class~="bg-background"], [class~="bg-secondary"]):hover:not(:disabled):not([aria-disabled="true"]):not([class*="hover:bg-primary"]):not([class*="hover:bg-destructive"]):not([class~="text-destructive"]):not([class~="text-destructive-foreground"]) {
+  background-color: hsl(var(--nature-control-hover) / var(--nature-control-opacity));
+  color: hsl(var(--nature-control-foreground));
+  border-color: hsl(var(--nature-control-border) / 0.70);
+}
+
+html.theme-nature :is(button, a)[class~="hover:bg-accent"]:hover:not(:disabled):not([aria-disabled="true"]):not([class~="text-destructive"]):not([class~="text-destructive-foreground"]) {
+  background-color: hsl(var(--nature-control-hover) / var(--nature-control-opacity));
+  color: hsl(var(--nature-control-foreground));
+}
+
+/* Filled actions keep their contrasting ink and hue, with calmer saturation.
+   Change button paint only: page headings, charts and theme tokens stay intact. */
+html.theme-nature :is(button, a)[class~="bg-primary"] {
+  background-color: hsl(var(--nature-action-surface));
+  color: hsl(var(--primary-foreground));
+}
+html.theme-nature :is(button, a)[class~="bg-primary"]:hover:not(:disabled):not([aria-disabled="true"]),
+html.theme-nature :is(button, a):is([class~="bg-background"], [class~="bg-secondary"])[class*="hover:bg-primary"]:hover:not(:disabled):not([aria-disabled="true"]) {
+  background-color: hsl(var(--nature-action-hover));
+  color: hsl(var(--primary-foreground));
+}
+
+/* ---------------------------------------------------------------- header */
+/* Phase-tinted frost keeps the header readable and blends with the cards. */
+html.theme-nature .app-header {
+  --primary: var(--nature-header-primary);
+  --accent: var(--nature-header-accent);
+  background-color: hsl(var(--nature-header-background) / var(--nature-header-opacity)) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+}
+
+/* Summer Golden: a light warm veil and quieter ink beside the sunset sky.
+   Keep specificity low so the reduced-transparency fallback still wins. */
+html.theme-nature:where([data-nature-season="summer"][data-nature-phase="golden"]) .app-header {
+  --nature-header-background: 32 24% 94%;
+  --nature-header-opacity: 0.16;
+  --nature-header-primary: 32 18% 33%;
+  --nature-header-accent: 345 12% 35%;
+  -webkit-backdrop-filter: blur(18px) saturate(100%);
+  backdrop-filter: blur(18px) saturate(100%);
+}
+
+/* Winter daylight: quieter frost and ink alongside the refined blue/rose
+   landscape. Header-local tokens leave cards and public top fades intact. */
+html.theme-nature[data-nature-season="winter"][data-nature-phase="morning"] .app-header {
+  --nature-header-background: 210 18% 94%;
+  --nature-header-opacity: 0.14;
+  --nature-header-primary: 207 18% 32%;
+  --nature-header-accent: 218 12% 34%;
+  -webkit-backdrop-filter: blur(18px) saturate(100%);
+  backdrop-filter: blur(18px) saturate(100%);
+}
+
+html.theme-nature[data-nature-season="winter"][data-nature-phase="golden"] .app-header {
+  --nature-header-background: 32 18% 94%;
+  --nature-header-opacity: 0.12;
+  --nature-header-primary: 260 12% 34%;
+  --nature-header-accent: 270 8% 34%;
+  -webkit-backdrop-filter: blur(18px) saturate(100%);
+  backdrop-filter: blur(18px) saturate(100%);
+}
+
+/* Only phase switches use the long transition. Normal hover/focus feedback
+   keeps its native timing once the sky has settled. Duration comes from the
+   same tween as the scene (3.3s adjacent phases, 4.8s morning to night). */
+html.theme-nature[data-nature-transitioning="true"] .app-header,
+html.theme-nature[data-nature-transitioning="true"] .app-header *,
+html.theme-nature[data-nature-transitioning="true"] [data-slot="card"],
+html.theme-nature[data-nature-transitioning="true"] [data-slot="daily-briefing-card"],
+html.theme-nature[data-nature-transitioning="true"] [data-slot="card-title"],
+html.theme-nature[data-nature-transitioning="true"] :is([class~="bg-card"], [class^="bg-card/"], [class*=" bg-card/"]):has(> [data-slot="card-title"]),
+html.theme-nature[data-nature-transitioning="true"] [data-slot="card"] :is(.text-primary, .text-accent, .text-muted-foreground, [data-slot="card-title"]),
+html.theme-nature[data-nature-transitioning="true"] [data-slot="daily-briefing-card"] :is(.text-primary, .text-accent, .text-muted-foreground, [data-slot="daily-briefing-title"]),
+html.theme-nature[data-nature-transitioning="true"] .nature-bottom-fade,
+html.theme-nature[data-nature-transitioning="true"] .nature-top-fade {
+  transition-property: background-color, border-color, box-shadow, text-shadow;
+  transition-duration: var(--nature-phase-duration, 3300ms);
+  transition-timing-function: cubic-bezier(.65, 0, .35, 1);
+}
+
+/* Ink switches once to the destination palette. Transitioning inherited color
+   on nested containers and utility-colored children creates competing color
+   transitions during a light/dark switch. Keep surface and motion transitions,
+   but exclude color (including transition-all utilities) until the phase ends.
+   This also covers controls, ordinary body text and portalled dialogs. */
+html.theme-nature[data-nature-transitioning="true"] body,
+html.theme-nature[data-nature-transitioning="true"] body *:not(:where(.lesson-document, .lesson-document *)) {
+  transition-property: background-color, border-color, box-shadow, text-shadow, opacity, transform, filter, backdrop-filter, -webkit-backdrop-filter !important;
+}
+
+/* A small, non-interactive veil at the viewport edge. It doesn't reserve
+   space, change scrolling, or cover dialogs and floating action buttons. */
+html.theme-nature .nature-top-fade {
+  display: none;
+}
+
+/* Public pages hide their stock-theme veil. Supply one shared replacement,
+   using the Nature header tint without another backdrop-filtered layer. */
+html.theme-nature[data-public-nature-phase] .nature-top-fade,
+html.theme-nature .nature-top-fade[data-public-page="true"] {
+  display: block;
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  inset: 0 0 auto;
+  height: 3.5rem;
+  background-color: hsl(var(--nature-header-background) / var(--nature-header-opacity));
+  -webkit-mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.8) 40%, transparent);
+  mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.8) 40%, transparent);
+}
+
+@media print {
+  html.theme-nature[data-public-nature-phase] .nature-top-fade,
+  html.theme-nature .nature-top-fade[data-public-page="true"] { display: none; }
+}
+
+html.theme-nature .nature-bottom-fade {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  inset: auto 0 0;
+  height: min(14vh, 140px);
+  background-color: hsl(var(--nature-fade-color) / var(--nature-fade-opacity));
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000);
+  mask-image: linear-gradient(to bottom, transparent, #000);
+}
+
+/* Ease the warm edge wash without changing its height or scrolling. */
+html.theme-nature:where([data-nature-season="summer"][data-nature-phase="golden"]) .nature-bottom-fade {
+  --nature-fade-color: 32 24% 83%;
+  --nature-fade-opacity: 0.60;
+}
+
+html.theme-nature [data-nature-glass-entry="true"] {
+  opacity: 1 !important;
+}
+
+/* The fixed scene owns its paint/layout boundary. Scrolling cards must not
+   invalidate the iframe's viewport-sized backing surface. Promote only this
+   fixed surface, not the entire scrolling page of frosted cards. */
+html.theme-nature .nature-scene-frame {
+  contain: strict;
+  transform: translateZ(0);
+}
+html.theme-nature [data-nature-glass-fade="true"] {
+  opacity: var(--nature-glass-entry-opacity, 1);
+}
+
+/* ---------------------------------------------------------------- type
+   Daylight: crisp dark ink, no neon glow. Night: soft shadow on pale ink. */
+html.theme-nature [data-slot='card-title'],
+html.theme-nature [data-slot='greeting-message'],
+html.theme-nature [data-slot='app-title'],
+html.theme-nature [data-slot='daily-briefing-greeting'],
+html.theme-nature [data-slot='daily-briefing-quote'],
+html.theme-nature [data-slot='daily-briefing-title'],
+html.theme-nature [data-slot="welcome-title"] {
+  text-shadow: var(--nature-text-shadow) !important;
+}
+
+html.theme-nature [data-slot="card-title"],
+html.theme-nature [data-slot="daily-briefing-title"],
+html.theme-nature [data-slot="daily-briefing-title"] svg,
+html.theme-nature [data-slot="card-title"] svg {
+  color: hsl(var(--nature-heading));
+}
+
+html.theme-nature [data-slot='card-header']>svg,
+html.theme-nature [data-slot='card-title'] svg,
+html.theme-nature [data-slot='daily-briefing-icon'],
+html.theme-nature [data-slot='app-icon'] {
+  filter: var(--nature-icon-shadow) !important;
+}
+
+html.theme-nature [data-active-glow="true"] {
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.45), 0 6px 20px rgba(0, 0, 0, 0.14) !important;
+}
+
+/* text that sits straight on the sky (page titles etc.) */
+html.theme-nature main h1:not(:where(.lesson-document, .lesson-document *)),
+html.theme-nature main h2:not(:where(.lesson-document, .lesson-document *)) {
+  text-shadow: var(--nature-sky-text-shadow);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html.theme-nature [class~="bg-card"],
+  html.theme-nature [class^="bg-card/"],
+  html.theme-nature [class*=" bg-card/"],
+  html.theme-nature [data-slot="card"],
+  html.theme-nature [data-slot="daily-briefing-card"],
+  html.theme-nature :is([class~="bg-card"], [class^="bg-card/"], [class*=" bg-card/"]):has(> [data-slot="card-title"]),
+  html.theme-nature .app-header {
+    background-color: var(--nature-glass-strong) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-nature[data-nature-transitioning="true"] .app-header,
+  html.theme-nature[data-nature-transitioning="true"] .app-header *,
+  html.theme-nature[data-nature-transitioning="true"] [data-slot="card"],
+  html.theme-nature[data-nature-transitioning="true"] [data-slot="card"] *,
+  html.theme-nature[data-nature-transitioning="true"] [data-slot="daily-briefing-card"],
+  html.theme-nature[data-nature-transitioning="true"] [data-slot="daily-briefing-card"] *,
+  html.theme-nature[data-nature-transitioning="true"] :is([class~="bg-card"], [class^="bg-card/"], [class*=" bg-card/"]):has(> [data-slot="card-title"]),
+  html.theme-nature[data-nature-transitioning="true"] .nature-bottom-fade,
+  html.theme-nature[data-nature-transitioning="true"] .nature-top-fade {
+    transition-duration: 0ms;
+  }
+}

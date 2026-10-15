@@ -29,6 +29,19 @@ export const translations = {
     'header.quickAction': 'Quick Action',
     'header.school': 'Institution',
 
+    // Quick actions (all account roles)
+    'quickActions.title': 'Quick Actions',
+    'quickActions.close': 'Close quick actions',
+    'quickActions.addStudent': 'Add Student',
+    'quickActions.addStaff': 'Add Staff Member',
+    'quickActions.staffDirectory': 'Staff Directory',
+    'quickActions.courseCatalog': 'Course Catalog',
+    'quickActions.schoolCalendar': 'School Calendar',
+    'quickActions.personalTasks': 'My Personal Tasks',
+    'quickActions.timetable': 'Class Timetable',
+    'quickActions.academicCalendar': 'Academic Calendar',
+    'quickActions.myCourses': 'My Courses',
+
     // Common
     'common.save': 'Save',
     'common.saving': 'Saving...',
@@ -434,6 +447,19 @@ export const translations = {
     'header.notifications': 'Njoftimet',
     'header.quickAction': 'Veprim i Shpejtë',
     'header.school': 'Institucioni',
+
+    // Veprimet e shpejta (të gjitha rolet)
+    'quickActions.title': 'Veprime të shpejta',
+    'quickActions.close': 'Mbyll veprimet e shpejta',
+    'quickActions.addStudent': 'Shto nxënës',
+    'quickActions.addStaff': 'Shto anëtar të stafit',
+    'quickActions.staffDirectory': 'Regjistri i stafit',
+    'quickActions.courseCatalog': 'Katalogu i lëndëve',
+    'quickActions.schoolCalendar': 'Kalendari shkollor',
+    'quickActions.personalTasks': 'Detyrat e mia personale',
+    'quickActions.timetable': 'Orari mësimor',
+    'quickActions.academicCalendar': 'Kalendari akademik',
+    'quickActions.myCourses': 'Lëndët e mia',
 
     // Të Përbashkëta
     'common.save': 'Ruaj',

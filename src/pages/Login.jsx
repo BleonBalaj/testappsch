@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, 
@@ -13,14 +13,12 @@ import {
   Lock, 
   Mail, 
   User, 
-  Moon, 
-  Sun, 
-  Laptop, 
   Sparkles, 
   X, 
   AlertCircle,
   CheckCircle2
 } from 'lucide-react';
+import ThemePicker from '../components/theme/ThemePicker';
 import StarryBackground from '../components/StarryBackground';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
@@ -30,8 +28,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
     currentUser,
     loginUser, 
     registerNewUserAndSchool, 
-    resetUserPassword, 
-    updateGlobalPreferences 
+    resetUserPassword
   } = useAuth();
 
   // Temporarily hide sign up (toggle to true when ready to re-enable)
@@ -54,55 +51,6 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const forgotRequest = useRef(0);
-
-  // Theme mode: 'dark', 'light', or 'system'
-  const [currentTheme, setCurrentTheme] = useState(() => {
-    return localStorage.getItem('lumi-theme-mode') || (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
-  });
-
-  useEffect(() => {
-    const handleExternalTheme = (e) => {
-      const mode = e?.detail?.mode || localStorage.getItem('lumi-theme-mode') || (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
-      setCurrentTheme(mode);
-    };
-    window.addEventListener('themechange', handleExternalTheme);
-    return () => window.removeEventListener('themechange', handleExternalTheme);
-  }, []);
-
-  const handleApplyTheme = async (mode) => {
-    setCurrentTheme(mode);
-    localStorage.setItem('lumi-theme-mode', mode);
-
-    let isLight = false;
-    if (mode === 'system') {
-      isLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-    } else {
-      isLight = mode === 'light';
-    }
-
-    if (isLight) {
-      document.documentElement.setAttribute('data-theme', 'light');
-      localStorage.setItem('lumi-theme', 'light');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-      localStorage.setItem('lumi-theme', 'dark');
-    }
-
-    window.dispatchEvent(new CustomEvent('themechange', { detail: { mode, isLight } }));
-    window.dispatchEvent(new Event('userSettingsChanged'));
-
-    if (addNotification) {
-      addNotification('info', `Switched theme to ${mode.charAt(0).toUpperCase() + mode.slice(1)} ✨`);
-    }
-
-    try {
-      if (currentUser?.uid) {
-        await updateGlobalPreferences({ theme: mode });
-      }
-    } catch {
-      // Ignored pre-auth
-    }
-  };
 
   // Sign In Handler
   const handleSignIn = async (e) => {
@@ -326,42 +274,7 @@ export const Login = ({ onLogin, onNavigate, addNotification }) => {
             </motion.div>
           </div>
 
-          {/* Theme Selector Dock */}
-          <div className="login-theme-dock" id="login-theme-selector-dock" title="Select Theme">
-            <button
-              type="button"
-              id="theme-dark-btn"
-              className={`theme-dock-btn ${currentTheme === 'dark' ? 'active' : ''}`}
-              onClick={() => handleApplyTheme('dark')}
-              title="Dark Cosmic Theme"
-              aria-label="Dark Theme"
-            >
-              <Moon size={16} />
-              <span>Dark</span>
-            </button>
-            <button
-              type="button"
-              id="theme-light-btn"
-              className={`theme-dock-btn ${currentTheme === 'light' ? 'active' : ''}`}
-              onClick={() => handleApplyTheme('light')}
-              title="Light Lilac Theme"
-              aria-label="Light Theme"
-            >
-              <Sun size={16} />
-              <span>Light</span>
-            </button>
-            <button
-              type="button"
-              id="theme-system-btn"
-              className={`theme-dock-btn ${currentTheme === 'system' ? 'active' : ''}`}
-              onClick={() => handleApplyTheme('system')}
-              title="System Default Theme"
-              aria-label="System Theme"
-            >
-              <Laptop size={16} />
-              <span>Auto</span>
-            </button>
-          </div>
+          <ThemePicker compact />
         </section>
 
         {/* ──────── RIGHT COLUMN: AUTHENTICATION CARD ──────── */}
