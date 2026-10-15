@@ -7,6 +7,7 @@ import { parseClassLabel } from '../features/lessonPlans/catalog.js';
 import { buildLessonAiRequestContext } from '../services/lessonAiContext.js';
 import { generateLessonPlanWithAI, getLessonAiUsage, mergeGeneratedLessonFields, GENERATED_LESSON_FIELDS, LESSON_AI_MODEL } from '../services/geminiLessonService.js';
 import { makeLessonAiUndoSnapshot, buildLessonAiUndoPatch, lessonAiUndoStorageKey } from '../features/lessonPlans/aiUndo.js';
+import { lessonAiQuotaRefreshDelay, lessonAiQuotaExhausted } from '../features/lessonPlans/aiQuota.js';
 
 export function LessonAiAssistanceCard({ 
   activePlan, 
@@ -32,11 +33,39 @@ export function LessonAiAssistanceCard({
 
   useEffect(() => {
     let cancelled = false;
+    let refreshing = false;
     if (!accountId) { setQuota(null); return undefined; }
-    getLessonAiUsage().then((usage) => { if (!cancelled) setQuota(usage); })
-      .catch((error) => { console.warn('Could not load lesson AI usage:', error); if (!cancelled) setQuota(null); });
-    return () => { cancelled = true; };
+    setQuota(null);
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try { const usage = await getLessonAiUsage(); if (!cancelled) setQuota(usage); }
+      catch (error) { console.warn('Could not load lesson AI usage:', error); if (!cancelled) setQuota(null); }
+      finally { refreshing = false; }
+    };
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    refresh();
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', visible);
+    };
   }, [accountId]);
+
+  useEffect(() => {
+    const delay = lessonAiQuotaRefreshDelay(quota);
+    if (!accountId || delay === null) return undefined;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      getLessonAiUsage().then(usage => { if (!cancelled) setQuota(usage); })
+        .catch(() => { if (!cancelled) setQuota(null); });
+    }, delay);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [accountId, quota]);
 
   useEffect(() => {
     try {
@@ -58,7 +87,7 @@ export function LessonAiAssistanceCard({
   const parsedClass = useMemo(() => parseClassLabel(activePlan?.classLabel), [activePlan?.classLabel]);
   const gradeNumber = parsedClass?.grade ?? (Number.isInteger(Number(activePlan?.grade)) && Number(activePlan?.grade) >= 1 && Number(activePlan?.grade) <= 12 ? Number(activePlan.grade) : null);
   const isReady = hasSubject && hasClass && hasUnit && gradeNumber !== null;
-  const limitReached = quota?.used >= 50;
+  const limitReached = lessonAiQuotaExhausted(quota);
 
   // Any positive period can be entered; an unset period defaults to the first lesson.
   const currentPeriodRaw = activePlan?.period ? String(activePlan.period).trim() : '1';
@@ -84,7 +113,7 @@ export function LessonAiAssistanceCard({
 
       const result = await generateLessonPlanWithAI(planContext, { schoolId, signal: controller.signal, requestId });
       lastAttemptRef.current = null;
-      if (result.quota) setQuota(result.quota);
+      if (result.quota && latestScopeRef.current.accountId === accountId) setQuota(result.quota);
       const current = latestPlanRef.current;
       const currentIdentity = JSON.stringify([latestScopeRef.current.accountId, latestScopeRef.current.schoolId, latestScopeRef.current.language, current?.id, buildLessonAiRequestContext(current, latestScopeRef.current.language)]);
       if (controller.signal.aborted || sourceIdentity !== currentIdentity) {
@@ -108,8 +137,9 @@ export function LessonAiAssistanceCard({
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
+      if (latestScopeRef.current.accountId !== accountId) return;
       if (err.details?.kind === 'lesson-ai-quota') setQuota(err.details);
-      else getLessonAiUsage().then(setQuota).catch(() => {});
+      else getLessonAiUsage().then(usage => { if (latestScopeRef.current.accountId === accountId) setQuota(usage); }).catch(() => {});
       console.error('AI generation error:', err);
       if (notify) {
         const albanianErrors = {
@@ -123,7 +153,9 @@ export function LessonAiAssistanceCard({
           'functions/failed-precondition': 'Plani i gjeneruar nuk u pranua ose shërbimi AI nuk është gati. Provoni përsëri.',
         };
         notify(err.details?.kind === 'lesson-ai-quota'
-          ? (isSq ? 'Keni përdorur të 50 gjenerimet me AI për këtë llogari.' : 'You have used all 50 AI generations for this account.')
+          ? (err.details.reserved > 0 && err.details.used < err.details.limit
+            ? (isSq ? 'Të gjitha gjenerimet e disponueshme për sot janë duke u përdorur. Prisni të përfundojnë.' : 'All available generation slots for today are in use. Wait for the current generations to finish.')
+            : (isSq ? 'Keni përdorur të 50 gjenerimet me AI për sot. Limiti rinovohet në mesnatë.' : 'You have used all 50 AI generations for today. Your allowance resets at midnight.'))
           : isSq
             ? 'Gabim gjatë gjenerimit me AI: ' + (albanianErrors[err.code] || err.message || 'Provoni përsëri.')
             : 'Failed to generate lesson plan: ' + (err.message || 'Please try again.'));
@@ -289,8 +321,9 @@ export function LessonAiAssistanceCard({
           )}
           <span className="lesson-ai-quota-note">
             {quota
-              ? (isSq ? `${quota.remaining} nga ${quota.limit} gjenerime të mbetura për këtë llogari.` : `${quota.remaining} of ${quota.limit} generations remaining for this account.`)
-              : (isSq ? 'Limiti: 50 gjenerime me AI për llogari.' : 'Limit: 50 AI generations per account.')}
+              ? (isSq ? `${quota.remaining} nga ${quota.limit} gjenerime të mbetura për sot.` : `${quota.remaining} of ${quota.limit} generations remaining today.`)
+              : (isSq ? 'Limiti: 50 gjenerime me AI për llogari në ditë.' : 'Limit: 50 AI generations per account per day.')}
+            {' '}{isSq ? 'Rinovohet në mesnatë (ora e Kosovës).' : 'Resets at midnight (Kosovo time).'}
             {' '}{isSq ? 'Zhbërja nuk e kthen një gjenerim.' : 'Undo does not restore a generation.'}
           </span>
         </p>
@@ -314,7 +347,7 @@ export function LessonAiAssistanceCard({
             <>
               <Sparkles size={16} />
               <span>{limitReached
-                ? (isSq ? 'Limiti prej 50 gjenerimesh u arrit' : '50-generation limit reached')
+                ? (isSq ? 'Limiti ditor prej 50 gjenerimesh u arrit' : 'Daily 50-generation limit reached')
                 : (isSq ? `Gjenero Orën ${currentPeriodNum} me AI` : `Generate Period ${currentPeriodNum} with AI`)}</span>
             </>
           )}
