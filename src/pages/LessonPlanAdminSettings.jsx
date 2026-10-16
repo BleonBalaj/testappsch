@@ -1,3 +1,4 @@
+import DialogPortal from '../components/DialogPortal';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { BookOpen, Layers3, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { CURRICULAR_AREAS, parseClassLabel } from '../features/lessonPlans';
@@ -492,7 +493,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
         </div>
       </section>
       {confirmDelete && (
-        <div className="lp-admin-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeConfirmation(); }}>
+        <DialogPortal><div className="lp-admin-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeConfirmation(); }}>
           <div
             className="lp-admin-confirm-card glass"
             role="alertdialog"
@@ -510,7 +511,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
               <button type="button" className="lp-admin-confirm-remove" onClick={confirmRemoval}><Trash2 size={16} /> {t('remove')}</button>
             </div>
           </div>
-        </div>
+        </div></DialogPortal>
       )}
     </div>
   );

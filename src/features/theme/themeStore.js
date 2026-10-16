@@ -1,7 +1,7 @@
 import { NATURE_PHASES, readNaturePhasePref, readNatureSeason, resolveNaturePhase, resolveNatureSeason } from './nature-phase.js';
 
 export const THEME_MODES = ['dark', 'light', 'system', 'nature'];
-export const normalizeTheme = value => THEME_MODES.includes(value) ? value : 'dark';
+export const normalizeTheme = value => THEME_MODES.includes(value) ? value : 'system';
 const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* Private storage can be unavailable. */ } };
 let currentMode = normalizeTheme(read('lumi-theme-mode') || read('lumi-theme'));

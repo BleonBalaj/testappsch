@@ -807,21 +807,21 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
         {/* Row 3: stat pills */}
         <div className="co-header-stats">
-          <div className="co-stat-pill" style={{ borderColor: `hsl(var(--chart-4) / 0.3)`, background: `hsl(var(--chart-4) / 0.13)` }}>
+          <div className="co-stat-pill" style={{ '--co-stat-color': 'var(--chart-4)', borderColor: `hsl(var(--chart-4) / 0.3)`, background: `hsl(var(--chart-4) / 0.13)` }}>
             <span style={{ color: 'hsl(var(--chart-4))' }}>{t('classes.students', 'Students')}</span>
             <strong style={{ color: 'hsl(var(--chart-4))' }}>{students.length}</strong>
           </div>
-          <div className="co-stat-pill" style={{ borderColor: `hsl(var(--chart-2) / 0.3)`, background: `hsl(var(--chart-2) / 0.13)` }}>
+          <div className="co-stat-pill" style={{ '--co-stat-color': 'var(--chart-2)', borderColor: `hsl(var(--chart-2) / 0.3)`, background: `hsl(var(--chart-2) / 0.13)` }}>
             <span style={{ color: 'hsl(var(--chart-2))' }}>{t('classes.progress', 'Progress')}</span>
             <strong style={{ color: 'hsl(var(--chart-2))' }}>{classData.progress}%</strong>
           </div>
-          <div className="co-stat-pill" style={{ borderColor: `hsl(var(${classData.color}) / 0.3)`, background: `hsl(var(${classData.color}) / 0.13)` }}>
+          <div className="co-stat-pill" style={{ '--co-stat-color': `var(${classData.color})`, borderColor: `hsl(var(${classData.color}) / 0.3)`, background: `hsl(var(${classData.color}) / 0.13)` }}>
             <span style={{ color: `hsl(var(${classData.color}))` }}>{t('classes.classAvg', 'Course Avg')}</span>
             <strong style={{ color: `hsl(var(${classData.color}))` }}>
               {classOverallAvg() !== null ? `${classOverallAvg()}%` : '—'}
             </strong>
           </div>
-          <div className="co-stat-pill" style={{ borderColor: `hsl(var(--chart-1) / 0.3)`, background: `hsl(var(--chart-1) / 0.13)` }}>
+          <div className="co-stat-pill" style={{ '--co-stat-color': 'var(--chart-1)', borderColor: `hsl(var(--chart-1) / 0.3)`, background: `hsl(var(--chart-1) / 0.13)` }}>
             <span style={{ color: 'hsl(var(--chart-1))' }}>{t('classes.assignments', 'Assignments')}</span>
             <strong style={{ color: 'hsl(var(--chart-1))' }}>{assignments.length}</strong>
           </div>

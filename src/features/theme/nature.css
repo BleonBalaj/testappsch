@@ -13,6 +13,8 @@
     --nature-status-completed-fill: 140 35% 72%;
     --nature-status-archived-ink: 213 17% 31%;
     --nature-status-archived-fill: 213 15% 72%;
+    --nature-review-active-ink: 176 52% 25%;
+    --nature-review-active-fill: 171 32% 72%;
   }
   html.theme-nature[data-nature-phase="night"] {
     --nature-status-draft-ink: 42 84% 78%;
@@ -21,7 +23,35 @@
     --nature-status-completed-fill: 150 45% 44%;
     --nature-status-archived-ink: 215 32% 82%;
     --nature-status-archived-fill: 216 24% 60%;
+    --nature-review-active-ink: 173 45% 81%;
+    --nature-review-active-fill: 173 35% 43%;
   }
+  /* Autumn Golden controls: luminous honey/peach instead of grey-beige.
+     Keep action colours and every other season/phase unchanged. */
+  html.theme-nature[data-nature-season="autumn"][data-nature-phase="golden"] {
+    --nature-control-surface: 36 76% 88%;
+    --nature-control-hover: 33 72% 82%;
+    --nature-control-border: 29 44% 62%;
+  }
+  html.theme-nature[data-nature-season="autumn"][data-nature-phase="golden"] h1.gradient-text {
+    background-image: linear-gradient(135deg, hsl(18 73% 30%), hsl(351 45% 32%));
+  }
+  /* Preserve each course metric's hue, but mix its ink toward the phase's
+     readable foreground and give it a stable, tinted reading surface.
+     Important is required to replace the existing inline chart colours. */
+  html.theme-nature .co-stat-pill {
+    --nature-stat-ink: color-mix(in srgb, hsl(var(--foreground)) 75%, hsl(var(--co-stat-color, var(--primary))));
+    color: var(--nature-stat-ink);
+    background: color-mix(in srgb, hsl(var(--nature-dialog-tint)) 86%, hsl(var(--co-stat-color, var(--primary)))) !important;
+    border-color: color-mix(in srgb, hsl(var(--nature-dialog-border)) 65%, hsl(var(--co-stat-color, var(--primary)))) !important;
+  }
+  html.theme-nature .co-stat-pill :is(span, strong) { color: var(--nature-stat-ink) !important; }
+  html.theme-nature .co-page .search-box {
+    background: hsl(var(--nature-control-surface) / var(--nature-control-opacity));
+    color: hsl(var(--nature-control-foreground));
+    border-color: hsl(var(--nature-control-border) / .55);
+  }
+  html.theme-nature .co-page .search-box input { background: transparent; color: inherit; box-shadow: none; }
   html.theme-nature #root { position: relative; isolation: isolate; min-height: 100vh; }
   html.theme-nature :is(.app-container, .login-viewport, .login-root-container) { background: transparent; }
   html.theme-nature .nature-scene-frame { position: fixed; inset: 0; width: 100vw; height: 100lvh; border: 0; z-index: -1; pointer-events: none; user-select: none; }
@@ -55,12 +85,27 @@
     -webkit-mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.8) 40%, transparent);
     mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.8) 40%, transparent);
   }
-  html.theme-nature:has(.messages-page, .full-messages-view, .modal-overlay, .lesson-modal-overlay, .search-overlay.open, [role="dialog"][aria-modal="true"])
+  html.theme-nature:has(.messages-page, .full-messages-view, .modal-overlay, .modal-backdrop, .lesson-modal-overlay, .lesson-sharing-overlay, .lp-admin-confirm-backdrop, .search-overlay.open, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"])
     :is(.nature-top-fade, .nature-bottom-fade) { display: none; }
   @media (prefers-reduced-motion: reduce) {
     html.theme-nature :is(.nature-top-fade, .nature-bottom-fade) { transition: none; }
   }
   html.theme-nature .glass { background-color: var(--nature-glass); background-image: none; border-color: var(--nature-glass-border); }
+  /* One composed opacity owns each outer glass surface. Motion retains its
+     original timelines; the observer mirrors their typed factors, not opacity
+     animations that would replace one another on the card. */
+  html.theme-nature [data-nature-glass-card="true"] { opacity: var(--nature-glass-entry-opacity, 1) !important; }
+
+  /* Follow the generic glass rule so its translucent paint cannot replace
+     the stable reading surface on page-title totals and course-stage tags. */
+  html.theme-nature :is(.count-pill, .lesson-count-pill, .msg-count-pill, .co-curriculum-badge) {
+    background: hsl(var(--nature-dialog-tint) / .94);
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--nature-heading) / .3);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: inset 0 1px 0 var(--nature-glass-highlight);
+  }
 
   /* These legacy student rules force an opaque background with !important.
      Override only the material; keep hover and archived-state border cues. */
@@ -151,6 +196,19 @@
   html.theme-nature :is(input, textarea, select) { background-color: hsl(var(--nature-dialog-surface) / 0.85); color: hsl(var(--foreground)); border-color: hsl(var(--nature-control-border) / 0.65); }
   html.theme-nature .main-header .header-search input { background: transparent; border: none; box-shadow: none; color: inherit; }
   html.theme-nature .main-header .header-search input::placeholder { color: hsl(var(--nature-chrome-muted)); }
+  /* Search wrappers own their seasonal material; their input must stay clear. */
+  html.theme-nature :is(.tasks-search, .tasks-filters .tf-filter, .res-search) {
+    background: hsl(var(--nature-control-surface) / var(--nature-control-opacity));
+    color: hsl(var(--nature-control-foreground));
+    border-color: hsl(var(--nature-control-border) / .55);
+  }
+  html.theme-nature :is(.tasks-search, .res-search) input {
+    background: transparent; color: inherit; border: 0; box-shadow: none; min-width: 0; width: 100%;
+  }
+  html.theme-nature :is(.tasks-search, .res-search) input::placeholder { color: hsl(var(--nature-control-foreground) / .8); }
+  html.theme-nature :is(.tasks-search, .res-search):focus-within,
+  html.theme-nature .tasks-filters .tf-filter:focus-visible { outline: 2px solid hsl(var(--nature-heading)); outline-offset: 2px; }
+  html.theme-nature .tasks-filters .tf-filter:is(:hover, .active) { background: hsl(var(--nature-control-hover) / var(--nature-control-opacity)); border-color: hsl(var(--nature-heading) / .45); }
   /* Lesson navigation and filters are app controls, never paper surfaces.
      The tab strip gets one glass layer; nested fields use the same seasonal
      control palette as the rest of Nature without a second white fill. */
@@ -177,6 +235,28 @@
   }
   html.theme-nature .lesson-search input { background: transparent; color: inherit; border: 0; box-shadow: none; }
   html.theme-nature .lesson-search input::placeholder { color: hsl(var(--nature-control-foreground) / .8); }
+  /* Small editor actions sit over detailed scenery, so give each a stable
+     seasonal reading surface rather than leaving its label over the grass. */
+  html.theme-nature .lesson-editor-subbar button {
+    color: hsl(var(--nature-control-foreground));
+    background: hsl(var(--nature-control-surface) / .9);
+    border: 1px solid hsl(var(--nature-control-border) / .6);
+    border-radius: 999px;
+    padding: .5rem .8rem;
+    min-height: 36px;
+    box-shadow: inset 0 1px 0 var(--nature-glass-highlight);
+  }
+  html.theme-nature .lesson-editor-subbar button:hover:not(:disabled) { background: hsl(var(--nature-control-hover) / .95); }
+  html.theme-nature .lesson-editor-subbar button:focus-visible { outline: 2px solid hsl(var(--nature-heading)); outline-offset: 2px; }
+  html.theme-nature .lesson-editor-subbar button:disabled { opacity: .6; cursor: wait; }
+  html.theme-nature .lesson-admin-inbox-button[aria-pressed="true"] { background: hsl(var(--nature-action-surface)); color: hsl(var(--primary-foreground)); border-color: hsl(var(--nature-action-surface)); }
+  html.theme-nature .lesson-admin-inbox-button[aria-pressed="true"]:hover { background: hsl(var(--nature-action-hover)); }
+  html.theme-nature .app-filter-trigger { background: hsl(var(--nature-control-surface) / var(--nature-control-opacity)); color: hsl(var(--nature-control-foreground)); border-color: hsl(var(--nature-control-border) / .6); }
+  html.theme-nature .app-filter-trigger:is(:hover, [aria-expanded="true"]) { background: hsl(var(--nature-control-hover) / .95); }
+  html.theme-nature .app-filter-trigger:focus-visible { outline-color: hsl(var(--nature-heading)); }
+  html.theme-nature .app-filter-popover { background: hsl(var(--nature-dialog-surface)); color: hsl(var(--foreground)); border-color: hsl(var(--nature-dialog-border)); box-shadow: 0 12px 35px hsl(var(--foreground) / .2); }
+  html.theme-nature .app-filter-option[data-active="true"] { background: hsl(var(--nature-control-hover) / .75); color: hsl(var(--nature-control-foreground)); }
+  html.theme-nature .app-filter-option.is-selected { background: hsl(var(--nature-action-surface)); color: hsl(var(--primary-foreground)); }
   html.theme-nature :is(.lesson-tabs button, .lesson-language-switch button, .lesson-filters > select, .lesson-filters > input):focus-visible,
   html.theme-nature .lesson-search:focus-within { outline: 2px solid hsl(var(--nature-heading)); outline-offset: 2px; }
   html.theme-nature .lesson-filters select option { background: hsl(var(--nature-dialog-surface)); color: hsl(var(--foreground)); }
@@ -188,6 +268,16 @@
   html.theme-nature .lesson-status-completed { --nature-status-ink: var(--nature-status-completed-ink); --nature-status-fill: var(--nature-status-completed-fill); }
   html.theme-nature .lesson-status-archived { --nature-status-ink: var(--nature-status-archived-ink); --nature-status-fill: var(--nature-status-archived-fill); }
   html.theme-nature[data-nature-phase="night"] .lesson-status { background: hsl(var(--nature-status-fill) / .18); border-color: hsl(var(--nature-status-ink) / .3); }
+  /* Review states use quiet amber, teal and slate tints on a stable reading
+     surface. They are separate from the author's own plan status. */
+  html.theme-nature .lesson-review-badge[data-review-status="pending"] { --review-ink: var(--nature-status-draft-ink); --review-fill: var(--nature-status-draft-fill); }
+  html.theme-nature .lesson-review-badge[data-review-status="reviewing"] { --review-ink: var(--nature-review-active-ink); --review-fill: var(--nature-review-active-fill); }
+  html.theme-nature .lesson-review-badge[data-review-status="archived"] { --review-ink: var(--nature-status-archived-ink); --review-fill: var(--nature-status-archived-fill); }
+  html.theme-nature .lesson-review-badge[data-review-status] { color: hsl(var(--review-ink)); background: color-mix(in srgb, hsl(var(--nature-dialog-surface)) 81%, hsl(var(--review-fill))); border-color: hsl(var(--review-ink) / .32); }
+  html.theme-nature .lesson-history-search-box { background: hsl(var(--nature-control-surface) / var(--nature-control-opacity)); border-color: hsl(var(--nature-control-border) / .6); color: hsl(var(--nature-control-foreground)); }
+  html.theme-nature .lesson-history-search-box input { background: transparent; color: inherit; border: 0; box-shadow: none; }
+  html.theme-nature .lesson-history-search-box input::placeholder { color: hsl(var(--nature-control-foreground) / .8); }
+  html.theme-nature .lesson-history-filter > input[type="date"] { background: hsl(var(--nature-control-surface) / var(--nature-control-opacity)); border-color: hsl(var(--nature-control-border) / .6); color: hsl(var(--nature-control-foreground)); }
   html.theme-nature :is(.modal-content, .modal-box, .lesson-modal-card, .lesson-subject-options, .channel-drawer, .profile-drawer, .search-overlay-content, .search-results, .searchable-dropdown-popover, .select-popover, .school-dropdown, .school-switcher-dropdown, .notification-dropdown, .emoji-quick-picker) {
     background: hsl(var(--nature-dialog-surface)) !important;
     background-image: linear-gradient(145deg, hsl(var(--nature-dialog-surface)), hsl(var(--nature-dialog-tint))) !important;
@@ -195,6 +285,15 @@
     backdrop-filter: none; -webkit-backdrop-filter: none;
   }
   html.theme-nature .school-switcher-dropdown { border-color: hsl(var(--nature-dialog-border)) !important; }
+  /* Dialog panes use the dialog's own material; page-scale glass shadows and
+     layered frost must not create a clipped grey rectangle in its scroller. */
+  html.theme-nature .staff-profile-modal :is(.profile-drawer-hero, .p-stat, .drawer-bio-box, .drawer-contact-box) {
+    background: color-mix(in srgb, hsl(var(--nature-dialog-surface)) 70%, hsl(var(--nature-dialog-tint)));
+    border-color: hsl(var(--nature-dialog-border) / .42);
+    box-shadow: inset 0 1px 0 var(--nature-glass-highlight);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   html.theme-nature :is(.chat-window, .messages-sidebar, .chat-messages-area, .chat-input-form) { background: hsl(var(--nature-dialog-surface)) !important; }
   html.theme-nature :is(.content-card, .settings-section, .focus-card, .lesson-editor-section, .lesson-ai-card) :is(h2, h3):not(:where(.lesson-document, .lesson-document *)) { color: hsl(var(--nature-heading)); text-shadow: var(--nature-text-shadow); }
   html.theme-nature .blank-person-avatar { background: hsl(var(--secondary) / 0.8) !important; color: hsl(var(--foreground) / 0.65) !important; }

@@ -306,10 +306,136 @@ service cloud.firestore {
         allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'classes', true, true);
       }
 
-      // Lesson Plans (Author, Teachers, and Admins)
+      // Plan content is private to its author. Admin review is explicitly shared.
+      function lessonMember() {
+        let member = get(/databases/$(database)/documents/schools/$(schoolId)/members/$(request.auth.uid)).data;
+        return member.status == 'active' && (member.role == 'admin' ||
+          (member.role in ['teacher', 'dept_head'] &&
+            get(/databases/$(database)/documents/schools/$(schoolId)).data.get('rolePermissions', {}).get('teacher', {}).get('lesson-plans', true) == true));
+      }
+      function lessonAuthor() {
+        return isSignedIn() && (isSchoolCreator(schoolId) || lessonMember());
+      }
+      function sharePath(planId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlanShares/$(planId); }
+      function inboxPath(planId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlanInbox/$(planId); }
+      function planPath(planId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlans/$(planId); }
+      function historyPath(planId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlanReviewHistory/$(planId); }
+      function eventPath(planId, eventId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlanReviewHistory/$(planId)/events/$(eventId); }
+      function logged(planId, action, eventId) {
+        let event = getAfter(eventPath(planId, eventId)).data;
+        return event.action == action && event.actorUid == request.auth.uid && event.at == request.time &&
+          getAfter(historyPath(planId)).data.lastEventId == eventId;
+      }
+      function ownsPlan(data) { return data.get('ownerUid', '') == request.auth.uid; }
+      function validHistoryIdentity(planId) {
+        let share = existsAfter(sharePath(planId)) ? getAfter(sharePath(planId)).data : get(sharePath(planId)).data;
+        return request.resource.data.ownerUid == share.ownerUid && request.resource.data.ownerName == share.ownerName &&
+          request.resource.data.ownerEmail == share.ownerEmail && request.resource.data.sharedAt == share.sharedAt && request.resource.data.shareCycle == share.shareCycle;
+      }
+      function previousReview(planId) { return exists(historyPath(planId)) ? get(historyPath(planId)).data.lastReviewStatus : ''; }
+      function validPlanOwner(planId) {
+        return request.resource.data.ownerUid == request.auth.uid && request.resource.data.id == planId &&
+          request.resource.data.teacherId.lower() == request.auth.token.email.lower();
+      }
+      function validInbox(planId) {
+        let data = request.resource.data;
+        let share = getAfter(sharePath(planId)).data;
+        let plan = getAfter(planPath(planId)).data;
+        return data.keys().hasOnly(['planId', 'ownerUid', 'ownerName', 'ownerEmail', 'lessonUnit', 'subject', 'topic', 'classLabel', 'lessonDate', 'planUpdatedAt', 'sharedAt', 'shareToken', 'revisionId', 'reviewStatus', 'reviewedByUid', 'reviewedAt', 'lastEventId', 'shareCycle']) &&
+          share.ownerUid == request.auth.uid && plan.ownerUid == request.auth.uid &&
+          data.planId == planId && data.ownerUid == share.ownerUid && data.ownerName == share.ownerName && data.ownerEmail == share.ownerEmail &&
+          data.sharedAt == share.sharedAt && data.shareToken == share.shareToken && data.revisionId == share.revisionId && data.shareCycle == share.shareCycle &&
+          data.lessonUnit == plan.get('lessonUnit', '') && data.subject == plan.get('subject', '') && data.topic == plan.get('topic', '') &&
+          data.classLabel == plan.get('classLabel', '') && data.lessonDate == plan.get('date', '') && data.planUpdatedAt == plan.get('updatedAt', '') &&
+          data.reviewStatus == 'pending' && data.reviewedByUid == '' && data.reviewedAt == null && data.lastEventId == share.revisionId;
+      }
       match /lessonPlans/{planId} {
-        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
-        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
+        allow read: if lessonAuthor() && (ownsPlan(resource.data) ||
+          (isSchoolAdmin(schoolId) && exists(sharePath(planId)) && get(sharePath(planId)).data.ownerUid == resource.data.ownerUid));
+        allow create: if lessonAuthor() && validPlanOwner(planId) &&
+          (!exists(historyPath(planId)) || ownsPlan(get(historyPath(planId)).data));
+        allow update: if lessonAuthor() && ownsPlan(resource.data) && validPlanOwner(planId) &&
+          (!exists(sharePath(planId)) || logged(planId, 'update', getAfter(sharePath(planId)).data.revisionId));
+        allow delete: if lessonAuthor() && ownsPlan(resource.data) && !existsAfter(sharePath(planId));
+      }
+      match /lessonPlanShares/{planId} {
+        allow get: if lessonAuthor() && (resource == null || ownsPlan(resource.data) || isSchoolAdmin(schoolId));
+        allow list: if lessonAuthor() && (ownsPlan(resource.data) || isSchoolAdmin(schoolId));
+        allow create: if lessonAuthor() && request.resource.data.keys().hasOnly(['planId', 'ownerUid', 'ownerName', 'ownerEmail', 'sharedAt', 'shareToken', 'revisionId', 'shareCycle']) &&
+          ownsPlan(getAfter(planPath(planId)).data) && request.resource.data.planId == planId && ownsPlan(request.resource.data) &&
+          request.resource.data.ownerEmail == request.auth.token.email.lower() && request.resource.data.ownerName is string && request.resource.data.ownerName.size() <= 200 &&
+          request.resource.data.sharedAt == request.time && request.resource.data.shareToken is string && request.resource.data.shareToken.size() > 0 &&
+          request.resource.data.revisionId is string && request.resource.data.revisionId.size() > 0 &&
+          request.resource.data.shareCycle == (exists(historyPath(planId)) ? get(historyPath(planId)).data.shareCycle + 1 : 1) &&
+          getAfter(inboxPath(planId)).data.revisionId == request.resource.data.revisionId &&
+          logged(planId, request.resource.data.shareCycle > 1 ? 'reshare' : 'share', request.resource.data.revisionId);
+        allow update: if lessonAuthor() && ownsPlan(resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revisionId']) &&
+          request.resource.data.revisionId is string && request.resource.data.revisionId.size() > 0 &&
+          request.resource.data.revisionId != resource.data.revisionId &&
+          getAfter(inboxPath(planId)).data.revisionId == request.resource.data.revisionId && logged(planId, 'update', request.resource.data.revisionId);
+        allow delete: if lessonAuthor() && ownsPlan(resource.data) && !existsAfter(inboxPath(planId)) &&
+          logged(planId, 'unshare', getAfter(historyPath(planId)).data.lastEventId);
+      }
+      match /lessonPlanInbox/{planId} {
+        allow read: if isSchoolAdmin(schoolId);
+        allow create: if lessonAuthor() && validInbox(planId);
+        allow update: if (lessonAuthor() && validInbox(planId) &&
+          (request.resource.data.revisionId != resource.data.revisionId || request.resource.data.shareToken != resource.data.shareToken)) ||
+          (isSchoolAdmin(schoolId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewStatus', 'reviewedByUid', 'reviewedAt', 'lastEventId']) &&
+          request.resource.data.reviewStatus in ['pending', 'reviewing', 'archived'] && request.resource.data.reviewedByUid == request.auth.uid && request.resource.data.reviewedAt == request.time &&
+          resource.data.revisionId == get(sharePath(planId)).data.revisionId && resource.data.shareToken == get(sharePath(planId)).data.shareToken &&
+          logged(planId, 'review', request.resource.data.lastEventId));
+        allow delete: if lessonAuthor() && ownsPlan(resource.data) && !existsAfter(sharePath(planId)) &&
+          logged(planId, 'unshare', getAfter(historyPath(planId)).data.lastEventId);
+      }
+      // Append-only audit snapshots survive unsharing. Only the author and school
+      // admins can read them; every write links to the same atomic operation.
+      match /lessonPlanReviewHistory/{planId} {
+        allow get: if lessonAuthor() && (resource == null || ownsPlan(resource.data) || isSchoolAdmin(schoolId));
+        allow list: if lessonAuthor() && (ownsPlan(resource.data) || isSchoolAdmin(schoolId));
+        allow create, update: if lessonAuthor() &&
+          (resource == null || request.resource.data.ownerUid == resource.data.ownerUid) &&
+          request.resource.data.keys().hasOnly(['planId', 'ownerUid', 'ownerName', 'ownerEmail', 'lessonUnit', 'subject', 'topic', 'classLabel', 'lessonDate', 'sharedAt', 'lastEventId', 'lastEventAt', 'lastAction', 'shareCycle', 'lastReviewStatus']) &&
+          request.resource.data.planId == planId && request.resource.data.lastEventAt == request.time &&
+          request.resource.data.ownerUid == getAfter(eventPath(planId, request.resource.data.lastEventId)).data.ownerUid &&
+          request.resource.data.lastAction == getAfter(eventPath(planId, request.resource.data.lastEventId)).data.action &&
+          logged(planId, request.resource.data.lastAction, request.resource.data.lastEventId) &&
+          request.resource.data.lessonUnit == getAfter(planPath(planId)).data.get('lessonUnit', '') &&
+          request.resource.data.subject == getAfter(planPath(planId)).data.get('subject', '') &&
+          request.resource.data.lessonDate == getAfter(planPath(planId)).data.get('date', '') &&
+          request.resource.data.classLabel == getAfter(planPath(planId)).data.get('classLabel', '') &&
+          request.resource.data.topic == getAfter(planPath(planId)).data.get('topic', '') && validHistoryIdentity(planId) &&
+          request.resource.data.lastReviewStatus == (request.resource.data.lastAction == 'unshare' ? previousReview(planId) : getAfter(eventPath(planId, request.resource.data.lastEventId)).data.reviewStatus);
+        allow delete: if false;
+        match /events/{eventId} {
+          allow read: if lessonAuthor() && (ownsPlan(get(historyPath(planId)).data) || isSchoolAdmin(schoolId));
+          allow create: if lessonAuthor() && request.resource.data.keys().hasOnly(['planId', 'ownerUid', 'actorUid', 'actorEmail', 'actorName', 'action', 'at', 'shareToken', 'revisionId', 'reviewStatus', 'previousReviewStatus', 'plan']) &&
+            request.resource.data.planId == planId &&
+            request.resource.data.actorName is string && request.resource.data.actorName.size() <= 200 && request.resource.data.at == request.time &&
+            request.resource.data.ownerUid == getAfter(planPath(planId)).data.ownerUid && request.resource.data.plan == getAfter(planPath(planId)).data &&
+            request.resource.data.previousReviewStatus == previousReview(planId) && (
+              (request.resource.data.action == 'auto_reopen' && request.resource.data.actorUid == 'system' && request.resource.data.actorEmail == '' &&
+                request.resource.data.actorName == 'System' && request.resource.data.previousReviewStatus == 'archived' && request.resource.data.reviewStatus == 'pending' &&
+                eventId == getAfter(historyPath(planId)).data.lastEventId + '-reopen' &&
+                getAfter(eventPath(planId, getAfter(historyPath(planId)).data.lastEventId)).data.action in ['reshare', 'update'] &&
+                request.resource.data.revisionId == getAfter(sharePath(planId)).data.revisionId && request.resource.data.shareToken == getAfter(sharePath(planId)).data.shareToken) ||
+              (request.resource.data.actorUid == request.auth.uid && request.resource.data.actorEmail == request.auth.token.email.lower() &&
+              getAfter(historyPath(planId)).data.lastEventId == eventId &&
+              (!(previousReview(planId) == 'archived' && request.resource.data.action in ['reshare', 'update']) ||
+                getAfter(eventPath(planId, eventId + '-reopen')).data.action == 'auto_reopen') && (
+              (request.resource.data.action in ['share', 'reshare', 'update'] && ownsPlan(request.resource.data) &&
+                request.resource.data.reviewStatus == 'pending' && eventId == getAfter(sharePath(planId)).data.revisionId &&
+                request.resource.data.revisionId == eventId && request.resource.data.shareToken == getAfter(sharePath(planId)).data.shareToken &&
+                ((request.resource.data.action in ['share', 'reshare'] && !exists(sharePath(planId))) || (request.resource.data.action == 'update' && exists(sharePath(planId))))) ||
+              (request.resource.data.action == 'unshare' && ownsPlan(request.resource.data) && !existsAfter(sharePath(planId)) &&
+                request.resource.data.reviewStatus == 'unshared' && request.resource.data.revisionId == get(sharePath(planId)).data.revisionId && request.resource.data.shareToken == get(sharePath(planId)).data.shareToken) ||
+              (request.resource.data.action == 'review' && isSchoolAdmin(schoolId) &&
+                getAfter(inboxPath(planId)).data.lastEventId == eventId && request.resource.data.reviewStatus == getAfter(inboxPath(planId)).data.reviewStatus &&
+                request.resource.data.revisionId == get(sharePath(planId)).data.revisionId && request.resource.data.shareToken == get(sharePath(planId)).data.shareToken)
+            )));
+          allow update, delete: if false;
+        }
       }
 
       // Lesson Plan Templates

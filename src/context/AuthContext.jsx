@@ -438,7 +438,7 @@ const DEFAULT_SCHOOL_ROLES = [
 
     // 5. Global preferences
     await setDoc(doc(db, 'users', user.uid, 'preferences', 'app'), {
-      theme: localStorage.getItem('lumi-theme-mode') || 'dark',
+      theme: localStorage.getItem('lumi-theme-mode') || 'system',
       language: 'en'
     }, { merge: true });
 

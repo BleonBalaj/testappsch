@@ -188,12 +188,28 @@
 }
 
 .staff-card {
+  position: relative;
   padding: 1.5rem;
   border-radius: 24px;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
+
+/* A native button opens the entire card, with links and separate actions
+   above its hit target. No nested buttons or card-level click bubbling. */
+.staff-card .staff-profile-trigger::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 24px;
+  cursor: pointer;
+}
+.staff-card .staff-profile-trigger,
+.staff-card .staff-profile-trigger:hover { position: static; transform: none; }
+.staff-card :is(.contact-pill, .staff-message-trigger, .icon-action-btn) { position: relative; z-index: 2; }
+.staff-card:focus-within { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
 
 .staff-card-top {
   display: flex;
@@ -205,6 +221,7 @@
   width: 72px;
   height: 72px;
   flex-shrink: 0;
+  border-radius: 20px;
 }
 
 .staff-avatar-wrap img {
@@ -629,12 +646,45 @@
   max-width: 580px;
 }
 
-.profile-drawer-body {
+.staff-profile-modal .modal-header { padding-right: 2.25rem !important; min-height: 1.75rem; }
+.staff-profile-modal .modal-header .icon-btn-close { top: 0 !important; right: 0 !important; }
+
+.staff-profile-modal .profile-drawer-body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border-radius: 1rem;
   gap: 1.25rem;
-  margin-top: 1rem;
+  padding: .5rem .65rem .9rem .15rem;
 }
+.staff-profile-modal .profile-drawer-body > * { flex-shrink: 0; min-width: 0; }
+.staff-profile-modal :is(.drawer-hero-info, .p-stat, .contact-row span) { min-width: 0; overflow-wrap: anywhere; }
+
+/* Nested panes sit inside one elevated dialog. Page-card shadows here stack
+   into a grey slab and are abruptly cropped by the scrollport. Keep only
+   contained surface detail, including on the role badge and footer button. */
+.staff-profile-modal .glass { box-shadow: none; }
+.staff-profile-modal :is(.profile-drawer-hero, .p-stat, .drawer-bio-box, .drawer-contact-box) {
+  border: 1px solid hsl(var(--foreground) / .1);
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / .025);
+}
+.staff-profile-modal .staff-profile-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: .65rem;
+  padding-top: .85rem;
+  border-top: 1px solid hsl(var(--foreground) / .1);
+}
+.staff-profile-modal .staff-profile-footer button { min-width: 0; max-width: 100%; }
 
 .profile-drawer-hero {
   display: flex;
@@ -650,6 +700,15 @@
   border-radius: 24px;
   background: hsl(var(--secondary));
   border: 3px solid hsl(var(--primary));
+  display: grid;
+  place-items: center;
+  flex: 0 0 80px;
+  overflow: hidden;
+}
+
+@media (max-width: 420px) {
+  .staff-profile-modal .profile-drawer-hero { flex-direction: column; text-align: center; }
+  .staff-profile-modal .profile-stats-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .drawer-hero-info h2 {

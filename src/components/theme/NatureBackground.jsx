@@ -51,7 +51,7 @@ function NatureActive({ allowScene, publicPage }) {
         if (!main)
             return;
         let paused = readNatureMotionPaused();
-        const stopEntries = observeNatureGlassEntries(main, () => paused);
+        const stopEntries = observeNatureGlassEntries(main);
         let stopPaint;
         const sync = () => {
             paused = readNatureMotionPaused();

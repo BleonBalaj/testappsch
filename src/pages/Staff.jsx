@@ -98,7 +98,7 @@ const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectPro
     >
       <div className="staff-card-top">
         <div className="staff-avatar-wrap">
-          <Avatar alt={displayStaffName} />
+          <Avatar alt={displayStaffName} size="100%" style={{ borderRadius: 'inherit' }} />
         </div>
 
         <div className="staff-primary-details">
@@ -165,11 +165,11 @@ const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectPro
 
       <div className="staff-footer-actions">
         <div className="primary-actions">
-          <button className="btn-secondary glass btn-small" onClick={() => onSelectProfile(staff)}>
-            Profile Details
+          <button type="button" className="btn-secondary glass btn-small staff-profile-trigger" onClick={() => onSelectProfile(staff)} aria-label={isAlbanian ? `Hap profilin e ${displayStaffName}` : `Open ${displayStaffName}'s profile`}>
+            {isAlbanian ? 'Profili' : 'Profile Details'}
           </button>
-          <button className="btn-primary btn-small" onClick={() => onMessage && onMessage(staff)}>
-            Message
+          <button type="button" className="btn-primary btn-small staff-message-trigger" onClick={() => onMessage && onMessage(staff)}>
+            {isAlbanian ? 'Mesazh' : 'Message'}
           </button>
         </div>
 
@@ -987,14 +987,17 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
           <div className="modal-overlay" onClick={() => setSelectedProfile(null)}>
             <motion.div 
               className="modal-content staff-profile-modal glass"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="staff-profile-title"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={e => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h3>Staff Profile Card</h3>
-                <button className="icon-btn-close" onClick={() => setSelectedProfile(null)}>
+                <h3 id="staff-profile-title">{isAlbanian ? 'Profili i anëtarit të stafit' : 'Staff Profile Card'}</h3>
+                <button type="button" className="icon-btn-close" onClick={() => setSelectedProfile(null)} aria-label={isAlbanian ? 'Mbyll profilin' : 'Close profile'}>
                   <X size={20} />
                 </button>
               </div>
@@ -1002,7 +1005,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
               <div className="profile-drawer-body">
                 <div className="profile-drawer-hero glass">
                   <div className="drawer-avatar">
-                    <Avatar alt={getResolvedStaffName(selectedProfile)} />
+                    <Avatar alt={getResolvedStaffName(selectedProfile)} size="100%" style={{ borderRadius: 'inherit' }} />
                   </div>
                   <div className="drawer-hero-info">
                     <h2>{getResolvedStaffName(selectedProfile)}</h2>
@@ -1065,10 +1068,11 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
                     </a>
                   </div>
                 </div>
+              </div>
 
-                <div className="modal-actions">
+                <div className="staff-profile-footer">
                   <button className="btn-secondary glass" onClick={() => setSelectedProfile(null)}>
-                    Close
+                    {isAlbanian ? 'Mbyll' : 'Close'}
                   </button>
                   <button 
                     className="btn-primary" 
@@ -1078,10 +1082,9 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
                     }}
                   >
                     <Mail size={16} />
-                    Send Direct Message
+                    {isAlbanian ? 'Dërgo mesazh' : 'Send Direct Message'}
                   </button>
                 </div>
-              </div>
             </motion.div>
           </div>
         )}

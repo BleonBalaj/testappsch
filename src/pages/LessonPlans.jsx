@@ -3,7 +3,7 @@ import {
   Archive, ArrowDown, ArrowLeft, ArrowUp, BookOpen, CalendarDays, Check,
   ChevronDown, Clock3, Copy, Download, FilePlus2, FileText, FolderArchive,
   LayoutTemplate, List, ListOrdered, Plus, Printer,
-  RotateCcw, Save, Search, Settings2, Sparkles, Trash2, X, Upload
+  RotateCcw, Save, Search, Settings2, Sparkles, Trash2, X, Upload, Share2, Unlink, History
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -12,13 +12,19 @@ import {
   createPlan, dateInTimeZone, duplicatePlan, getDateRange, getSubjectArea, listSubjects, stageForClass,
 } from '../features/lessonPlans/index.js';
 import { translate, translateCatalogValue } from '../features/lessonPlans/i18n';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { compressImageFile } from '../services/imageUtils';
 import { createLessonCloudAutosave } from '../features/lessonPlans/cloudAutosave';
 import LessonPlanDocument from './LessonPlanDocument';
 import LessonPlanAdminSettings from './LessonPlanAdminSettings';
 import LessonAiAssistanceCard from '../components/LessonAiAssistanceCard';
+import SharedLessonPlans from '../components/SharedLessonPlans';
+import LessonPlanHistory from '../components/LessonPlanHistory';
+import LessonSharingDialog from '../components/LessonSharingDialog';
+import DialogPortal from '../components/DialogPortal';
+import { prepareLessonPlanOwnership, writeOwnedLessonPlan, setPlanShared } from '../features/lessonPlans/sharingCloud';
+import { shareText } from '../features/lessonPlans/sharingI18n';
 import './LessonPlans.css';
 
 const DATE_OPTIONS = ['all', 'today', 'yesterday', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'last7Days', 'custom'];
@@ -150,6 +156,7 @@ function Section({ id, title, subtitle, children, open, onToggle }) {
 function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser = {}, language = 'en', onLanguageChange, scheduledLesson = null, onScheduledLessonConsumed }) {
   const t = (key, values) => translate(language, key, values);
   const ct = (value) => translateCatalogValue(language, value);
+  const s = (key) => shareText(language, key);
   const { staffList, classGroups = [], classesList = [] } = useSchoolData();
   const { 
     activeSchoolId, 
@@ -159,8 +166,11 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     updateSchoolPreferences 
   } = useAuth();
   const effectiveUid = authUser?.uid || currentUser?.uid;
-  const teacherId = currentUser?.email || authUser?.email || effectiveUid || 'user@noesishorizon.edu';
-  const repository = useMemo(() => createLessonPlanRepository(teacherId, { schoolId: activeSchoolId || 'default' }), [teacherId, activeSchoolId]);
+  const teacherId = authUser?.email || currentUser?.email || effectiveUid || 'user@noesishorizon.edu';
+  const identity = useMemo(() => ({ uid: effectiveUid, email: teacherId, name: currentUser?.name || authUser?.displayName || teacherId }), [effectiveUid, teacherId, currentUser?.name, authUser?.displayName]);
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const repository = useMemo(() => createLessonPlanRepository(teacherId, { schoolId: activeSchoolId || 'default', ownerUid: effectiveUid }), [teacherId, activeSchoolId, effectiveUid]);
   const [view, setView] = useState(initialView);
   const [plans, setPlans] = useState(() => repository.listPlans());
   const [preferences, setPreferences] = useState(() => {
@@ -252,11 +262,31 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [templateSource, setTemplateSource] = useState(null);
   const [templateName, setTemplateName] = useState('');
   const [pendingTopic, setPendingTopic] = useState(null);
+  const [syncError, setSyncError] = useState(false);
+  const [syncAttempt, setSyncAttempt] = useState(0);
+  const [sharing, setSharing] = useState({ key: '', shared: {}, history: {} });
+  const [sharingBusy, setSharingBusy] = useState('');
+  const [sharingError, setSharingError] = useState('');
+  const [confirmShare, setConfirmShare] = useState(null);
+  const [historyPlan, setHistoryPlan] = useState(null);
+  const sharingKey = `${activeSchoolId}:${effectiveUid}`;
+  const isShared = (id) => sharing.key === sharingKey && Boolean(sharing.shared[id]);
+  const hasHistory = (id) => sharing.key === sharingKey && Boolean(sharing.history[id]);
+  useEffect(() => {
+    if (!activeSchoolId || !effectiveUid) return;
+    const subscribe = (name, field) => onSnapshot(query(collection(db, 'schools', activeSchoolId, name), where('ownerUid', '==', effectiveUid)), { includeMetadataChanges: true }, snapshot => {
+      if (snapshot.metadata.hasPendingWrites) return;
+      setSharing(previous => ({ ...(previous.key === sharingKey ? previous : { key: sharingKey, shared: {}, history: {} }), [field]: Object.fromEntries(snapshot.docs.map(entry => [entry.id, entry.data()])) }));
+    }, error => { console.warn('Lesson sharing sync failed:', error); setSyncError(true); });
+    const offShares = subscribe('lessonPlanShares', 'shared');
+    const offHistory = subscribe('lessonPlanReviewHistory', 'history');
+    return () => { offShares(); offHistory(); };
+  }, [activeSchoolId, effectiveUid, sharingKey, syncAttempt]);
 
   const autosaveRef = useRef(null);
   if (!autosaveRef.current) {
     autosaveRef.current = createLessonCloudAutosave({
-      write: (plan, schoolId) => setDoc(doc(db, 'schools', schoolId, 'lessonPlans', String(plan.id)), plan),
+      write: (plan, schoolId) => writeOwnedLessonPlan(plan, schoolId, identityRef.current),
       onStatus: (planId, schoolId, status, error) => {
         if (error) console.warn('Lesson plan cloud save failed:', error);
         if (activeSchoolIdRef.current === schoolId && activePlanRef.current?.id === planId) setSaveState(status);
@@ -266,13 +296,19 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
 
   // Real-time Cloud Sync with Firestore
   useEffect(() => {
-    if (!activeSchoolId) return;
+    if (!activeSchoolId || !effectiveUid) return;
     cloudReadyRef.current = false;
 
     // 1. Sync Lesson Plans from Firestore
-    const plansCol = collection(db, 'schools', activeSchoolId, 'lessonPlans');
+    const plansCol = query(collection(db, 'schools', activeSchoolId, 'lessonPlans'), where('ownerUid', '==', effectiveUid));
     let initialSnapshot = true;
-    const unsubPlans = onSnapshot(plansCol, (snapshot) => {
+    let cancelled = false;
+    let unsubPlans = () => {};
+    prepareLessonPlanOwnership(activeSchoolId, teacherId).then(() => {
+      if (cancelled) return;
+      setSyncError(false);
+      autosaveRef.current.flush(activeSchoolId);
+      unsubPlans = onSnapshot(plansCol, { includeMetadataChanges: true }, (snapshot) => {
       let hasChanges = false;
       snapshot.docChanges().forEach(({ type, doc: docSnap }) => {
         if (type === 'removed') return;
@@ -297,7 +333,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           const cloudPlan = cloudById.get(String(localPlan.id));
           if ((!cloudPlan || String(localPlan.updatedAt ?? '') > String(cloudPlan.updatedAt ?? ''))
             && !autosaveRef.current.hasUnconfirmed(activeSchoolId, localPlan.id)) {
-            autosaveRef.current.enqueue(localPlan, activeSchoolId, true);
+            autosaveRef.current.enqueue({ ...localPlan, ownerUid: effectiveUid, teacherId }, activeSchoolId, true);
           }
         }
         const current = activePlanRef.current;
@@ -306,7 +342,8 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
       if (hasChanges || snapshot.empty) {
         setPlans(repository.listPlans());
       }
-    }, (err) => console.warn('Lesson plans cloud sync notice:', err.message));
+    }, (err) => { console.warn('Lesson plans cloud sync notice:', err.message); setSyncError(true); });
+    }).catch(error => { if (!cancelled) { console.warn('Lesson ownership preparation failed:', error); setSyncError(true); } });
 
     // 2. Sync Templates from Firestore
     const tplCol = collection(db, 'schools', activeSchoolId, 'templates');
@@ -342,12 +379,13 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     }, (err) => console.warn('Reusable entries cloud sync notice:', err.message));
 
     return () => {
+      cancelled = true;
       unsubPlans();
       unsubTpl();
       unsubTopics();
       unsubReusable();
     };
-  }, [activeSchoolId, repository]);
+  }, [activeSchoolId, effectiveUid, teacherId, repository, syncAttempt]);
 
   const refresh = useCallback(() => {
     setPlans(repository.listPlans());
@@ -364,6 +402,9 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     previousRepositoryRef.current = repository;
     activePlanRef.current = null;
     setActivePlan(null);
+    setHistoryPlan(null);
+    setConfirmShare(null);
+    setSharingError('');
     setSaveState('saving');
     setView('plans');
     refresh();
@@ -389,6 +430,24 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   }, [printTarget, documentLanguage]);
 
   const notify = (value) => { setMessage(value); window.setTimeout(() => setMessage(''), 4000); };
+  const changeSharing = async (plan, shared) => {
+    if (sharingBusy) return;
+    const schoolId = activeSchoolId, account = identity, key = sharingKey;
+    setSharingBusy(plan.id);
+    setSharingError('');
+    try {
+      // Publish the latest confirmed cloud version. Never claim success while
+      // a newer local edit is still waiting to be saved.
+      await autosaveRef.current.flushAndWait();
+      await setPlanShared(schoolId, plan.id, account, shared);
+      if (activeSchoolIdRef.current === schoolId && identityRef.current.uid === account.uid) {
+        setSharing(previous => ({ ...(previous.key === key ? previous : { key, shared: {}, history: {} }), shared: { ...(previous.key === key ? previous.shared : {}), [plan.id]: shared }, history: { ...(previous.key === key ? previous.history : {}), [plan.id]: true } }));
+        notify(s(shared ? 'sharedSuccess' : 'unsharedSuccess'));
+      }
+    } catch (error) { console.warn('Lesson sharing failed:', error); setSharingError(s(error.message?.startsWith('sharing.') ? error.message.slice(8) : 'error')); }
+    finally { setSharingBusy(''); setConfirmShare(null); }
+  };
+  const requestSharing = plan => isShared(plan.id) ? changeSharing(plan, false) : setConfirmShare(plan);
   const updatePlan = (change, { immediate = false } = {}) => {
     const current = activePlanRef.current;
     if (!current) return;
@@ -513,13 +572,16 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
 
   return <LessonLanguageContext.Provider value={language}><div ref={pageRef} lang={language === 'sq' ? 'sq' : 'en'} className="lesson-page">
     {storageProblem && <div className="lesson-storage-warning" role="alert">{t('validation.saveFailed')}</div>}
+    {syncError && <div className="lesson-storage-warning" role="alert">{s('syncError')} <button type="button" className="btn-secondary" onClick={() => setSyncAttempt(value => value + 1)}>{s('retry')}</button></div>}
+    {sharingError && <div className="lesson-storage-warning" role="alert">{sharingError}<button type="button" className="lesson-icon-button" onClick={() => setSharingError('')} aria-label={s('close')}><X size={16} /></button></div>}
     {message && <div className="lesson-toast" role="status"><Check size={16} />{message}</div>}
     {view !== 'editor' && <>
       <header className="lesson-page-header">
         <div><div className="lesson-title-row"><h1 className="gradient-text">{t('page.title')}</h1><span className="lesson-count-pill">{t('page.activeCount', { count: stats.total })}</span></div>
           <p>{t('page.subtitle')}</p></div>
         <div className="lesson-header-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={() => setView('settings')}><Settings2 size={17} /> {t('page.settings')}</button>
-          <button type="button" className="btn-primary" onClick={() => startPlan()}><Plus size={18} /> {t('page.createPlan')}</button></div>
+          <button type="button" className="btn-primary" onClick={() => startPlan()}><Plus size={18} /> {t('page.createPlan')}</button>
+          {isAdmin && <button type="button" className="btn-secondary lesson-admin-inbox-button" aria-pressed={view === 'shared'} onClick={() => setView('shared')}><Share2 size={17} />{s('adminInbox')}</button>}</div>
       </header>
       <nav className="lesson-tabs" aria-label={t('page.sectionsAria')}>
         <button className={view === 'plans' ? 'active' : ''} onClick={() => setView('plans')}><FileText size={17} /> {t('nav.myPlans')}</button>
@@ -527,6 +589,10 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
         <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}><Settings2 size={17} /> {t('nav.planningSettings')}</button>
       </nav>
     </>}
+
+    {view === 'shared' && isAdmin && activeSchoolId && <SharedLessonPlans key={`${activeSchoolId}:${effectiveUid}`} schoolId={activeSchoolId} identity={identity} language={language} />}
+    {confirmShare && <LessonSharingDialog title={s('confirmTitle')} onClose={() => !sharingBusy && setConfirmShare(null)}><p>{s('confirmText')}</p><div className="lesson-review-toolbar"><button type="button" className="btn-secondary" disabled={Boolean(sharingBusy)} onClick={() => setConfirmShare(null)}>{s('cancel')}</button><button type="button" className="btn-primary" disabled={Boolean(sharingBusy)} onClick={() => changeSharing(confirmShare, true)}><Share2 size={17} />{s(sharingBusy ? 'sharing' : 'confirm')}</button></div></LessonSharingDialog>}
+    {historyPlan && <LessonSharingDialog title={s('history')} side onClose={() => setHistoryPlan(null)}><LessonPlanHistory key={`${activeSchoolId}:${historyPlan}`} schoolId={activeSchoolId} planId={historyPlan} language={language} /></LessonSharingDialog>}
 
     {view === 'plans' && <>
       <div className="lesson-stats">
@@ -553,6 +619,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
                 {plan.lessonUnit || t('plans.untitledUnit')}
               </button></h3>
               <span className={`lesson-status lesson-status-${plan.status}`}>{t(`status.${plan.status}`)}</span>
+              {isShared(plan.id) && <span className="lesson-review-badge">{s('shared')}</span>}
             </div>
             <p>
               {[ct(plan.subject), plan.classLabel, plan.topic].filter(Boolean).join(' · ') || t('plans.completeDetails')}
@@ -560,12 +627,13 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
             <small>{dateLabel(plan.date, language)} · {t('plans.modified', { date: plan.updatedAt ? language === 'sq' ? dateInTimeZone(plan.updatedAt, SCHOOL_TIME_ZONE).split('-').reverse().slice(0, 2).join('.') : new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(plan.updatedAt)) : t('date.todayLower') })}</small>
           </div>
           <div className="lesson-plan-actions">
-            <button type="button" onClick={() => openPlan(plan, 'preview')} title={t('plans.openPreviewTitle')}><FileText size={16} /> {t('plans.open')}</button>
-            <button type="button" onClick={() => openPlan(plan)} title={t('plans.edit')}><BookOpen size={16} /> {t('plans.edit')}</button>
+            <button type="button" onClick={() => openPlan(plan)} title={t('plans.open')}><FileText size={16} /> {t('plans.open')}</button>
+            {hasHistory(plan.id) && <button type="button" onClick={() => setHistoryPlan(plan.id)}><History size={16} />{s('history')}</button>}
             <button type="button" onClick={() => duplicate(plan)} title={t('plans.duplicate')}><Copy size={16} /> {t('plans.duplicate')}</button>
             <button type="button" onClick={() => printPlan(plan)} title={t('plans.print')}><Printer size={16} /> {t('plans.print')}</button>
             <button type="button" onClick={() => printPlan(plan)} title={t('plans.pdfTitle')}><Download size={16} /> {t('plans.pdf')}</button>
             <button type="button" onClick={() => changeStatus(plan, plan.status === 'archived' ? 'draft' : 'archived')} title={t(plan.status === 'archived' ? 'plans.restore' : 'plans.archive')}>{plan.status === 'archived' ? <RotateCcw size={16} /> : <Archive size={16} />}{t(plan.status === 'archived' ? 'plans.restore' : 'plans.archive')}</button>
+            <button type="button" disabled={Boolean(sharingBusy) || syncError} onClick={() => requestSharing(plan)}>{isShared(plan.id) ? <Unlink size={16} /> : <Share2 size={16} />}{s(sharingBusy === plan.id ? 'sharing' : isShared(plan.id) ? 'unshare' : 'share')}</button>
           </div>
         </article>)}</div> : <div className="lesson-empty"><span><FilePlus2 size={29} /></span><h3>{t(plans.length ? 'plans.noResultsTitle' : 'plans.firstPlanTitle')}</h3><p>{t(plans.length ? 'plans.noResultsDescription' : 'plans.firstPlanDescription')}</p><button type="button" className="btn-primary" onClick={() => startPlan()}><Plus size={17} /> {t('page.createPlan')}</button></div>}
       </section>
@@ -722,8 +790,11 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
         <div className="lesson-editor-toolbar-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={() => { autosaveRef.current.flush(activeSchoolId, activePlanRef.current?.id); setMobilePane('preview'); document.getElementById('lesson-preview')?.scrollIntoView({ block: 'nearest' }); }}><FileText size={16} /> {t('editor.preview')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)}><Printer size={16} /> {t('editor.print')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)} title={t('editor.pdfTitle')}><Download size={16} /> {t('editor.pdf')}</button></div>
       </div>
       <div className="lesson-editor-subbar"><div><span className={`lesson-status lesson-status-${activePlan.status}`}>{t(`status.${activePlan.status}`)}</span><span>{dateLabel(activePlan.date, language)} · {activePlan.classLabel || t('editor.noClass')}</span></div><div>
+        {isShared(activePlan.id) && <span className="lesson-review-badge" title={s('live')}>{s('shared')}</span>}
+        {hasHistory(activePlan.id) && <button type="button" onClick={() => setHistoryPlan(activePlan.id)}><History size={15} />{s('history')}</button>}
         <button type="button" onClick={() => makeTemplate(activePlan)}><LayoutTemplate size={15} /> {t('editor.saveAsTemplate')}</button>
         <button type="button" onClick={() => duplicate(activePlan)}><Copy size={15} /> {t('editor.duplicate')}</button>
+        <button type="button" disabled={Boolean(sharingBusy) || syncError} onClick={() => requestSharing(activePlan)}>{isShared(activePlan.id) ? <Unlink size={15} /> : <Share2 size={15} />}{s(sharingBusy === activePlan.id ? 'sharing' : isShared(activePlan.id) ? 'unshare' : 'share')}</button>
         <button type="button" onClick={() => updatePlan({ status: activePlan.status === 'completed' ? 'draft' : 'completed' })}><Check size={15} /> {t(activePlan.status === 'completed' ? 'editor.returnToDraft' : 'editor.markCompleted')}</button>
       </div></div>
       <div className="lesson-mobile-pane-switch"><button className={mobilePane === 'editor' ? 'active' : ''} onClick={() => setMobilePane('editor')}>{t('editor.editorTab')}</button><button className={mobilePane === 'preview' ? 'active' : ''} onClick={() => setMobilePane('preview')}>{t('editor.documentTab')}</button></div>
@@ -771,8 +842,8 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
         <div className={`lesson-preview-panel glass ${mobilePane === 'editor' ? 'lesson-mobile-hidden' : ''}`} id="lesson-preview"><div className="lesson-preview-heading"><div><FileText size={18} /><strong>{t('editor.documentPreview')}</strong></div><div className="lesson-preview-controls"><label>{t('editor.pdfLanguage')} <select aria-label={t('editor.pdfLanguage')} value={documentLanguage} onChange={(event) => changeDocumentLanguage(event.target.value)}><option value="sq">Shqip</option><option value="en">English</option></select></label><span>{t('editor.a4Portrait')}</span></div></div><div className="lesson-paper-wrap"><LessonPlanDocument plan={{ ...(activePlan || {}), schoolLogo: settingsDraft?.schoolLogo !== undefined ? settingsDraft.schoolLogo : (activePlan?.schoolLogo || preferences?.schoolLogo) }} language={documentLanguage} showSchoolName={showSchoolName} /></div></div>
       </div>
     </>}
-    {templateSource && <div className="lesson-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTemplateSource(null); }}><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-template-dialog-title"><h2 id="lesson-template-dialog-title">{t('templates.dialogTitle')}</h2><p>{t('templates.dialogDescription')}</p><label className="lesson-field"><span className="lesson-field-heading">{t('templates.namePrompt')}</span><input autoFocus value={templateName} onChange={(event) => setTemplateName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveTemplate(); if (event.key === 'Escape') setTemplateSource(null); }} /></label><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setTemplateSource(null)}>{t('common.cancel')}</button><button type="button" className="btn-primary" onClick={saveTemplate} disabled={!templateName.trim()}>{t('editor.saveAsTemplate')}</button></div></div></div>}
-    {pendingTopic && <div className="lesson-modal-overlay" role="presentation"><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-topic-dialog-title"><h2 id="lesson-topic-dialog-title">{t('confirm.outcomeTitle')}</h2><p>{t('confirm.replaceTopicOutcome')}</p><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setPendingTopic(null)}>{t('confirm.keepOutcome')}</button><button type="button" className="btn-primary" onClick={() => { updatePlan({ topic: pendingTopic.title, topicLearningOutcome: pendingTopic.outcome }); setPendingTopic(null); }}>{t('confirm.useSavedOutcome')}</button></div></div></div>}
+    {templateSource && <DialogPortal><div className="lesson-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTemplateSource(null); }}><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-template-dialog-title"><h2 id="lesson-template-dialog-title">{t('templates.dialogTitle')}</h2><p>{t('templates.dialogDescription')}</p><label className="lesson-field"><span className="lesson-field-heading">{t('templates.namePrompt')}</span><input autoFocus value={templateName} onChange={(event) => setTemplateName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveTemplate(); if (event.key === 'Escape') setTemplateSource(null); }} /></label><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setTemplateSource(null)}>{t('common.cancel')}</button><button type="button" className="btn-primary" onClick={saveTemplate} disabled={!templateName.trim()}>{t('editor.saveAsTemplate')}</button></div></div></div></DialogPortal>}
+    {pendingTopic && <DialogPortal><div className="lesson-modal-overlay" role="presentation"><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-topic-dialog-title"><h2 id="lesson-topic-dialog-title">{t('confirm.outcomeTitle')}</h2><p>{t('confirm.replaceTopicOutcome')}</p><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setPendingTopic(null)}>{t('confirm.keepOutcome')}</button><button type="button" className="btn-primary" onClick={() => { updatePlan({ topic: pendingTopic.title, topicLearningOutcome: pendingTopic.outcome }); setPendingTopic(null); }}>{t('confirm.useSavedOutcome')}</button></div></div></div></DialogPortal>}
     <div className="lesson-print-only"><LessonPlanDocument plan={{ ...(printTarget?.plan || activePlan || {}), schoolLogo: printTarget?.plan?.schoolLogo || (settingsDraft?.schoolLogo !== undefined ? settingsDraft.schoolLogo : (activePlan?.schoolLogo || preferences?.schoolLogo)) }} language={documentLanguage} showSchoolName={showSchoolName} /></div>
   </div></LessonLanguageContext.Provider>;
 }

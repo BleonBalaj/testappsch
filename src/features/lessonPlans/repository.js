@@ -80,7 +80,7 @@ function removeFromCollection(storage, key, initial, collections, collection, re
   return true;
 }
 
-export function createLessonPlanRepository(teacherId, { storage, schoolId = 'default', now = () => new Date() } = {}) {
+export function createLessonPlanRepository(teacherId, { storage, schoolId = 'default', ownerUid = '', now = () => new Date() } = {}) {
   const teacher = compact(teacherId);
   if (!teacher) throw new TypeError('A stable teacherId is required');
   const school = compact(schoolId) || 'default';
@@ -97,6 +97,7 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
   const byUpdated = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
   const requireAdmin = (isAdmin) => { if (isAdmin !== true) throw new Error('Administrator access is required for school-wide records'); };
   const subjectKey = (value) => compact(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const belongsToOwner = (plan) => !ownerUid || !plan.ownerUid || plan.ownerUid === ownerUid;
 
   const api = {
     storageKeys: Object.freeze({ personal: personalKey, school: schoolKey }),
@@ -105,16 +106,16 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
       const shared = readSchool();
       return { personal: { ok: !personal.error, error: personal.error }, school: { ok: !shared.error, error: shared.error } };
     },
-    listPlans() { return copy(readPersonal().data.plans).sort(byUpdated); },
-    getPlan(planId) { return copy(readPersonal().data.plans.find((plan) => plan.id === planId) ?? null); },
+    listPlans() { return copy(readPersonal().data.plans.filter(belongsToOwner)).sort(byUpdated); },
+    getPlan(planId) { return copy(readPersonal().data.plans.find((plan) => plan.id === planId && belongsToOwner(plan)) ?? null); },
     savePlan(plan) {
-      if (plan?.teacherId && String(plan.teacherId) !== teacher) throw new Error('Cannot save another teacher’s plan');
+      if (!belongsToOwner(plan) || (plan?.teacherId && String(plan.teacherId) !== teacher && (!ownerUid || plan.ownerUid !== ownerUid))) throw new Error('Cannot save another teacher’s plan');
       if (!['draft', 'completed', 'archived'].includes(plan?.status)) throw new TypeError('Plan status must be draft, completed, or archived');
-      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'plans', plan, { teacherId: teacher }, stamp);
+      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'plans', plan, { teacherId: teacher, ...(ownerUid ? { ownerUid } : {}) }, stamp);
     },
     mergeCloudPlan(plan) {
       if (!plan?.id || !['draft', 'completed', 'archived'].includes(plan.status)) return false;
-      if (plan.teacherId && String(plan.teacherId) !== teacher) return false;
+      if (!belongsToOwner(plan) || (plan.teacherId && String(plan.teacherId) !== teacher && (!ownerUid || plan.ownerUid !== ownerUid))) return false;
       const data = readPersonal(true).data;
       const index = data.plans.findIndex((entry) => entry.id === plan.id);
       const local = index >= 0 ? data.plans[index] : null;

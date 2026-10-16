@@ -43,6 +43,13 @@ export const updateSchoolStaff = onCall({ region: 'us-central1', invoker: 'publi
   });
 });
 
+export const prepareLessonPlanOwnership = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 300, maxInstances: 5 }, async request => {
+  return reportErrors('prepareLessonPlanOwnership', request, async () => {
+    const { prepareOwnership } = await import('./lessonPlanOwnership.js');
+    return prepareOwnership(request);
+  });
+});
+
 // One-time upgrade of a school's student records so the directory can page,
 // filter and search them on the server. Safe to call again; it is a no-op
 // once the school is current.

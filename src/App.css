@@ -11,6 +11,18 @@
   pointer-events: none;
 }
 
+/* A modal owns interaction with the page, including the floating launcher.
+   Portalled dialogs already blur/dim the sidebar through their full backdrop. */
+body:has(:is(.modal-overlay, .lesson-modal-overlay, .lesson-sharing-overlay, .modal-backdrop, .lp-admin-confirm-backdrop, [aria-modal="true"])) .quick-action-container {
+  visibility: hidden;
+  pointer-events: none;
+}
+@media print { [data-app-dialog-portal] { display: none !important; } }
+[data-app-dialog-portal] > :is(.lesson-modal-overlay, .lp-admin-confirm-backdrop) {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
 .main-content {
   flex: 1;
   min-width: 0;

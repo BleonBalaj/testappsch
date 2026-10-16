@@ -1,3 +1,4 @@
+import DialogPortal from '../components/DialogPortal';
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -112,7 +113,7 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <DialogPortal><div className="modal-backdrop" onClick={onClose}>
       <motion.div
         className="modal-box glass"
         initial={{ opacity: 0, scale: 0.93, y: 10 }}
@@ -183,7 +184,7 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
           </button>
         </div>
       </motion.div>
-    </div>
+    </div></DialogPortal>
   );
 };
 

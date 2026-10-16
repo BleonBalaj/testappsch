@@ -6,7 +6,7 @@
 
 ## 1. Color System & Theme Tokens
 
-LumiSchool supports **Dark Theme** (default) and **Light Theme** via `[data-theme='light']` with CSS variables in HSL format (`H S% L%`).
+The app supports **System** (first-visit default), **Dark**, **Light**, and the independent **Nature** theme. Light uses `[data-theme='light']`; Nature uses `html.theme-nature` plus season/phase attributes. CSS variables use HSL components (`H S% L%`). See section 12 before changing theme behavior.
 
 ### 1.1 Palette Matrix
 
@@ -92,9 +92,15 @@ LumiSchool supports **Dark Theme** (default) and **Light Theme** via `[data-them
 ### 4.2 Standard Dialog Layout Hierarchy (Tasks Dialog Exact Standard)
 Every creation or editing dialog must follow the standard structure:
 ```jsx
+import DialogPortal from '../components/DialogPortal'; // adjust the relative import
+
+<DialogPortal>
 <div className="modal-overlay" onClick={onClose}>
   <motion.div 
     className="modal-content"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Modal Title"
     initial={{ opacity: 0, scale: 0.96, y: 8 }}
     animate={{ opacity: 1, scale: 1, y: 0 }}
     exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -131,6 +137,7 @@ Every creation or editing dialog must follow the standard structure:
     </form>
   </motion.div>
 </div>
+</DialogPortal>
 ```
 
 ### 4.3 Zero Horizontal Scroll Standard (Strictly Mandatory)
@@ -165,7 +172,7 @@ Every creation or editing dialog must follow the standard structure:
 
 ### 6.1 Sidebar Navigation Architecture & Modal Dimming Rules
 * **Sidebar Containment**: The sidebar is fixed and left-pinned with quick collapse/expand toggle.
-* **Modal Dimming Rule**: When ANY modal (`.modal-overlay`) or Search overlay (`.search-overlay.open`) is active, the sidebar MUST remain fixed in place, dimmed, and blurred without shifting or sliding off-screen:
+* **Modal Dimming Rule**: When any covering modal or search overlay is active, the sidebar MUST remain fixed, dimmed, blurred and noninteractive. New full-screen dialogs use `DialogPortal` so the full viewport backdrop covers it directly. The following is the legacy fallback for nested standard/search overlays; do not add a second sidebar filter to portalled dialogs:
   ```css
   .app-container:has(.modal-overlay) .sidebar,
   .app-container:has(.search-overlay.open) .sidebar {
@@ -332,7 +339,7 @@ Passing emulator tests is **not** proof. These differences already broke product
 
 ### 11.4 Before handing anything over
 1. Run everything that applies: `npm test`, `npm run lint`, `npm run build`, `cd functions && npm test`, `npm run test:rules` (Firestore emulator).
-2. Exercise every changed flow end to end against the emulators (Auth + Firestore + Functions) in a real browser.
+2. Exercise changed data/security flows against the appropriate emulators. If the owner has requested no browser testing, honor that instruction: use code, meaningful unit/integration tests and endpoint/deployment checks, and explicitly state that browser visuals/interactions remain unverified. Do not run browser tooling in that case.
 3. Walk through §11.2 for the change and fix any production-only risk before handing over.
 4. Never break existing flows. In particular:
    * School admins create teachers and students **with a manually set password**; teachers create students. This must keep working.
@@ -341,7 +348,7 @@ Passing emulator tests is **not** proof. These differences already broke product
 5. Unexpected server errors must reach the UI with their real message (`functions/callableErrors.js`), never a bare `INTERNAL`.
 
 ### 11.5 Handing over
-* Give complete, exact steps for the owner's setup: merge the pull request → `git pull` → `npm install` if dependencies changed → `cmd.exe /c "npx firebase-tools deploy"` → any post-deploy steps (for example the `/admin` **Fix now** repairs).
+* Give the steps actually needed for the current checkout. If deployment is authorized, run `cmd.exe /c "npx firebase-tools deploy"`, wait for completion and verify the live release. Mention dependency installation only when dependencies changed, and PR merge/pull steps only when the owner requested a PR workflow. Do not invent those steps for primary-checkout edits.
 * Tell the owner how to confirm the new version is live, e.g. `.firebase/hosting.ZGlzdA.cache` lists the new `assets/` files, or the changed page shows the change.
 * The owner's live Firebase project and logs are not reachable from cloud sandboxes. State plainly what could not be verified, and add safeguards (clear error messages, logging) for it.
 * Owner's review workflow: work in this primary checkout on `main` and leave edits uncommitted so they appear in GitHub Desktop's Changes list for review/discard. Do not automatically commit, push, or create another branch/worktree. A requested deployment does not authorize a Git commit or push.
@@ -353,5 +360,88 @@ Passing emulator tests is **not** proof. These differences already broke product
 * Preserve explicit update confirmation and cloud-save acknowledgement before refresh. Do not force reload a user who is editing or whose pending saves failed.
 
 ---
+
+## 12. Nature, filter menus, dialogs and lesson review: required details
+
+These rules supplement the earlier design standards. The owner's current instructions take priority. Nature's established appearance must be preserved when fixing behavior; never redesign its cards as a side effect of a loading, stacking or animation repair.
+
+### 12.1 Theme identity, preferences and source map
+
+| Responsibility | Source of truth |
+| --- | --- |
+| Selected mode, resolved light/dark state, device tracking | `src/features/theme/themeStore.js` |
+| Theme controls and account preference sync | `src/components/theme/ThemePicker.jsx`, `AuthContext.jsx` |
+| Nature season, phase, pause preferences and events | `src/features/theme/nature-phase.js` |
+| Horizon palette, original materials, fades and type | `src/features/theme/nature-reference.css` |
+| Noesis component-specific overrides | `src/features/theme/nature.css` |
+| Scene mounting, trusted messaging, pause/occlusion | `src/components/theme/NatureBackground.jsx` |
+| Real outer reading surfaces | `src/features/theme/surfaces.js` |
+| Motion entrance compositing | `src/features/theme/nature-glass-entry.js` |
+| Covering dialog detection | `src/features/theme/dialog-overlays.js` |
+| Scene source/build | `scripts/nature/prototype.html`, `scripts/build-nature-scene.cjs`, `scripts/nature-*.cjs` |
+
+- A fresh visit selects **System**, even when the device resolves to dark. The selected mode is `lumi-theme-mode`; the legacy `lumi-theme` value remains compatible. Never substitute the resolved dark/light appearance for an explicit selected mode. An explicit saved Dark/Light/Nature choice stays selected.
+- Nature is a separate mode, not a tinted default theme. Root attributes are `data-theme="nature"`, `data-theme-style="light|dark"`, `data-nature-season` and `data-nature-phase`. Changing away must remove Nature-only attributes, observers and entrance mirrors.
+- Seasons are Summer (also representing spring), Autumn and Winter. Auto uses local calendar months: December–February Winter, September–November Autumn, other months Summer. Phase names are `morning`, `golden`, `night`; Auto uses 06:00–16:59, 17:00–19:59, and 20:00–05:59 respectively. Check the helper/tests before changing those boundaries.
+- Device preferences are `natureThemeSeason`, `natureThemePhase`, and `natureBackgroundPaused`; use their exported read/write helpers and events. Do not replace a user's explicit season or phase with Auto.
+- Scene assets are local and generated. Edit source helpers, run `npm run nature:build`, and retain the vendored Three.js license. Do not hand-edit generated `public/nature/scene.html` or replace the scene with external/CDN media.
+
+### 12.2 Palette and material contracts
+
+- Every Nature adaptation must start with `html.theme-nature` and live within screen media in the Nature sheets. The existing nine season/phase combinations all matter, including night; do not hardcode an Autumn daylight brown as a global Nature foreground.
+- Outer reading cards use `--nature-card-glass`, `--nature-card-blur`, `--nature-glass-border`, `--nature-glass-shadow` and `--nature-glass-highlight`. Preserve established radius, spacing, geometry and elevation. Update `surfaces.js` and adapter card selectors together if adding a genuine outer reading surface.
+- Nested panels reuse the parent's frost. Dialogs and small inset profile sections use `--nature-dialog-surface`, `--nature-dialog-tint`, `--nature-dialog-border`; avoid multiplying page-card shadows inside a clipped scrolling pane.
+- General app controls use `--nature-control-surface`, `--nature-control-opacity`, `--nature-control-foreground`, `--nature-control-border`, and `--nature-control-hover`. Primary/selected controls use `--nature-action-surface` / `--nature-action-hover` and `--primary-foreground`.
+- Header search, school switcher, bell and date have their own neutral opal material: `--nature-chrome-fill`, `--nature-chrome-hover`, `--nature-chrome-border`, `--nature-chrome-ink`, `--nature-chrome-muted`. Do not reuse tan general-control paint for them. Header search inputs stay transparent; decorative emoji bells are replaced by the Nature icon.
+- Autumn Golden alone uses the lighter honey/peach control overrides and slightly deeper copper/rose title gradient. Current title stops are `18 73% 30%` and `351 45% 32%`. Preserve that scope and every other palette.
+- Page-title totals have a stable tinted reading surface and foreground ink. Lesson draft/completed/archived badges have explicit daytime/nighttime ink/fill tokens. Course stat pills retain metric hues through `--co-stat-color`, mixed with readable foreground/dialog tint; never apply their Nature contrast override to normal themes.
+- Editor subbar actions require their own subtle seasonal fill, clear border, foreground ink, hover and focus outline because they sit over detailed grass. Do not place low-contrast bare labels over the scene or introduce grey default-theme buttons.
+
+### 12.3 Filter dropdowns: the open menu is part of the component
+
+- Use `src/components/FilterSelect.jsx` for styled page-filter menus. Shared-plan user/subject/status/date-basis/date-preset controls use it. Native `<option>` menus are OS-painted and cannot reliably supply the app's rounded shape, seasonal selected color or popup geometry. Styling just `<select>` is insufficient.
+- Closed trigger, popup surface, selected option, keyboard-active option, hover, focus, disabled state and night contrast must all be covered. Nature overrides live in `nature.css`; general geometry lives in `FilterSelect.css`.
+- Popups are portalled to `document.body`, fixed to the trigger, clamped to viewport edges, able to open upward, and have bounded vertical scrolling without horizontal overflow. A portal retains React context but loses ancestor CSS selectors: use component classes and root theme tokens, never depend on `.lesson-page` as its DOM ancestor.
+- Retain keyboard arrows, Home/End, Enter/Space, Escape, Tab dismissal, type-to-find, outside-click dismissal and accessible combobox/listbox/option state. Keep selected text readable, long labels contained and the scrollbar usable.
+- Search wrappers own their material. Their inner `<input>` must be transparent with inherited ink and no second rectangle. Existing fixes cover header, lesson planner, Tasks, Materials (`.res-search`) and course gradebook search. Check actual component selectors before adding CSS.
+
+### 12.4 Full-screen dialogs, sidebar blur and stacking
+
+- Use `src/components/DialogPortal.jsx` for new full-screen dialogs and drawers. Current custom consumers include Share, History, save-template, topic-outcome confirmation, curriculum-delete confirmation and Tasks. It mounts under `document.body`, beyond page/card stacking and backdrop roots; it retains React context.
+- Keep the whole viewport backdrop above the sidebar, header and floating launcher. Increasing a nested child's z-index cannot escape `.main-content`'s stacking context or an ancestor's transform/backdrop filter. Never solve it by changing page-card materials or clipping the sidebar.
+- The portal locks document scrolling, preserves the gutter where needed, disables background app interaction with `inert`, and restores prior state/focus on close. Multiple open portals must not unlock the background until the last closes.
+- `dialog-background.js` locks root overflow and uses **body `overflow: clip`**, not body `overflow: hidden`. A body scroll container changes the sticky sidebar's ancestor during Nature document scrolling and can make it vanish when opening history deep in the plan list. Preserve inline overflow longhands/priorities and the original document position; focus the drawer with `preventScroll: true`. Do not fix this by hiding/rebuilding/translating the sidebar or changing its glass material.
+- Older `.modal-overlay` / search dialogs use the existing sidebar blur/disable rule. Portalled dialogs blur/dim the sidebar through their real backdrop; do not add a second filter over that sidebar. `App.css` hides the floating quick-action launcher for modal/alertdialog states, including custom overlay classes, so it cannot appear on top of history.
+- Cover every custom overlay in both `dialog-overlays.js` (Nature pause) and the Nature fade-hide selector. This includes `.modal-backdrop`, `.lesson-sharing-overlay`, `.lesson-modal-overlay`, `.lp-admin-confirm-backdrop`, modal/alertdialog ARIA roles and the existing standard/search overlays. Do not classify ordinary filter popups as modal dialogs.
+- Follow the single-scrollport structure: fixed header, one padded body with `min-height: 0`, fixed actions as appropriate. Avoid nested broad shadows, clipped rectangular shadow slabs, horizontal overflow and double scrollbars. Focus must enter the dialog, remain within the modal flow, allow Escape where appropriate, and restore without scrolling the page.
+- Dialog portals and filter popups are excluded from printing. A dialog fix must not alter the lesson document or PDF/print path.
+
+### 12.5 Fades, scrolling, scene lifetime and entrance animation
+
+- Nature's top veil is 3.5rem high, full viewport width, uses exactly `--nature-header-background` / `--nature-header-opacity` and `linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.8) 40%, transparent)` as its mask. The bottom uses Horizon's original `--nature-fade-color` / `--nature-fade-opacity`, `min(14vh, 140px)` height and `linear-gradient(to bottom, transparent, #000)` mask. Summer Golden keeps its source exception of `32 24% 83%` / `0.60`. Do not invent replacements or flatten the other seasonal tokens.
+- Both veils continue behind the sidebar with no sidebar-width inset, cutoff or width animation. Hide them during covering dialogs, Messages and printing. Do not substitute `--background`, darken moving cards, or filter/mask card contents to simulate a screen-edge fade.
+- Nature normally uses document scrolling so frosted cards are not clipped inside a second viewport-sized scroll container. Messages retains its dedicated bounded internal layout. Navigation resets both document and main scroll owners once; typing/autosave must not reset position.
+- Entrance protection multiplies inherited typed numeric opacity factors following the original Motion timing. Never clone overlapping `opacity` animations onto a card: they replace each other and create the loading glitch. Preserve the finished factor until Motion acknowledges its endpoint, reuse factor slots and fully clean up on leaving Nature.
+- `NatureBackground.jsx` validates same-origin iframe messages and their source window, mirrors season/phase preferences, forwards exposed-meadow pointer movement and pauses behind covering dialogs. Preserve frozen-frame pause/resume, hidden-tab handling, seasonal assets, cat motion, slow-device behavior and reduced-motion behavior. Do not restart/rebuild the scene on normal page navigation.
+
+### 12.6 Lesson-paper and review-history boundaries
+
+- Nature must never retheme `.lesson-document` or its descendants. The side preview, recorded-version paper, native Print and Save as PDF retain existing white paper, blue headings, fonts, data and geometry. Preserve the export implementation and school-name/logo preference.
+- Personal-plan action order: sharing/unsharing is last. Editor order: sharing/unsharing immediately precedes Complete/Return to draft, which remains last. History/template/duplicate controls must not accidentally move completion away from the end.
+- Admin access to school-shared plans is a separate **Shared plans / Planet e ndara** button in the page's top action row, immediately after New plan. Keep it out of the personal My plans / My templates / Planning settings tab group; indicate its selected state in the top button, including Nature colors.
+- Audit records stay immutable and retain exact saved versions. The visible log groups consecutive `update` events from the same actor and sharing lifecycle into 30-minute windows anchored at the newest event; it must not chain a whole day into one session.
+- A session shows one combined changed-field list, original/final values and access to intermediate field changes and saved versions. Reverted fields are still listed. Keep share, unshare, reshare, admin-review and automatic system-reopening events distinct. Pagination must disclose an incomplete session and extend it when earlier history loads.
+- The shared `LessonPlanHistory` controls serve both authors and admins. Use `FilterSelect` for person/action/review-state/date filters and the themed search wrapper for text. Date filters refer to audit-event dates in the app's Europe/Belgrade timezone, not the lesson's date. Group before filtering; all criteria must match the same saved event, and show its whole session with the original baseline and intermediate versions intact.
+- History searches must include earlier records, not silently stop at the first 100. `historyReader.js` uses cursor pages plus one lookahead record and a live query anchored at the initial oldest snapshot. Active filters automatically load earlier pages; show progress, result scope and a retryable incomplete-search message on failure. Dispose listeners and ignore stale requests on school/plan changes; clear retained records if access is denied.
+- Keep stored review states `pending`, `reviewing`, `archived` unchanged. Singular badges and plural filter options have separate translation keys. Albanian actions use **Fillo kontrollin**, **Arkivo nga lista**, **Rikthe në pritje të kontrollit**; badges use **Në pritje të kontrollit**, **Në kontroll**, **I arkivuar**. Explain the inbox-only meaning of archiving alongside these actions.
+- Review badges carry `data-review-status` for subtle amber (pending), teal (reviewing), and slate (archived) treatment. Nature uses stable tinted surfaces and separate day/night inks under `@media screen`; neutral sharing/resharing badges stay neutral. Never apply these attributes or colors to lesson paper or change the author's personal plan status.
+- Admin review archiving affects only the shared inbox; it never changes the author's plan status. Resharing returns the plan to Needs review, and reopening an archived review has a separate system log. Preserve server ownership/read-only enforcement and the sharing confirmation's history-retention explanation.
+
+### 12.7 Verification and handover boundary
+
+- Check source selectors and stacking ancestry, not just palette tokens. A successful build does not prove browser blur, focus, popup placement or contrast. Honor the owner's no-browser-testing instruction and state that boundary honestly.
+- Run meaningful grouping/history tests when changing aggregation; run Firestore emulator tests when changing transactions, roles or security rules. Run app tests, lint and a production build for a runtime release. Do not expand unrelated testing without a concrete risk.
+- Confirm requested visual changes are Nature-only; preserve other themes, established cards, preview and export. Update this guide when introducing a reusable control or dialog primitive.
+- Bump `public/version.json` once after the change set is complete, deploy the manifest and assets together, wait for `Deploy complete!`, verify the live version and file hashes, and leave source edits unstaged/uncommitted on `main` for GitHub Desktop.
 
 *Authored for the LumiSchool Design & Engineering Team. Keep this file updated as new components are added.*

@@ -1,4 +1,4 @@
-const OVERLAY = '.modal-overlay, .lesson-modal-overlay, .search-overlay.open, .drawer-overlay, .profile-drawer-overlay, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]';
+const OVERLAY = '.modal-overlay, .modal-backdrop, .lesson-modal-overlay, .lesson-sharing-overlay, .lp-admin-confirm-backdrop, .search-overlay.open, .drawer-overlay, .profile-drawer-overlay, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]';
 
 // Track only dialog changes; chart animation must not trigger full-page scans.
 export function observeDialogOverlays(root, onChange) {
