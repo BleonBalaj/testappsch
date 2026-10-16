@@ -91,6 +91,12 @@
     html.theme-nature :is(.nature-top-fade, .nature-bottom-fade) { transition: none; }
   }
   html.theme-nature .glass { background-color: var(--nature-glass); background-image: none; border-color: var(--nature-glass-border); }
+  /* Separate dashboard totals inside the existing outer glass card. Inner
+     panels need a quiet seasonal tint, not a second page-card blur/shadow. */
+  html.theme-nature .dashboard .dashboard-stat-total { background: hsl(var(--nature-dialog-surface) / .3); border-color: hsl(var(--nature-control-foreground) / .2); box-shadow: inset 0 1px 0 var(--nature-glass-highlight); }
+  html.theme-nature .dashboard .dashboard-stat-total dt { color: hsl(var(--nature-control-foreground)); }
+  html.theme-nature .dashboard .dashboard-stat-total dt svg { color: hsl(var(--nature-heading)); }
+  html.theme-nature .dashboard .stat-info .dashboard-stat-title { color: hsl(var(--muted-foreground)); }
   /* One composed opacity owns each outer glass surface. Motion retains its
      original timelines; the observer mirrors their typed factors, not opacity
      animations that would replace one another on the card. */

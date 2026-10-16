@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, GraduationCap, Calendar, TrendingUp, Star, 
-  Coffee, Plus, Trash2, Clock, MapPin, GripVertical, 
+  School, Plus, Trash2, Clock, MapPin, GripVertical,
   Target, Smile, Meh, Frown, X, Send, BookOpen, 
   CheckCircle2, AlertCircle, LayoutDashboard,
   Presentation, Rocket, Megaphone, BellRing, Sparkles,
@@ -22,23 +22,31 @@ import { useCourseRecords } from '../features/gradebook/useCourseRecords';
 import { useStudentCounts } from '../features/students/studentData';
 import './Dashboard.css';
 
-const StatCard = ({ icon: IconComponent, label, value, color, delay, subtext }) => (
+const StatCard = ({ icon: IconComponent, label, value, color, delay, subtext, metrics }) => (
   <motion.div 
-    className="stat-card glass bouncy"
+    className={`stat-card glass bouncy${metrics ? ' stat-card-totals' : ''}`}
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay }}
   >
+    {metrics ? <>
+      <h3 className="dashboard-totals-heading">{label}</h3>
+      <dl className="dashboard-stat-totals" aria-label={label}>
+        {metrics.map(metric => <div className="dashboard-stat-total" key={metric.label}>
+          <dt>{React.createElement(metric.icon, { size: 19, 'aria-hidden': true })}<span>{metric.label}</span></dt>
+          <dd>{metric.value}</dd>
+        </div>)}
+      </dl>
+    </> : <>
     <div className="stat-icon-wrapper" style={{ backgroundColor: `hsla(var(${color}), 0.2)`, color: `hsl(var(${color}))` }}>
       {React.createElement(IconComponent, { size: 24 })}
     </div>
     <div className="stat-info">
+      <p className="dashboard-stat-title">{label}</p>
       <h3>{value}</h3>
-      <p>{label}</p>
     </div>
-    <div className="stat-trend">
-      {subtext && <span>{subtext}</span>}
-    </div>
+    {subtext && <p className="dashboard-stat-subtitle">{subtext}</p>}
+    </>}
   </motion.div>
 );
 
@@ -59,7 +67,7 @@ const QUOTES_SQ = [
 const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const [note, setNote] = useState('');
   const { moodHistory, addMoodEntry, getTodayMood } = useMood();
-  const { staffList = [], classesList = [], classGroups = [], eventsList = [], myStudentRecord, studentsVersion } = useSchoolData();
+  const { staffList = [], classesList = [], classesLoaded, classesError, classGroups = [], classGroupsLoaded, classGroupsError, eventsList = [], myStudentRecord, studentsVersion } = useSchoolData();
   const { currentUser, activeSchool, activeSchoolId } = useAuth();
   const { language, isAlbanian, t } = useLanguage();
   const todayEntry = getTodayMood();
@@ -473,7 +481,10 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             <StatCard icon={GraduationCap} label={t('dashboard.studentsEnrolled')} value={totalStudents === undefined ? '…' : totalStudents.toLocaleString()} color="--primary" delay={0.1} subtext={t('dashboard.activeStudents')} />
             <StatCard icon={Users} label={t('dashboard.staffFaculty')} value={staffList.length} color="--accent" delay={0.2} subtext={t('dashboard.facultyRoster')} />
             <StatCard icon={Star} label={t('dashboard.campusEvents')} value={eventsList.length} color="--chart-1" delay={0.3} subtext={isAlbanian ? 'E Planifikuar' : 'Scheduled'} />
-            <StatCard icon={Coffee} label={t('dashboard.activeClasses')} value={classesList.length} color="--chart-2" delay={0.4} subtext={isAlbanian ? `${classGroups.length} klasa` : `${classGroups.length} ${classGroups.length === 1 ? 'class' : 'classes'}`} />
+            <StatCard label={t('dashboard.subjectsAndClasses')} delay={0.4} metrics={[
+              { icon: BookOpen, label: t('dashboard.subjects'), value: classesError ? '—' : classesLoaded ? classesList.length : '…' },
+              { icon: School, label: t('dashboard.classes'), value: classGroupsError ? '—' : classGroupsLoaded ? classGroups.length : '…' },
+            ]} />
           </>
         ) : (
           <>
