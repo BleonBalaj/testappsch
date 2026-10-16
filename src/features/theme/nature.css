@@ -135,6 +135,12 @@
     --nature-card-glass: rgba(255, 234, 207, 0.30);
     --nature-card-blur: blur(20px) saturate(130%);
   }
+  /* Daily Motivation mirrors Horizon's Upcoming card: seasonal glass tint
+     without backdrop frost, letting the scenery show through more clearly. */
+  html.theme-nature .dashboard .focus-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   /* Child surfaces use the parent's frost, keeping text and charts crisp. */
   html.theme-nature .glass .glass { backdrop-filter: none; -webkit-backdrop-filter: none; }
   html.theme-nature :is(.content-card, .settings-section, .lesson-list-panel) :is(.stat-card, .permission-card, .lesson-template-card, .student-class-card) { backdrop-filter: none; -webkit-backdrop-filter: none; }
