@@ -20,7 +20,10 @@ import {
   Trash2,
   AlertTriangle
 } from 'lucide-react';
-import { arrayRemove, arrayUnion, collection, doc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import {useWorkflowCollection,useScopedDocument} from '../features/schoolWorkflows/cloud';
+import {emptyReadReady} from '../features/liveResource';
+import ReadStatus from '../components/ReadStatus';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useSchoolData } from '../context/SchoolDataContext';
@@ -60,7 +63,7 @@ const typeIcon = (type) => {
   }
 };
 
-const ResourceCard = ({ resource, view, contextLabel, isBookmarked, onToggleBookmark, onDelete, isAlbanian }) => {
+const ResourceCard = ({ resource, view, contextLabel, isBookmarked, bookmarksLoading, onToggleBookmark, onDelete, isAlbanian }) => {
   const url = safeWebLink(resource.url);
   const openButton = url ? (
     <a href={url} target="_blank" rel="noopener noreferrer" className={view === 'list' ? 'res-action-btn' : 'res-btn bouncy glass'}
@@ -76,11 +79,12 @@ const ResourceCard = ({ resource, view, contextLabel, isBookmarked, onToggleBook
     <button
       type="button"
       className={`bookmark-btn ${isBookmarked ? 'active' : ''}`}
+      disabled={bookmarksLoading}
       onClick={() => onToggleBookmark(resource.id)}
-      title={isBookmarked ? (isAlbanian ? 'Hiq nga të ruajturat' : 'Remove bookmark') : (isAlbanian ? 'Ruaje' : 'Bookmark')}
+      title={bookmarksLoading?(isAlbanian?'Duke ngarkuar të ruajturat…':'Loading bookmarks…'):isBookmarked ? (isAlbanian ? 'Hiq nga të ruajturat' : 'Remove bookmark') : (isAlbanian ? 'Ruaje' : 'Bookmark')}
       aria-pressed={isBookmarked}
     >
-      <Bookmark size={view === 'list' ? 17 : 16} fill={isBookmarked ? "hsl(var(--primary))" : "none"} />
+      {bookmarksLoading?<span aria-hidden="true">…</span>:<Bookmark size={view === 'list' ? 17 : 16} fill={isBookmarked ? "hsl(var(--primary))" : "none"} />}
     </button>
   );
   const deleteButton = onDelete && (
@@ -163,8 +167,8 @@ const Resources = ({ userRole = 'student' }) => {
   const { classesList = [], classGroups = [] } = useSchoolData();
   const { t, isAlbanian } = useLanguage();
   const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
-  const [resourceState, setResourceState] = useState({ schoolId: null, items: [], error: null });
-  const [bookmarkState, setBookmarkState] = useState({ key: '', ids: [] });
+  const resourceState=useWorkflowCollection(activeSchoolId,'resources');
+  const bookmarkState=useScopedDocument(currentUser?.uid&&activeSchoolId?['users',currentUser.uid,'resourceBookmarks',activeSchoolId]:null);
   const [activeScope, setActiveScope] = useState('all');
   const [activeType, setActiveType] = useState('All Types');
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
@@ -177,26 +181,9 @@ const Resources = ({ userRole = 'student' }) => {
   const [resourceToDelete, setResourceToDelete] = useState(null);
   const [deleteError, setDeleteError] = useState('');
 
-  // Real-time school library.
-  useEffect(() => {
-    if (!activeSchoolId) return undefined;
-    const schoolId = activeSchoolId;
-    return onSnapshot(collection(db, 'schools', schoolId, 'resources'), (snapshot) => {
-      setResourceState({ schoolId, items: snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), error: null });
-    }, (err) => setResourceState({ schoolId, items: [], error: err }));
-  }, [activeSchoolId]);
-  const resources = useMemo(() => (resourceState.schoolId === activeSchoolId ? resourceState.items : []), [resourceState, activeSchoolId]);
-  const resourcesLoaded = resourceState.schoolId === activeSchoolId;
-
-  // Bookmarks are private to each person (users/{uid}/resourceBookmarks/{schoolId}).
-  const bookmarkKey = currentUser?.uid && activeSchoolId ? `${currentUser.uid}|${activeSchoolId}` : '';
-  useEffect(() => {
-    if (!bookmarkKey) return undefined;
-    return onSnapshot(doc(db, 'users', currentUser.uid, 'resourceBookmarks', activeSchoolId),
-      (snapshot) => setBookmarkState({ key: bookmarkKey, ids: Array.isArray(snapshot.data()?.resourceIds) ? snapshot.data().resourceIds.map(String) : [] }),
-      () => setBookmarkState({ key: bookmarkKey, ids: [] }));
-  }, [bookmarkKey, currentUser?.uid, activeSchoolId]);
-  const bookmarkIds = useMemo(() => new Set(bookmarkState.key === bookmarkKey ? bookmarkState.ids : []), [bookmarkState, bookmarkKey]);
+  const resources=resourceState.rows;
+  const bookmarkIds=useMemo(()=>new Set((bookmarkState.value?.resourceIds||[]).map(String)),[bookmarkState.value]);
+  const resultsReady=emptyReadReady(resourceState)&&(!bookmarkedOnly||emptyReadReady(bookmarkState));
 
   const courseById = useMemo(() => new Map(classesList.map(course => [String(course.id), course])), [classesList]);
   const contextLabel = (resource) => {
@@ -265,7 +252,7 @@ const Resources = ({ userRole = 'student' }) => {
   const canDelete = (resource) => isAdmin || (canAddResources && resource.createdByUid && resource.createdByUid === currentUser?.uid);
 
   const handleToggleBookmark = async (id) => {
-    if (!currentUser?.uid || !activeSchoolId) return;
+    if (!currentUser?.uid || !activeSchoolId || bookmarkState.loading || bookmarkState.refreshing || bookmarkState.error) return;
     const key = String(id);
     try {
       await setDoc(doc(db, 'users', currentUser.uid, 'resourceBookmarks', activeSchoolId), {
@@ -348,7 +335,7 @@ const Resources = ({ userRole = 'student' }) => {
               {t('resources.title', 'Resource Hub')}
               <Library size={30} className="page-title-icon" aria-hidden="true" />
             </h1>
-            <span className="count-pill glass">{resources.length} {t('resources.materials', 'Materials')}</span>
+            <span className="count-pill glass">{resourceState.error?'—':resourceState.hasLoaded?resources.length:'…'} {t('resources.materials', 'Materials')}</span>
           </div>
           <p>{t('resources.subtitle', 'Access study materials, curriculum guides, video lectures, and syllabi.')}</p>
         </div>
@@ -475,7 +462,10 @@ const Resources = ({ userRole = 'student' }) => {
         </div>
       </motion.div>
 
-      {resourceState.error && resourcesLoaded && (
+      <ReadStatus state={resourceState} language={isAlbanian?'sq':'en'} loadingText={isAlbanian?'Duke ngarkuar materialet…':'Loading materials…'}/>
+      {bookmarkedOnly&&<ReadStatus state={bookmarkState} language={isAlbanian?'sq':'en'} loadingText={isAlbanian?'Duke ngarkuar të ruajturat…':'Loading saved materials…'}/>}
+      {(resourceState.error||bookmarkState.error)&&<button type="button" className="btn-secondary" onClick={()=>{resourceState.retry();bookmarkState.retry();}}>{isAlbanian?'Riprovo ngarkimin':'Retry loading'}</button>}
+      {(resourceState.error || bookmarkState.error) && (
         <div className="res-notice is-error" role="alert">{isAlbanian ? 'Materialet nuk mund të ngarkohen. Kontrolloni lejet.' : 'Materials could not be loaded. Check your access.'}</div>
       )}
 
@@ -488,6 +478,7 @@ const Resources = ({ userRole = 'student' }) => {
               view={view}
               contextLabel={contextLabel(res)}
               isBookmarked={bookmarkIds.has(String(res.id))}
+              bookmarksLoading={bookmarkState.loading||bookmarkState.refreshing||Boolean(bookmarkState.error)}
               onToggleBookmark={handleToggleBookmark}
               onDelete={canDelete(res) ? (resource) => { setDeleteError(''); setResourceToDelete(resource); } : undefined}
               isAlbanian={isAlbanian}
@@ -495,10 +486,10 @@ const Resources = ({ userRole = 'student' }) => {
           ))}
         </AnimatePresence>
 
-        {filteredResources.length === 0 && (
+        {resultsReady && filteredResources.length === 0 && (
           <motion.div className="empty-resources glass" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <Filter size={44} />
-            <h3>{!resourcesLoaded ? (isAlbanian ? 'Po ngarkohen materialet…' : 'Loading materials…') : resources.length === 0 ? (isAlbanian ? 'Ende nuk ka materiale' : 'No materials yet') : (isAlbanian ? 'Nuk u gjetën materiale' : 'No materials found')}</h3>
+            <h3>{resources.length === 0 ? (isAlbanian ? 'Ende nuk ka materiale' : 'No materials yet') : (isAlbanian ? 'Nuk u gjetën materiale' : 'No materials found')}</h3>
             <p>{resources.length === 0
               ? (canAddResources ? (isAlbanian ? 'Shtoni materialin e parë me lidhjen e tij.' : 'Add the first material with its link.') : '')
               : (isAlbanian ? 'Provoni të rregulloni kërkimin ose filtrat.' : 'Try adjusting your search or filters.')}</p>

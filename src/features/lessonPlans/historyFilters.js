@@ -2,9 +2,10 @@ import { dateInTimeZone, getDateRange } from './plan.js';
 import { normalizePlanSearch } from './sharing.js';
 import { shareText } from './sharingI18n.js';
 import { translate } from './i18n.js';
+import { historyFieldLabel, historyFieldValue } from './historyPresentation.js';
 
 export const HISTORY_FILTER_DEFAULTS = { search: '', actor: 'all', action: 'all', status: 'all', date: 'all', from: '', to: '' };
-export const HISTORY_ACTIONS = ['share', 'reshare', 'update', 'unshare', 'review', 'auto_reopen'];
+export const HISTORY_ACTIONS = ['share', 'reshare', 'update', 'comment', 'unshare', 'review', 'auto_reopen', 'resubmit', 'reviewer_assign', 'reviewer_reassign', 'reviewer_release'];
 export const HISTORY_DATES = ['all', 'today', 'yesterday', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'last7Days', 'custom'];
 
 export const hasHistoryFilters = filters => Boolean(filters.search.trim() || ['actor', 'action', 'status', 'date'].some(key => filters[key] !== 'all'));
@@ -13,12 +14,12 @@ const textValue = value => typeof value === 'object' ? JSON.stringify(value) : S
 function eventSearchText(event, group, language) {
   const plan = event.plan || {};
   const fields = group.changes.flatMap(change => change.steps.filter(step => step.event.eventId === event.eventId).map(step => [
-    change.field, translate(language, `editor.${change.field}`), textValue(step.before), textValue(step.after),
+    change.field, translate(language, `editor.${change.field}`), historyFieldLabel(change.field,language), historyFieldValue(step.before,change.field,language), historyFieldValue(step.after,change.field,language), textValue(step.before), textValue(step.after),
   ].join(' ')));
   return normalizePlanSearch([
     event.actorName, event.actorEmail, event.actorUid === 'system' ? shareText(language, 'system') : '',
     shareText(language, `action_${event.action}`), shareText(language, event.reviewStatus),
-    plan.lessonUnit, plan.subject, plan.topic, plan.classLabel, ...fields,
+    plan.lessonUnit, plan.subject, plan.topic, plan.classLabel, event.feedback?.message, event.feedback?.outcome, event.note, event.reviewer?.name, event.previousReviewerName, ...fields,
   ].join(' '));
 }
 
@@ -32,7 +33,7 @@ export function filterHistoryGroups(groups, filters, { language = 'en', now = ne
     : getDateRange(filters.date, { now, timeZone });
   return groups.filter(group => group.events.some(event => {
     if (filters.actor !== 'all' && event.actorUid !== filters.actor) return false;
-    if (filters.action !== 'all' && event.action !== filters.action) return false;
+    if (filters.action !== 'all' && (filters.action==='comment'?!['comment','feedback','reply'].includes(event.action):event.action!==filters.action)) return false;
     if (filters.status !== 'all' && event.reviewStatus !== filters.status) return false;
     if (range) {
       const stamp = event.at?.toDate?.() || new Date(event.at || 0);

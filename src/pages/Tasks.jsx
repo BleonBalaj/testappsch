@@ -1,4 +1,6 @@
+import ReadStatus from '../components/ReadStatus';
 import DialogPortal from '../components/DialogPortal';
+import { localDateKey } from '../features/moods';
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -72,12 +74,13 @@ const CustomSelect = ({ value, onChange, options }) => {
 };
 
 /* ─── Add/Edit Modal ─────────────────────────────────────── */
-const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = STUDENT_CATEGORIES, isAlbanian = false }) => {
+const TaskModal = ({ task, onSave, onClose, error, userRole = 'student', categories = STUDENT_CATEGORIES, isAlbanian = false }) => {
   const defaultCategory = userRole === 'student' ? 'Homework' : 'Admin';
   const [form, setForm] = useState(task || {
     content: '', status: 'todo', priority: 'medium',
     category: defaultCategory, due: '', notes: '', role: userRole
   });
+  const [saving,setSaving]=useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const availableCategories = categories.filter(c => c !== 'All');
@@ -178,8 +181,9 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
         </div>
 
         <div className="modal-footer">
+          {error&&<p role="alert" className="workflow-error">{error.message}</p>}
           <button className="btn-secondary glass" onClick={onClose}>{isAlbanian ? 'Anulo' : 'Cancel'}</button>
-          <button className="btn-primary" disabled={!form.content.trim()} onClick={() => onSave(form)}>
+          <button className="btn-primary" disabled={saving||!form.content.trim()} onClick={async()=>{setSaving(true);try{await onSave({...form,content:form.content.trim()});}finally{setSaving(false);}}}>
             <Check size={16}/> {task ? (isAlbanian ? 'Përditëso' : 'Update') : (userRole === 'student' ? (isAlbanian ? 'Ruaj Detyrën' : 'Save Task') : (isAlbanian ? 'Shto Detyrë' : 'Add Task'))}
           </button>
         </div>
@@ -191,7 +195,7 @@ const TaskModal = ({ task, onSave, onClose, userRole = 'student', categories = S
 /* ─── Single Task Card ───────────────────────────────────── */
 const TaskCard = ({ task, onEdit, onDelete, onMove, compact, isAlbanian = false }) => {
   const pm = PRIORITY_META[task.priority] || PRIORITY_META.medium;
-  const isOverdue = task.due && new Date(task.due) < new Date() && task.status !== 'done';
+  const isOverdue = task.due && task.due < localDateKey() && task.status !== 'done';
 
   const getPriorityLabel = (p) => {
     if (!isAlbanian) return pm.label;
@@ -221,6 +225,7 @@ const TaskCard = ({ task, onEdit, onDelete, onMove, compact, isAlbanian = false 
     <motion.div
       layout
       className={`task-card glass ${compact ? 'compact' : ''}`}
+      data-priority={task.priority}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -246,11 +251,11 @@ const TaskCard = ({ task, onEdit, onDelete, onMove, compact, isAlbanian = false 
       </div>
       {!compact && (
         <div className="task-card-meta">
-          <span className="task-badge" style={{ color: pm.color, background: `${pm.color}20` }}>{pm.icon} {getPriorityLabel(task.priority)}</span>
+          <span className={`task-badge priority-badge priority-${task.priority}`} data-priority={task.priority}>{pm.icon} {getPriorityLabel(task.priority)}</span>
           {task.category && <span className="task-badge cat-badge">{getCategoryLabel(task.category)}</span>}
           {task.due && (
             <span className="task-badge" style={{ color: isOverdue ? 'hsl(var(--mood-sad))' : 'hsl(var(--muted-foreground))', background: isOverdue ? 'hsl(var(--mood-sad) / 0.12)' : 'hsl(var(--muted)/0.3)' }}>
-              📅 {new Date(task.due).toLocaleDateString(isAlbanian ? 'sq-AL' : 'en-US', { month: 'short', day: 'numeric' })}
+              📅 {new Date(task.due+'T12:00:00').toLocaleDateString(isAlbanian ? 'sq-AL' : 'en-US', { month: 'short', day: 'numeric' })}
               {isOverdue && ' ⚠️'}
             </span>
           )}
@@ -304,7 +309,7 @@ const KanbanCol = ({ status, tasks, onEdit, onDelete, onMove, isAlbanian = false
 
 /* ─── Main Tasks Page ────────────────────────────────────── */
 const Tasks = ({ userRole = 'student' }) => {
-  const { tasks, addTask, updateTask, deleteTask, moveTask } = useTasks();
+  const { tasks, error:taskError, loading:tasksLoading, addTask, updateTask, deleteTask, moveTask } = useTasks();
   const { language, t, isAlbanian } = useLanguage();
   const [view, setView]         = useState('list');   // list | kanban
   const [modal, setModal]       = useState(null);     // null | 'new' | task obj
@@ -347,10 +352,10 @@ const Tasks = ({ userRole = 'student' }) => {
     return sMap[s] || STATUS_META[s]?.label || s;
   };
 
-  const handleSave = (form) => {
-    if (modal === 'new') addTask(form);
-    else updateTask(modal.id, form);
-    setModal(null);
+  const handleSave = async (form) => {
+    const saved=modal==='new'?await addTask(form):await updateTask(modal.id,form);
+    if(saved)setModal(null);
+    return saved;
   };
 
   const roleBaseTasks = useMemo(() => {
@@ -375,7 +380,8 @@ const Tasks = ({ userRole = 'student' }) => {
 
   const doneCount    = roleBaseTasks.filter(t => t.status === 'done').length;
   const totalCount   = roleBaseTasks.length;
-  const overdueTasks = roleBaseTasks.filter(t => t.due && new Date(t.due) < new Date() && t.status !== 'done');
+  const shownCount=value=>taskError?'—':tasksLoading?'…':value;
+  const overdueTasks = roleBaseTasks.filter(t => t.due && t.due < localDateKey() && t.status !== 'done');
 
   return (
     <motion.div className="tasks-page" initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}>
@@ -393,24 +399,26 @@ const Tasks = ({ userRole = 'student' }) => {
         </button>
       </div>
 
+      {taskError&&<p role="alert" className="workflow-error">{isAlbanian?'Veprimi dështoi. Teksti juaj ruhet; provoni sërish.':'The action failed. Your draft is preserved; try again.'} {taskError.message}</p>}
+      <ReadStatus state={{loading:tasksLoading,hasLoaded:!tasksLoading,rows:tasks,error:taskError}} language={language} loadingText={isAlbanian?'Duke ngarkuar detyrat…':'Loading tasks…'}/>
       {/* ── Stats Strip ── */}
       <div className="tasks-stats">
         <div className="tstat glass">
           <span>📋</span>
-          <div><strong>{totalCount}</strong><small>{t('common.total')}</small></div>
+          <div><strong>{shownCount(totalCount)}</strong><small>{t('common.total')}</small></div>
         </div>
         <div className="tstat glass">
           <span>⚡</span>
-          <div><strong>{tasks.filter(t => t.status === 'inprogress').length}</strong><small>{t('tasks.inProgress')}</small></div>
+          <div><strong>{shownCount(roleBaseTasks.filter(t => t.status === 'inprogress').length)}</strong><small>{t('tasks.inProgress')}</small></div>
         </div>
         <div className="tstat glass">
           <span>✅</span>
-          <div><strong>{doneCount}</strong><small>{t('tasks.completed')}</small></div>
+          <div><strong>{shownCount(doneCount)}</strong><small>{t('tasks.completed')}</small></div>
         </div>
         <div className="tstat glass" style={{ borderColor: overdueTasks.length ? 'hsl(var(--mood-sad)/0.4)' : undefined }}>
           <span>⚠️</span>
           <div>
-            <strong style={{ color: overdueTasks.length ? 'hsl(var(--mood-sad))' : undefined }}>{overdueTasks.length}</strong>
+            <strong style={{ color: overdueTasks.length ? 'hsl(var(--mood-sad))' : undefined }}>{shownCount(overdueTasks.length)}</strong>
             <small>{isAlbanian ? 'Të Vonuara' : 'Overdue'}</small>
           </div>
         </div>
@@ -418,7 +426,7 @@ const Tasks = ({ userRole = 'student' }) => {
         <div className="tasks-progress-wrap glass">
           <div className="tasks-progress-label">
             <span>{isAlbanian ? 'Përfundimi' : 'Completion'}</span>
-            <strong>{totalCount ? Math.round((doneCount / totalCount) * 100) : 0}%</strong>
+            <strong>{shownCount(totalCount ? `${Math.round((doneCount / totalCount) * 100)}%` : '0%')}</strong>
           </div>
           <div className="tasks-progress-bg">
             <motion.div
@@ -487,7 +495,7 @@ const Tasks = ({ userRole = 'student' }) => {
 
       {/* ── Views ── */}
       <AnimatePresence mode="wait">
-        {view === 'list' ? (
+        {tasksLoading||taskError ? null : view === 'list' ? (
           <motion.div key="list" className="tasks-list" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }}>
             {/* Group by status */}
             {STATUSES.map(status => {
@@ -505,13 +513,13 @@ const Tasks = ({ userRole = 'student' }) => {
                       <TaskCard key={t.id} task={t} onEdit={setModal} onDelete={deleteTask} onMove={moveTask} isAlbanian={isAlbanian} />
                     ))}
                   </AnimatePresence>
-                  {group.length === 0 && (
+                  {!tasksLoading&&!taskError&&group.length === 0 && (
                     <div className="group-empty">{isAlbanian ? 'Nuk ka detyra këtu — punë e shkëlqyer! 🎉' : 'No tasks here — great job! 🎉'}</div>
                   )}
                 </div>
               );
             })}
-            {sorted.length === 0 && (
+            {!tasksLoading&&!taskError&&sorted.length === 0 && (
               <div className="empty-state"><Star size={32}/><p>{isAlbanian ? 'Asnjë detyrë nuk përputhet me filtrat tuaj.' : 'No tasks match your filters.'}</p></div>
             )}
           </motion.div>
@@ -538,6 +546,7 @@ const Tasks = ({ userRole = 'student' }) => {
           <TaskModal
             task={modal === 'new' ? null : modal}
             onSave={handleSave}
+            error={taskError}
             onClose={() => setModal(null)}
             userRole={userRole}
             categories={categories}

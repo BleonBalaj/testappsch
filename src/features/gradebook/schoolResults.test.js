@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSchoolRankings, courseResult } from './schoolResults.js';
+import { buildSchoolRankings, calculateCandidateRanks, courseResult } from './schoolResults.js';
 
 const courses = [
   { id: 'math', name: 'Mathematics', code: 'M1', weights: { Homework: 100, Engagement: 0 } },
@@ -49,3 +49,15 @@ test('archived students and grades from non-enrolled courses are excluded', () =
   const ranked = buildSchoolRankings([{ ...students[0], status: 'archived' }, students[3]], courses, records);
   assert.deepEqual(ranked, []);
 });
+
+test('calculateCandidateRanks computes overall ranks accurately from course records without student profiles', () => {
+  const candidateRanks = calculateCandidateRanks(['a', 'b', 'c', 'd'], courses, records);
+  // Cora: 100 (2 courses), Ben: 100 (1 course), Ada: 85 (2 courses: 90% math, 80% science), Deni: no grades
+  assert.deepEqual(candidateRanks, [
+    { id: 'c', average: 100, gradedCourses: 2, rank: 1 },
+    { id: 'b', average: 100, gradedCourses: 1, rank: 1 },
+    { id: 'a', average: 85, gradedCourses: 2, rank: 3 },
+  ]);
+});
+
+

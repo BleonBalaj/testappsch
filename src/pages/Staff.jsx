@@ -11,6 +11,7 @@ import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
+import ReadStatus from '../components/ReadStatus';
 import './Staff.css';
 
 const lower = value => String(value || '').trim().toLowerCase();
@@ -197,7 +198,7 @@ const StaffCard = ({ staff, roleInfo, isAdmin, onEditRole, onDelete, onSelectPro
 };
 
 const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
-  const { staffList, rolesList, classesList = [], classGroups = [], addStaff, updateStaff, deleteStaff, addCustomRole, deleteCustomRole } = useSchoolData();
+  const { staffList,staffLoaded,staffError,retrySchoolData, rolesList, classesList = [], classGroups = [], addStaff, updateStaff, deleteStaff, addCustomRole, deleteCustomRole } = useSchoolData();
   const { activeSchoolId, getIdTokenSafe, currentUser } = useAuth();
   const { language, t, isAlbanian } = useLanguage();
   const isAdmin = userRole === 'admin';
@@ -414,7 +415,7 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
               {t('staff.title')}
               <UserSquare2 size={32} style={{ color: 'hsl(var(--primary))' }} />
             </h1>
-            <span className="count-pill glass">{`${filteredStaff.length} ${t('common.total')}`}</span>
+            <span className="count-pill glass">{`${staffError?'—':staffLoaded?filteredStaff.length:'…'} ${t('common.total')}`}</span>
           </div>
           <p>{t('staff.subtitle')}</p>
         </div>
@@ -513,7 +514,9 @@ const Staff = ({ userRole = 'admin', onNavigate, addNotification }) => {
       </motion.div>
 
       {/* Staff Grid */}
-      {filteredStaff.length === 0 ? (
+      <ReadStatus state={{loading:!staffLoaded,hasLoaded:staffLoaded,rows:staffList,error:staffError}} language={language} loadingText={isAlbanian?'Duke ngarkuar stafin…':'Loading staff…'}/>
+      {staffError&&<p role="alert">{isAlbanian?'Stafi nuk mund të ngarkohet.':'Staff could not be loaded.'} <button className="btn-secondary" onClick={retrySchoolData}>{isAlbanian?'Provo përsëri':'Try again'}</button></p>}
+      {staffLoaded&&!staffError&&filteredStaff.length === 0 ? (
         <div className="empty-staff-state glass">
           <div className="empty-icon-box glass">
             <Search size={32} />

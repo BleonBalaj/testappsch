@@ -1,3 +1,5 @@
+import { PlanReviewer, PlanUnreadDot } from '../components/PlanActivity';
+import LessonPlanFeedback, { LessonPlanFeedbackDialog } from '../components/LessonPlanFeedback';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive, ArrowDown, ArrowLeft, ArrowUp, BookOpen, CalendarDays, Check,
@@ -21,6 +23,7 @@ import LessonPlanAdminSettings from './LessonPlanAdminSettings';
 import LessonAiAssistanceCard from '../components/LessonAiAssistanceCard';
 import SharedLessonPlans from '../components/SharedLessonPlans';
 import LessonPlanHistory from '../components/LessonPlanHistory';
+import OptionalLessonDate from '../components/OptionalLessonDate';
 import LessonSharingDialog from '../components/LessonSharingDialog';
 import DialogPortal from '../components/DialogPortal';
 import { prepareLessonPlanOwnership, writeOwnedLessonPlan, setPlanShared } from '../features/lessonPlans/sharingCloud';
@@ -145,15 +148,17 @@ function RichEditor({ label, value, onChange, placeholder, tall = false, reusabl
   </div>;
 }
 
-function Section({ id, title, subtitle, children, open, onToggle }) {
+function Section({ id, title, subtitle, children }) {
   return <section className="lesson-editor-section glass" id={id}>
-    <button type="button" className="lesson-section-toggle" aria-expanded={open} onClick={onToggle}>
-      <span><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</span><ChevronDown className={open ? 'is-open' : ''} size={20} />
-    </button>{open && <div className="lesson-section-body">{children}</div>}
+    <div className="lesson-section-header">
+      <span><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</span>
+    </div>
+    <div className="lesson-section-body">{children}</div>
   </section>;
 }
 
-function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser = {}, language = 'en', onLanguageChange, scheduledLesson = null, onScheduledLessonConsumed }) {
+function LessonPlans({ notification=null, initialView = 'plans', userRole = 'teacher', currentUser = {}, language = 'en', onLanguageChange, scheduledLesson = null, onScheduledLessonConsumed }) {
+  const isAdmin = userRole === 'admin';
   const t = (key, values) => translate(language, key, values);
   const ct = (value) => translateCatalogValue(language, value);
   const s = (key) => shareText(language, key);
@@ -249,7 +254,6 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [saveState, setSaveState] = useState('saved');
   const [message, setMessage] = useState('');
   const [mobilePane, setMobilePane] = useState('editor');
-  const [expanded, setExpanded] = useState({ basics: true, general: true, specific: true, methodology: true, assessment: true, homework: true, reflection: true });
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [subjectFilter, setSubjectFilter] = useState('all');
@@ -267,8 +271,12 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const [sharing, setSharing] = useState({ key: '', shared: {}, history: {} });
   const [sharingBusy, setSharingBusy] = useState('');
   const [sharingError, setSharingError] = useState('');
+  const [auxSaving, setAuxSaving] = useState(false);
+  const auxWriteRef = useRef({ busy: false, key: '', id: '' });
   const [confirmShare, setConfirmShare] = useState(null);
   const [historyPlan, setHistoryPlan] = useState(null);
+  const [noticeFeedback,setNoticeFeedback]=useState(null);
+  useEffect(()=>{if(!notification?.recordId)return;if(isAdmin)setView('shared');else if(['plan_feedback','plan_reply','plan_resubmit','feedback','reply'].includes(notification.kind))setNoticeFeedback(notification.recordId);else setHistoryPlan(notification.recordId);},[notification?.nonce,notification?.recordId,notification?.kind,isAdmin]);
   const sharingKey = `${activeSchoolId}:${effectiveUid}`;
   const isShared = (id) => sharing.key === sharingKey && Boolean(sharing.shared[id]);
   const hasHistory = (id) => sharing.key === sharingKey && Boolean(sharing.history[id]);
@@ -345,45 +353,40 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     }, (err) => { console.warn('Lesson plans cloud sync notice:', err.message); setSyncError(true); });
     }).catch(error => { if (!cancelled) { console.warn('Lesson ownership preparation failed:', error); setSyncError(true); } });
 
-    // 2. Sync Templates from Firestore
-    const tplCol = collection(db, 'schools', activeSchoolId, 'templates');
-    const unsubTpl = onSnapshot(tplCol, (snapshot) => {
-      snapshot.forEach(docSnap => {
-        try {
-          repository.saveTemplate({ id: docSnap.id, ...docSnap.data() });
-        } catch (error) { console.warn('Could not cache template:', error); }
-      });
-      setTemplates(repository.listTemplates());
-    }, (err) => console.warn('Templates cloud sync notice:', err.message));
+    const templatesCol=query(collection(db,'schools',activeSchoolId,'templates'),where('ownerUid','==',effectiveUid));
+    const unsubTpl=onSnapshot(templatesCol,{includeMetadataChanges:true},snapshot=>{
+      if(cancelled||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites)return;
+      try{repository.mergeCloudCollection('templates',snapshot.docs.map(doc=>({...doc.data(),id:doc.id})));setTemplates(repository.listTemplates());}
+      catch(error){console.warn('Could not reconcile templates:',error);setSyncError(true);}
+    },error=>{if(!cancelled){console.warn('templates sync failed:',error);setSyncError(true);}});
 
-    // 3. Sync Topics from Firestore
-    const topicsCol = collection(db, 'schools', activeSchoolId, 'topics');
-    const unsubTopics = onSnapshot(topicsCol, (snapshot) => {
-      snapshot.forEach(docSnap => {
-        try {
-          repository.saveTopic({ id: docSnap.id, ...docSnap.data() });
-        } catch (error) { console.warn('Could not cache topic:', error); }
-      });
-      setTopics(repository.listTopics());
-    }, (err) => console.warn('Topics cloud sync notice:', err.message));
+    const topicsCol=query(collection(db,'schools',activeSchoolId,'topics'),where('ownerUid','==',effectiveUid));
+    const unsubTopics=onSnapshot(topicsCol,{includeMetadataChanges:true},snapshot=>{
+      if(cancelled||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites)return;
+      try{repository.mergeCloudCollection('topics',snapshot.docs.map(doc=>({...doc.data(),id:doc.id})));setTopics(repository.listTopics());}
+      catch(error){console.warn('Could not reconcile topics:',error);setSyncError(true);}
+    },error=>{if(!cancelled){console.warn('topics sync failed:',error);setSyncError(true);}});
 
-    // 4. Sync Reusable Entries from Firestore
-    const reusableCol = collection(db, 'schools', activeSchoolId, 'reusableEntries');
-    const unsubReusable = onSnapshot(reusableCol, (snapshot) => {
-      snapshot.forEach(docSnap => {
-        try {
-          repository.saveReusableEntry({ id: docSnap.id, ...docSnap.data() });
-        } catch (error) { console.warn('Could not cache reusable entry:', error); }
-      });
-      setReusable(repository.listReusableEntries());
-    }, (err) => console.warn('Reusable entries cloud sync notice:', err.message));
+    const reusableEntriesCol=query(collection(db,'schools',activeSchoolId,'reusableEntries'),where('ownerUid','==',effectiveUid));
+    const unsubReusable=onSnapshot(reusableEntriesCol,{includeMetadataChanges:true},snapshot=>{
+      if(cancelled||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites)return;
+      try{repository.mergeCloudCollection('reusableEntries',snapshot.docs.map(doc=>({...doc.data(),id:doc.id})));setReusable(repository.listReusableEntries());}
+      catch(error){console.warn('Could not reconcile reusableEntries:',error);setSyncError(true);}
+    },error=>{if(!cancelled){console.warn('reusableEntries sync failed:',error);setSyncError(true);}});
 
+    const unsubSchoolTopics=onSnapshot(query(collection(db,'schools',activeSchoolId,'topics'),where('scope','==','school')),{includeMetadataChanges:true},snapshot=>{if(!cancelled&&!snapshot.metadata.fromCache&&!snapshot.metadata.hasPendingWrites){repository.mergeCloudCollection('topics',snapshot.docs.map(doc=>({...doc.data(),id:doc.id})),{schoolWide:true});setTopics(repository.listTopics());}},()=>{if(!cancelled)setSyncError(true);});
+    const mappingUnsubs=['subjectMappings','stageMappings'].map(name=>onSnapshot(collection(db,'schools',activeSchoolId,name),{includeMetadataChanges:true},snapshot=>{
+      if(cancelled||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites)return;
+      try{repository.mergeCloudCollection(name,snapshot.docs.map(doc=>({...doc.data(),id:doc.id})),{schoolWide:true});setSchoolSubjects(repository.listSubjectMappings());}
+      catch(error){console.warn('Curriculum sync failed:',error);setSyncError(true);}
+    },error=>{if(!cancelled){console.warn('Curriculum sync failed:',error);setSyncError(true);}}));
     return () => {
       cancelled = true;
       unsubPlans();
       unsubTpl();
       unsubTopics();
-      unsubReusable();
+      unsubReusable();unsubSchoolTopics();
+      mappingUnsubs.forEach(off=>off());
     };
   }, [activeSchoolId, effectiveUid, teacherId, repository, syncAttempt]);
 
@@ -472,12 +475,12 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const startPlan = (template = null) => {
     try {
       const plan = template
-        ? duplicatePlan(template.plan || template, { date: todayLocal(), teacherId })
+        ? duplicatePlan(template.plan || template, { teacherId })
         : createPlan({ preferences, schoolData: { subjectMappings: schoolSubjects, stageMappings: repository.listStageMappings(), teacherName: currentUser.name }, teacherId, now: new Date() });
       const saved = repository.savePlan(plan);
       activePlanRef.current = saved; setActivePlan(saved); refresh(); setMobilePane('editor'); setView('editor');
       if (!autosaveRef.current.enqueue(saved, activeSchoolId, true)) setSaveState('error');
-    } catch { notify(t('validation.saveFailed')); }
+    } catch(error) { setSharingError(t('validation.saveFailed')+' '+error.message); }
   };
   useEffect(() => {
     if (!scheduledLesson) return;
@@ -502,7 +505,6 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const changeSubject = (subject) => updatePlan((current) => changePlanSubject(current, subject, { schoolSubjects }));
   const changeClass = (classLabel) => updatePlan((current) => changePlanClass(current, classLabel, { schoolSubjects, schoolStages: repository.listStageMappings() }));
   const updateArray = (key, values) => updatePlan({ [key]: values });
-  const toggleSection = (key) => setExpanded((current) => ({ ...current, [key]: !current[key] }));
   const applyTopic = (topic) => {
     if (!topic) return;
     const current = activePlanRef.current;
@@ -511,7 +513,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     updatePlan({ topic: topic.title, ...(topic.outcome ? { topicLearningOutcome: topic.outcome } : {}) });
   };
   const duplicate = (plan) => {
-    const copy = duplicatePlan(plan, { date: todayLocal(), teacherId });
+    const copy = duplicatePlan(plan, { teacherId });
     const saved = repository.savePlan(copy);
     refresh(); openPlan(saved); notify(t('notice.duplicateCreated'));
     if (!autosaveRef.current.enqueue(saved, activeSchoolId, true)) setSaveState('error');
@@ -522,16 +524,27 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     refresh(); notify(t(status === 'archived' ? 'notice.archived' : 'notice.restored'));
   };
   const makeTemplate = (plan) => { setTemplateSource(plan); setTemplateName(plan.lessonUnit || ct(plan.subject) || t('templates.newName')); };
-  const saveTemplate = () => {
+  const persistPersonal=async(collectionName,record,saveMethod)=>{
+    if(auxWriteRef.current.busy)throw new Error(t('editor.saving'));
+    if(!activeSchoolId)throw new Error('Select a school first.');
+    const key=JSON.stringify([activeSchoolId,collectionName,record]);
+    const recordId=record.id||(auxWriteRef.current.key===key?auxWriteRef.current.id:makeId());
+    auxWriteRef.current={busy:true,key,id:recordId};setAuxSaving(true);
+    const at=new Date().toISOString(),saved=JSON.parse(JSON.stringify({...record,id:recordId,ownerUid:effectiveUid,teacherId,createdAt:record.createdAt||at,updatedAt:at}));
+    try{await setDoc(doc(db,'schools',activeSchoolId,collectionName,String(saved.id)),saved,{merge:true});
+      repository[saveMethod](saved);refresh();auxWriteRef.current.key='';return saved;
+    }finally{auxWriteRef.current.busy=false;setAuxSaving(false);}
+  };
+  const removePersonal=async(collectionName,record,removeMethod)=>{
+    try{await deleteDoc(doc(db,'schools',activeSchoolId,collectionName,String(record.id)));repository[removeMethod](record.id);refresh();}
+    catch(error){setSharingError(t('validation.saveFailed')+' '+error.message);}
+  };
+  const saveTemplate = async () => {
     if (!templateName.trim() || !templateSource) return;
     try {
-      const tpl = { id: makeId(), name: templateName.trim(), plan: { ...templateSource, reflection: '', date: '', status: 'draft' } };
-      repository.saveTemplate(tpl);
-      if (activeSchoolId) {
-        setDoc(doc(db, 'schools', activeSchoolId, 'templates', String(tpl.id)), tpl, { merge: true }).catch(() => {});
-      }
-      refresh(); setTemplateSource(null); notify(t('notice.templateSaved'));
-    } catch { notify(t('validation.saveFailed')); }
+      await persistPersonal('templates',{name:templateName.trim(),plan:{...templateSource,reflection:'',date:'',status:'draft'}},'saveTemplate');
+      setTemplateSource(null);notify(t('notice.templateSaved'));
+    }catch(error){setSharingError(t('validation.saveFailed')+' '+error.message);}
   };
   const printPlan = (plan) => {
     autosaveRef.current.flush(activeSchoolId, activePlanRef.current?.id);
@@ -565,8 +578,6 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
   const subjects = unique([...plans.map((plan) => plan.subject), ...SUBJECTS.map((subject) => subject.name)]);
   const topicMatches = topics.filter((topic) => (!topic.classLabel || topic.classLabel === activePlan?.classLabel) && (!topic.subject || topic.subject === activePlan?.subject));
   const reusableFor = (type) => reusable.filter((entry) => entry.type === type);
-  const isAdmin = userRole === 'admin';
-
   const storageStatus = repository.getStorageStatus();
   const storageProblem = !storageStatus.personal.ok || !storageStatus.school.ok;
 
@@ -577,20 +588,27 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     {message && <div className="lesson-toast" role="status"><Check size={16} />{message}</div>}
     {view !== 'editor' && <>
       <header className="lesson-page-header">
-        <div><div className="lesson-title-row"><h1 className="gradient-text">{t('page.title')}</h1><span className="lesson-count-pill">{t('page.activeCount', { count: stats.total })}</span></div>
-          <p>{t('page.subtitle')}</p></div>
-        <div className="lesson-header-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={() => setView('settings')}><Settings2 size={17} /> {t('page.settings')}</button>
-          <button type="button" className="btn-primary" onClick={() => startPlan()}><Plus size={18} /> {t('page.createPlan')}</button>
-          {isAdmin && <button type="button" className="btn-secondary lesson-admin-inbox-button" aria-pressed={view === 'shared'} onClick={() => setView('shared')}><Share2 size={17} />{s('adminInbox')}</button>}</div>
+        <div><div className="lesson-title-row"><h1 className="gradient-text">{view==='shared'?s('adminInbox'):t('page.title')}</h1>{view!=='shared'&&<span className="lesson-count-pill">{t('page.activeCount', { count: stats.total })}</span>}</div>
+          <p>{view==='shared'?s('sharedWorkspaceHint'):t('page.subtitle')}</p></div>
+        <div className="lesson-header-actions">
+          {isAdmin && (
+            <nav className="lesson-tabs lesson-workspace-tabs" aria-label={s('workspaceNavigation')}>
+              <button type="button" className={view !== 'shared' ? 'active' : ''} aria-current={view !== 'shared' ? 'page' : undefined} onClick={() => setView('plans')}><FileText size={16} />{t('nav.myPlans')}</button>
+              <button type="button" className={view === 'shared' ? 'active' : ''} aria-current={view === 'shared' ? 'page' : undefined} onClick={() => setView('shared')}><Share2 size={16} />{s('adminInbox')}</button>
+            </nav>
+          )}
+          <div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div>{view !== 'shared' && <><button type="button" className="btn-secondary" onClick={() => setView('settings')}><Settings2 size={17} /> {t('page.settings')}</button>
+          <button type="button" className="btn-primary" onClick={() => startPlan()}><Plus size={18} /> {t('page.createPlan')}</button></>}</div>
       </header>
-      <nav className="lesson-tabs" aria-label={t('page.sectionsAria')}>
+      {view !== 'shared' && <nav className="lesson-tabs lesson-personal-tabs" aria-label={t('page.sectionsAria')}>
         <button className={view === 'plans' ? 'active' : ''} onClick={() => setView('plans')}><FileText size={17} /> {t('nav.myPlans')}</button>
         <button className={view === 'templates' ? 'active' : ''} onClick={() => setView('templates')}><LayoutTemplate size={17} /> {t('nav.myTemplates')}</button>
         <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}><Settings2 size={17} /> {t('nav.planningSettings')}</button>
-      </nav>
+      </nav>}
     </>}
 
-    {view === 'shared' && isAdmin && activeSchoolId && <SharedLessonPlans key={`${activeSchoolId}:${effectiveUid}`} schoolId={activeSchoolId} identity={identity} language={language} />}
+    {view === 'shared' && isAdmin && activeSchoolId && <SharedLessonPlans key={`${activeSchoolId}:${effectiveUid}:${notification?.nonce||''}`} schoolId={activeSchoolId} identity={identity} language={language} initialPlanId={notification?.recordId} />}
+    {noticeFeedback&&<LessonPlanFeedbackDialog schoolId={activeSchoolId} planId={noticeFeedback} language={language} onClose={()=>setNoticeFeedback(null)}/>}
     {confirmShare && <LessonSharingDialog title={s('confirmTitle')} onClose={() => !sharingBusy && setConfirmShare(null)}><p>{s('confirmText')}</p><div className="lesson-review-toolbar"><button type="button" className="btn-secondary" disabled={Boolean(sharingBusy)} onClick={() => setConfirmShare(null)}>{s('cancel')}</button><button type="button" className="btn-primary" disabled={Boolean(sharingBusy)} onClick={() => changeSharing(confirmShare, true)}><Share2 size={17} />{s(sharingBusy ? 'sharing' : 'confirm')}</button></div></LessonSharingDialog>}
     {historyPlan && <LessonSharingDialog title={s('history')} side onClose={() => setHistoryPlan(null)}><LessonPlanHistory key={`${activeSchoolId}:${historyPlan}`} schoolId={activeSchoolId} planId={historyPlan} language={language} /></LessonSharingDialog>}
 
@@ -619,6 +637,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
                 {plan.lessonUnit || t('plans.untitledUnit')}
               </button></h3>
               <span className={`lesson-status lesson-status-${plan.status}`}>{t(`status.${plan.status}`)}</span>
+              {hasHistory(plan.id) && <PlanReviewer planId={plan.id} language={language}/>}
               {isShared(plan.id) && <span className="lesson-review-badge">{s('shared')}</span>}
             </div>
             <p>
@@ -628,7 +647,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
           </div>
           <div className="lesson-plan-actions">
             <button type="button" onClick={() => openPlan(plan)} title={t('plans.open')}><FileText size={16} /> {t('plans.open')}</button>
-            {hasHistory(plan.id) && <button type="button" onClick={() => setHistoryPlan(plan.id)}><History size={16} />{s('history')}</button>}
+            {hasHistory(plan.id) && <LessonPlanFeedback schoolId={activeSchoolId} planId={plan.id} language={language} />}{hasHistory(plan.id) && <button type="button" onClick={() => setHistoryPlan(plan.id)}><History size={16} />{s('history')}<PlanUnreadDot planId={plan.id} kind="history" language={language}/></button>}
             <button type="button" onClick={() => duplicate(plan)} title={t('plans.duplicate')}><Copy size={16} /> {t('plans.duplicate')}</button>
             <button type="button" onClick={() => printPlan(plan)} title={t('plans.print')}><Printer size={16} /> {t('plans.print')}</button>
             <button type="button" onClick={() => printPlan(plan)} title={t('plans.pdfTitle')}><Download size={16} /> {t('plans.pdf')}</button>
@@ -640,7 +659,7 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
     </>}
 
     {view === 'templates' && <section className="lesson-list-panel glass"><div className="lesson-panel-heading"><div><h2>{t('templates.heading')}</h2><p>{t('templates.description')}</p></div></div>
-      {templates.length ? <div className="lesson-template-grid">{templates.map((template) => <article className="lesson-template-card" key={template.id}><span><LayoutTemplate size={20} /></span><h3>{template.name}</h3><p>{ct(template.plan?.subject) || t('templates.noSubject')} · {template.plan?.classLabel || t('templates.noClass')}</p><div><button type="button" className="btn-primary" onClick={() => startPlan(template)}><Plus size={16} /> {t('templates.use')}</button><button type="button" className="btn-secondary" onClick={() => { repository.deleteTemplate(template.id); if (activeSchoolId) deleteDoc(doc(db, 'schools', activeSchoolId, 'templates', String(template.id))).catch(() => {}); refresh(); }}><Trash2 size={16} /> {t('templates.remove')}</button></div></article>)}</div>
+      {templates.length ? <div className="lesson-template-grid">{templates.map((template) => <article className="lesson-template-card" key={template.id}><span><LayoutTemplate size={20} /></span><h3>{template.name}</h3><p>{ct(template.plan?.subject) || t('templates.noSubject')} · {template.plan?.classLabel || t('templates.noClass')}</p><div><button type="button" className="btn-primary" onClick={() => startPlan(template)}><Plus size={16} /> {t('templates.use')}</button><button type="button" className="btn-secondary" onClick={()=>removePersonal('templates',template,'deleteTemplate')}><Trash2 size={16} /> {t('templates.remove')}</button></div></article>)}</div>
         : <div className="lesson-empty"><span><LayoutTemplate size={28} /></span><h3>{t('templates.emptyTitle')}</h3><p>{t('templates.emptyDescription')}</p></div>}
     </section>}
 
@@ -769,16 +788,16 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
             <Field label={t('editor.class')}><input list="lesson-assigned-classes" value={topicDraft.classLabel} onChange={(event) => setTopicDraft({ ...topicDraft, classLabel: event.target.value })} placeholder={t('settings.exampleClass')} /></Field>
             <Field label={t('editor.subject')}><select value={topicDraft.subject} onChange={(event) => setTopicDraft({ ...topicDraft, subject: event.target.value })}><option value="">{t('settings.selectSubject')}</option>{listSubjects({ schoolSubjects }).map((subject) => <option key={subject.name} value={subject.name}>{ct(subject.name)}</option>)}</select></Field>
             <Field label={t('settings.topicOutcome')}><textarea value={topicDraft.outcome} onChange={(event) => setTopicDraft({ ...topicDraft, outcome: event.target.value })} rows="3" placeholder={t('settings.topicOutcomePlaceholder')} /></Field>
-            <button type="button" className="btn-secondary" onClick={() => { if (!topicDraft.title.trim()) return notify(t('validation.topicRequired')); if (!topicDraft.subject) return notify(t('validation.topicSubjectRequired')); try { const newTop = { ...topicDraft, id: makeId() }; repository.saveTopic(newTop); if (activeSchoolId) { setDoc(doc(db, 'schools', activeSchoolId, 'topics', String(newTop.id)), newTop, { merge: true }).catch(() => {}); } setTopicDraft({ title: '', classLabel: '', subject: '', outcome: '' }); refresh(); notify(t('notice.topicSaved')); } catch { notify(t('validation.saveFailed')); } }}><Plus size={16} /> {t('settings.saveTopic')}</button>
+            <button type="button" className="btn-secondary" disabled={auxSaving} onClick={async () => { if (!topicDraft.title.trim()) return notify(t('validation.topicRequired')); if (!topicDraft.subject) return notify(t('validation.topicSubjectRequired')); try { await persistPersonal('topics',{...topicDraft,scope:'teacher'},'saveTopic'); setTopicDraft({ title: '', classLabel: '', subject: '', outcome: '' }); refresh(); notify(t('notice.topicSaved')); } catch(error) { setSharingError(t('validation.saveFailed')+' '+error.message); } }}><Plus size={16} /> {t('settings.saveTopic')}</button>
           </div>
-          {!!topics.length && <div className="lesson-settings-list">{topics.map((topic) => <div key={topic.id}><span><strong>{topic.title}</strong><small>{[topic.classLabel, ct(topic.subject)].filter(Boolean).join(' · ')}</small></span><button type="button" aria-label={t('settings.removeTopicAria', { name: topic.title })} onClick={() => { repository.deleteTopic(topic.id); if (activeSchoolId) { deleteDoc(doc(db, 'schools', activeSchoolId, 'topics', String(topic.id))).catch(() => {}); } refresh(); }}><Trash2 size={15} /></button></div>)}</div>}
+          {!!topics.length && <div className="lesson-settings-list">{topics.map((topic) => <div key={topic.id}><span><strong>{topic.title}</strong><small>{[topic.classLabel, ct(topic.subject)].filter(Boolean).join(' · ')}</small></span>{(topic.scope!=='school'||isAdmin) && <button type="button" aria-label={t('settings.removeTopicAria', { name: topic.title })} onClick={()=>removePersonal('topics',topic,'deleteTopic')}><Trash2 size={15} /></button>}</div>)}</div>}
         </div>
         <div className="lesson-settings-card glass"><div className="lesson-settings-heading"><span><Sparkles size={20} /></span><div><h2>{t('settings.reusableHeading')}</h2><p>{t('settings.reusableDescription')}</p></div></div>
           <div className="lesson-settings-fields"><Field label={t('settings.entryType')}><select value={reusableDraft.type} onChange={(event) => setReusableDraft({ ...reusableDraft, type: event.target.value })}>{REUSABLE_TYPES.map((value) => <option key={value} value={value}>{t(`reusable.${value}`)}</option>)}</select></Field>
             <Field label={t('settings.entryContent')}><textarea value={reusableDraft.text} onChange={(event) => setReusableDraft({ ...reusableDraft, text: event.target.value })} rows="3" placeholder={t('settings.entryPlaceholder')} /></Field>
-            <button type="button" className="btn-secondary" onClick={() => { if (!reusableDraft.text.trim()) return notify(t('validation.entryRequired')); try { const newRe = { ...reusableDraft, id: makeId() }; repository.saveReusableEntry(newRe); if (activeSchoolId) { setDoc(doc(db, 'schools', activeSchoolId, 'reusableEntries', String(newRe.id)), newRe, { merge: true }).catch(() => {}); } setReusableDraft({ ...reusableDraft, text: '' }); refresh(); notify(t('notice.entrySaved')); } catch { notify(t('validation.saveFailed')); } }}><Plus size={16} /> {t('settings.saveEntry')}</button>
+            <button type="button" className="btn-secondary" disabled={auxSaving} onClick={async () => { if (!reusableDraft.text.trim()) return notify(t('validation.entryRequired')); try { await persistPersonal('reusableEntries',reusableDraft,'saveReusableEntry'); setReusableDraft({ ...reusableDraft, text: '' }); refresh(); notify(t('notice.entrySaved')); } catch(error) { setSharingError(t('validation.saveFailed')+' '+error.message); } }}><Plus size={16} /> {t('settings.saveEntry')}</button>
           </div>
-          {!!reusable.length && <div className="lesson-settings-list">{reusable.map((entry) => <div key={entry.id}><span><strong>{entry.text}</strong><small>{t(`reusable.${entry.type}`)}</small></span><button type="button" aria-label={t('settings.removeEntryAria')} onClick={() => { repository.deleteReusableEntry(entry.id); if (activeSchoolId) { deleteDoc(doc(db, 'schools', activeSchoolId, 'reusableEntries', String(entry.id))).catch(() => {}); } refresh(); }}><Trash2 size={15} /></button></div>)}</div>}
+          {!!reusable.length && <div className="lesson-settings-list">{reusable.map((entry) => <div key={entry.id}><span><strong>{entry.text}</strong><small>{t(`reusable.${entry.type}`)}</small></span><button type="button" aria-label={t('settings.removeEntryAria')} onClick={()=>removePersonal('reusableEntries',entry,'deleteReusableEntry')}><Trash2 size={15} /></button></div>)}</div>}
         </div>
         {isAdmin && <LessonPlanAdminSettings repository={repository} onChange={refresh} notify={notify} language={language} />}
       </div>
@@ -789,13 +808,15 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
         <div className="lesson-editor-toolbar-left"><button type="button" className="lesson-icon-button" onClick={leaveEditor} aria-label={t('editor.backAria')}><ArrowLeft size={20} /></button><div><h1 ref={editorTitleRef} tabIndex={-1}>{activePlan.lessonUnit || t('editor.newPlanTitle')}</h1><span className={`lesson-save-state lesson-save-${saveState}`}>{t(`save.${saveState}`)}</span></div></div>
         <div className="lesson-editor-toolbar-actions"><div className="lesson-language-switch" role="group" aria-label={t('page.languageAria')}><button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => onLanguageChange?.('en')}>English</button><button type="button" className={language === 'sq' ? 'active' : ''} aria-pressed={language === 'sq'} onClick={() => onLanguageChange?.('sq')}>Shqip</button></div><button type="button" className="btn-secondary" onClick={() => { autosaveRef.current.flush(activeSchoolId, activePlanRef.current?.id); setMobilePane('preview'); document.getElementById('lesson-preview')?.scrollIntoView({ block: 'nearest' }); }}><FileText size={16} /> {t('editor.preview')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)}><Printer size={16} /> {t('editor.print')}</button><button type="button" className="btn-secondary" onClick={() => printPlan(activePlan)} title={t('editor.pdfTitle')}><Download size={16} /> {t('editor.pdf')}</button></div>
       </div>
-      <div className="lesson-editor-subbar"><div><span className={`lesson-status lesson-status-${activePlan.status}`}>{t(`status.${activePlan.status}`)}</span><span>{dateLabel(activePlan.date, language)} · {activePlan.classLabel || t('editor.noClass')}</span></div><div>
+      <div className="lesson-editor-subbar"><div className="lesson-editor-metadata"><span className={`lesson-status lesson-status-${activePlan.status}`}>{t(`status.${activePlan.status}`)}</span><span>{dateLabel(activePlan.date, language)} · {activePlan.classLabel || t('editor.noClass')}</span>
+        {hasHistory(activePlan.id) && <PlanReviewer planId={activePlan.id} language={language}/>}
         {isShared(activePlan.id) && <span className="lesson-review-badge" title={s('live')}>{s('shared')}</span>}
-        {hasHistory(activePlan.id) && <button type="button" onClick={() => setHistoryPlan(activePlan.id)}><History size={15} />{s('history')}</button>}
-        <button type="button" onClick={() => makeTemplate(activePlan)}><LayoutTemplate size={15} /> {t('editor.saveAsTemplate')}</button>
-        <button type="button" onClick={() => duplicate(activePlan)}><Copy size={15} /> {t('editor.duplicate')}</button>
-        <button type="button" disabled={Boolean(sharingBusy) || syncError} onClick={() => requestSharing(activePlan)}>{isShared(activePlan.id) ? <Unlink size={15} /> : <Share2 size={15} />}{s(sharingBusy === activePlan.id ? 'sharing' : isShared(activePlan.id) ? 'unshare' : 'share')}</button>
-        <button type="button" onClick={() => updatePlan({ status: activePlan.status === 'completed' ? 'draft' : 'completed' })}><Check size={15} /> {t(activePlan.status === 'completed' ? 'editor.returnToDraft' : 'editor.markCompleted')}</button>
+      </div><div className="lesson-editor-actions">
+        {hasHistory(activePlan.id) && <LessonPlanFeedback schoolId={activeSchoolId} planId={activePlan.id} language={language} disabled={saveState !== 'saved'} />}{hasHistory(activePlan.id) && <button type="button" className="lesson-action-history" onClick={() => setHistoryPlan(activePlan.id)}><History size={15} />{s('history')}<PlanUnreadDot planId={activePlan.id} kind="history" language={language}/></button>}
+        <button type="button" className="lesson-action-tool" onClick={() => makeTemplate(activePlan)}><LayoutTemplate size={15} /> {t('editor.saveAsTemplate')}</button>
+        <button type="button" className="lesson-action-tool" onClick={() => duplicate(activePlan)}><Copy size={15} /> {t('editor.duplicate')}</button>
+        <button type="button" className="lesson-action-share" data-shared={isShared(activePlan.id)} disabled={Boolean(sharingBusy) || syncError} onClick={() => requestSharing(activePlan)}>{isShared(activePlan.id) ? <Unlink size={15} /> : <Share2 size={15} />}{s(sharingBusy === activePlan.id ? 'sharing' : isShared(activePlan.id) ? 'unshare' : 'share')}</button>
+        <button type="button" className="lesson-action-complete" data-completed={activePlan.status === 'completed'} onClick={() => updatePlan({ status: activePlan.status === 'completed' ? 'draft' : 'completed' })}>{activePlan.status === 'completed'?<RotateCcw size={15}/>:<Check size={15} />} {t(activePlan.status === 'completed' ? 'editor.returnToDraft' : 'editor.markCompleted')}</button>
       </div></div>
       <div className="lesson-mobile-pane-switch"><button className={mobilePane === 'editor' ? 'active' : ''} onClick={() => setMobilePane('editor')}>{t('editor.editorTab')}</button><button className={mobilePane === 'preview' ? 'active' : ''} onClick={() => setMobilePane('preview')}>{t('editor.documentTab')}</button></div>
       <div className="lesson-editor-layout">
@@ -808,8 +829,8 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
             language={language}
             notify={notify}
           />
-          <Section id="lesson-basics" title={t('editor.basicsTitle')} subtitle={t('editor.basicsSubtitle')} open={expanded.basics} onToggle={() => toggleSection('basics')}>
-            <div className="lesson-form-grid"><Field label={t('editor.date')}><input type="date" value={activePlan.date || ''} onChange={(event) => updatePlan({ date: event.target.value })} /></Field>
+          <Section id="lesson-basics" title={t('editor.basicsTitle')} subtitle={t('editor.basicsSubtitle')}>
+            <div className="lesson-form-grid"><Field label={t('editor.optionalDate')}><OptionalLessonDate value={activePlan.date||''} language={language} onChange={date=>updatePlan({date})}/></Field>
               <Field label={t('editor.class')}><input list="lesson-class-list" value={activePlan.classLabel || ''} onChange={(event) => changeClass(event.target.value)} placeholder={t('settings.exampleClass')} /><datalist id="lesson-class-list">{unique([...(preferences.assignedClasses || []), preferences.defaultClass, ...schoolClassLabels]).filter(Boolean).map((value) => <option key={value} value={value} />)}</datalist></Field>
               <Field label={t('editor.subject')}><SubjectPicker value={activePlan.subject || ''} onChange={changeSubject} classLabel={activePlan.classLabel} schoolSubjects={schoolSubjects} /></Field>
               <Field label={t('editor.lessonUnit')} className="lesson-grid-wide"><input value={activePlan.lessonUnit || ''} onChange={(event) => updatePlan({ lessonUnit: event.target.value })} placeholder={t('editor.lessonUnitPlaceholder')} /></Field>
@@ -819,30 +840,30 @@ function LessonPlans({ initialView = 'plans', userRole = 'teacher', currentUser 
               <Field label={t('editor.period')}><input value={activePlan.period || ''} onChange={(event) => updatePlan({ period: event.target.value })} placeholder={t('editor.periodPlaceholder')} /></Field>
             </div>
           </Section>
-          <Section id="lesson-general" title={t('editor.generalTitle')} subtitle={t('editor.generalSubtitle')} open={expanded.general} onToggle={() => toggleSection('general')}>
+          <Section id="lesson-general" title={t('editor.generalTitle')} subtitle={t('editor.generalSubtitle')}>
             <Field label={t('editor.topic')} hint={t(topicMatches.length ? 'editor.topicSavedHint' : 'editor.topicNewHint')}><input list="lesson-topic-list" value={activePlan.topic || ''} onChange={(event) => updatePlan({ topic: event.target.value })} onBlur={(event) => { const match = topicMatches.find((topic) => topic.title === event.target.value); if (match) applyTopic(match); }} placeholder={t('editor.topicPlaceholder')} /><datalist id="lesson-topic-list">{topicMatches.map((topic) => <option key={topic.id} value={topic.title} />)}</datalist></Field>
             <RichEditor label={t('editor.topicLearningOutcome')} value={activePlan.topicLearningOutcome} onChange={(value) => updatePlan({ topicLearningOutcome: value })} placeholder={t('editor.topicOutcomePlaceholder')} />
             <ListEditor label={t('editor.competencyOutcomes')} values={activePlan.competencyOutcomes} onChange={(values) => updateArray('competencyOutcomes', values)} placeholder={t('editor.addOutcomePlaceholder')} reusable={reusableFor('competencyOutcomes')} />
             <ListEditor label={t('editor.fieldOutcomes')} values={activePlan.fieldOutcomes} onChange={(values) => updateArray('fieldOutcomes', values)} placeholder={t('editor.addOutcomePlaceholder')} reusable={reusableFor('fieldOutcomes')} />
           </Section>
-          <Section id="lesson-specific" title={t('editor.specificTitle')} subtitle={t('editor.specificSubtitle')} open={expanded.specific} onToggle={() => toggleSection('specific')}>
+          <Section id="lesson-specific" title={t('editor.specificTitle')} subtitle={t('editor.specificSubtitle')}>
             <Field label={t('editor.keywords')}><input value={activePlan.keywords || ''} onChange={(event) => updatePlan({ keywords: event.target.value })} placeholder={t('editor.keywordsPlaceholder')} /></Field>
             <ListEditor label={t('editor.lessonOutcomes')} values={activePlan.lessonOutcomes} onChange={(values) => updateArray('lessonOutcomes', values)} placeholder={t('editor.lessonOutcomePlaceholder')} />
             <ListEditor label={t('editor.successCriteria')} values={activePlan.successCriteria} onChange={(values) => updateArray('successCriteria', values)} placeholder={t('editor.successCriterionPlaceholder')} />
             <RichEditor label={t('editor.resources')} value={activePlan.resources} onChange={(value) => updatePlan({ resources: value })} placeholder={t('editor.resourcesPlaceholder')} reusable={reusableFor('resources')} />
             <RichEditor label={t('editor.crossCurricular')} value={activePlan.crossCurricular} onChange={(value) => updatePlan({ crossCurricular: value })} placeholder={t('editor.crossCurricularPlaceholder')} reusable={reusableFor('crossCurricular')} />
           </Section>
-          <Section id="lesson-methodology" title={t('editor.methodologyTitle')} subtitle={t('editor.methodologySubtitle')} open={expanded.methodology} onToggle={() => toggleSection('methodology')}>
+          <Section id="lesson-methodology" title={t('editor.methodologyTitle')} subtitle={t('editor.methodologySubtitle')}>
             <RichEditor label={t('editor.methodology')} value={activePlan.methodology} onChange={(value) => updatePlan({ methodology: value })} placeholder={t('editor.methodologyPlaceholder')} tall reusable={reusableFor('methodology')} />
           </Section>
-          <Section id="lesson-assessment" title={t('editor.assessmentTitle')} open={expanded.assessment} onToggle={() => toggleSection('assessment')}><RichEditor label={t('editor.assessment')} value={activePlan.assessment} onChange={(value) => updatePlan({ assessment: value })} placeholder={t('editor.assessmentPlaceholder')} reusable={reusableFor('assessment')} /></Section>
-          <Section id="lesson-homework" title={t('editor.homeworkTitle')} open={expanded.homework} onToggle={() => toggleSection('homework')}><RichEditor label={t('editor.homework')} value={activePlan.homework} onChange={(value) => updatePlan({ homework: value })} placeholder={t('editor.homeworkPlaceholder')} /></Section>
-          <Section id="lesson-reflection" title={t('editor.reflectionTitle')} subtitle={t('editor.reflectionSubtitle')} open={expanded.reflection} onToggle={() => toggleSection('reflection')}><RichEditor label={t('editor.reflection')} value={activePlan.reflection} onChange={(value) => updatePlan({ reflection: value })} placeholder={t('editor.reflectionPlaceholder')} /></Section>
+          <Section id="lesson-assessment" title={t('editor.assessmentTitle')}><RichEditor label={t('editor.assessment')} value={activePlan.assessment} onChange={(value) => updatePlan({ assessment: value })} placeholder={t('editor.assessmentPlaceholder')} reusable={reusableFor('assessment')} /></Section>
+          <Section id="lesson-homework" title={t('editor.homeworkTitle')}><RichEditor label={t('editor.homework')} value={activePlan.homework} onChange={(value) => updatePlan({ homework: value })} placeholder={t('editor.homeworkPlaceholder')} /></Section>
+          <Section id="lesson-reflection" title={t('editor.reflectionTitle')} subtitle={t('editor.reflectionSubtitle')}><RichEditor label={t('editor.reflection')} value={activePlan.reflection} onChange={(value) => updatePlan({ reflection: value })} placeholder={t('editor.reflectionPlaceholder')} /></Section>
         </div>
         <div className={`lesson-preview-panel glass ${mobilePane === 'editor' ? 'lesson-mobile-hidden' : ''}`} id="lesson-preview"><div className="lesson-preview-heading"><div><FileText size={18} /><strong>{t('editor.documentPreview')}</strong></div><div className="lesson-preview-controls"><label>{t('editor.pdfLanguage')} <select aria-label={t('editor.pdfLanguage')} value={documentLanguage} onChange={(event) => changeDocumentLanguage(event.target.value)}><option value="sq">Shqip</option><option value="en">English</option></select></label><span>{t('editor.a4Portrait')}</span></div></div><div className="lesson-paper-wrap"><LessonPlanDocument plan={{ ...(activePlan || {}), schoolLogo: settingsDraft?.schoolLogo !== undefined ? settingsDraft.schoolLogo : (activePlan?.schoolLogo || preferences?.schoolLogo) }} language={documentLanguage} showSchoolName={showSchoolName} /></div></div>
       </div>
     </>}
-    {templateSource && <DialogPortal><div className="lesson-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTemplateSource(null); }}><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-template-dialog-title"><h2 id="lesson-template-dialog-title">{t('templates.dialogTitle')}</h2><p>{t('templates.dialogDescription')}</p><label className="lesson-field"><span className="lesson-field-heading">{t('templates.namePrompt')}</span><input autoFocus value={templateName} onChange={(event) => setTemplateName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveTemplate(); if (event.key === 'Escape') setTemplateSource(null); }} /></label><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setTemplateSource(null)}>{t('common.cancel')}</button><button type="button" className="btn-primary" onClick={saveTemplate} disabled={!templateName.trim()}>{t('editor.saveAsTemplate')}</button></div></div></div></DialogPortal>}
+    {templateSource && <DialogPortal><div className="lesson-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTemplateSource(null); }}><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-template-dialog-title"><h2 id="lesson-template-dialog-title">{t('templates.dialogTitle')}</h2><p>{t('templates.dialogDescription')}</p><label className="lesson-field"><span className="lesson-field-heading">{t('templates.namePrompt')}</span><input autoFocus value={templateName} onChange={(event) => setTemplateName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveTemplate(); if (event.key === 'Escape') setTemplateSource(null); }} /></label><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setTemplateSource(null)}>{t('common.cancel')}</button><button type="button" className="btn-primary" onClick={saveTemplate} disabled={auxSaving || !templateName.trim()}>{t('editor.saveAsTemplate')}</button></div></div></div></DialogPortal>}
     {pendingTopic && <DialogPortal><div className="lesson-modal-overlay" role="presentation"><div className="lesson-modal-card glass" role="dialog" aria-modal="true" aria-labelledby="lesson-topic-dialog-title"><h2 id="lesson-topic-dialog-title">{t('confirm.outcomeTitle')}</h2><p>{t('confirm.replaceTopicOutcome')}</p><div className="lesson-modal-actions"><button type="button" className="btn-secondary" onClick={() => setPendingTopic(null)}>{t('confirm.keepOutcome')}</button><button type="button" className="btn-primary" onClick={() => { updatePlan({ topic: pendingTopic.title, topicLearningOutcome: pendingTopic.outcome }); setPendingTopic(null); }}>{t('confirm.useSavedOutcome')}</button></div></div></div></DialogPortal>}
     <div className="lesson-print-only"><LessonPlanDocument plan={{ ...(printTarget?.plan || activePlan || {}), schoolLogo: printTarget?.plan?.schoolLogo || (settingsDraft?.schoolLogo !== undefined ? settingsDraft.schoolLogo : (activePlan?.schoolLogo || preferences?.schoolLogo)) }} language={documentLanguage} showSchoolName={showSchoolName} /></div>
   </div></LessonLanguageContext.Provider>;

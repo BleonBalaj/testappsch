@@ -25,6 +25,8 @@ const PERMISSIBLE_MODULES = [
   { id: 'classes', label: 'Courses & Classes', desc: 'Courses, classes (e.g. 10A) and their rosters', icon: Book },
   { id: 'lesson-plans', label: 'Lesson Planning', desc: 'Lesson preparation & curriculum stages', icon: BookOpen },
   { id: 'tasks', label: 'Tasks & Homework', desc: 'Personal task manager and to-do lists', icon: CheckSquare },
+  { id: 'school-requests', label: 'School Requests', desc: 'Staff supply and repair requests; students never have access', descSq: 'Kërkesat e stafit për pajisje dhe riparime; nxënësit nuk kanë qasje', icon: CheckSquare, staffOnly: true },
+  { id: 'coverage', label: 'Absence & Coverage', desc: 'Teacher absence and substitute lesson arrangements', descSq: 'Mungesat e mësimdhënësve dhe organizimi i zëvendësimeve', icon: Calendar, staffOnly: true },
   { id: 'messages', label: 'Campus Messages', desc: 'Direct messaging and announcement channels', icon: MessageSquare },
   { id: 'students', label: 'Student Directory', desc: 'Student enrollment list and profiles', icon: Users },
   { id: 'staff', label: 'Staff Directory', desc: 'Faculty list and staff contact details', icon: UserSquare2 },
@@ -1084,10 +1086,10 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
             </div>
 
             <div className="permissions-toggle-grid">
-              {PERMISSIBLE_MODULES.map(mod => {
+              {PERMISSIBLE_MODULES.filter(mod => !mod.staffOnly || permTargetRole !== 'student').map(mod => {
                 const isEnabled = (rolePermissions?.[permTargetRole]?.[mod.id] ?? DEFAULT_ROLE_PERMISSIONS[permTargetRole]?.[mod.id]) ?? false;
                 const IconComponent = mod.icon;
-                const moduleKey = mod.id === 'classes' ? 'classes' : mod.id === 'lesson-plans' ? 'lessonPlans' : mod.id === 'mood-insights' ? 'moodInsights' : mod.id;
+                const moduleKey = mod.id === 'classes' ? 'classes' : mod.id === 'school-requests' ? 'schoolRequests' : mod.id === 'lesson-plans' ? 'lessonPlans' : mod.id === 'mood-insights' ? 'moodInsights' : mod.id;
                 const translatedLabel = t(`nav.${moduleKey}`, mod.label);
                 return (
                   <div key={mod.id} className="permission-card glass">
@@ -1097,7 +1099,7 @@ const Settings = ({ addNotification, lessonLanguage = 'en', onNavigate, onLogout
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <strong>{translatedLabel}</strong>
-                        <p>{mod.desc}</p>
+                        <p>{isAlbanian && mod.descSq ? mod.descSq : mod.desc}</p>
                       </div>
                     </div>
                     <Toggle 

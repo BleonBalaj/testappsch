@@ -1,0 +1,5 @@
+.data-read-status { display:flex; align-items:center; gap:.6rem; padding:.75rem 0; margin:0; color:hsl(var(--muted-foreground)); font-size:.85rem; line-height:1.5; }
+.data-read-status > svg { flex-shrink:0; color:hsl(var(--primary)); animation:data-read-spin 1s linear infinite; }
+@keyframes data-read-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .data-read-status > svg { animation:none; } }
+@media screen { html.theme-nature .data-read-status { color:hsl(var(--nature-chrome-muted)); } html.theme-nature .data-read-status > svg { color:hsl(var(--nature-heading)); } }

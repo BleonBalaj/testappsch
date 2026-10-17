@@ -27,3 +27,31 @@ export function buildSchoolRankings(students, courses, records, filter = 'overal
   rankings.sort((a, b) => b.average - a.average || b.gradedCourses - a.gradedCourses || a.name.localeCompare(b.name));
   return rankings.map((item, index) => ({ ...item, rank: index > 0 && item.average === rankings[index - 1].average ? rankings.findIndex(row => row.average === item.average) + 1 : index + 1 }));
 }
+
+/**
+ * Computes candidate overall rankings directly from course records and student IDs
+ * without needing full student profile documents. Useful for 50,000+ student scale
+ * so only top students need their documents fetched from Firestore.
+ */
+export function calculateCandidateRanks(studentIds, courses, records) {
+  const list = [];
+  const coursesById = new Map((courses || []).map(c => [String(c.id), c]));
+  for (const studentId of studentIds) {
+    const grades = [];
+    for (const [courseId, course] of coursesById.entries()) {
+      const record = records[courseId];
+      if (!record) continue;
+      const pct = courseResult(studentId, course, record);
+      if (Number.isFinite(pct)) grades.push(pct);
+    }
+    if (grades.length === 0) continue;
+    const average = Math.round((grades.reduce((sum, pct) => sum + pct, 0) / grades.length) * 10) / 10;
+    list.push({ id: String(studentId), average, gradedCourses: grades.length });
+  }
+  list.sort((a, b) => b.average - a.average || b.gradedCourses - a.gradedCourses || String(a.id).localeCompare(String(b.id)));
+  return list.map((item, index) => ({
+    ...item,
+    rank: index > 0 && item.average === list[index - 1].average ? list.findIndex(row => row.average === item.average) + 1 : index + 1,
+  }));
+}
+

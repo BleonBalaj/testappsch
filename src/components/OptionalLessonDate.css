@@ -1,0 +1,15 @@
+.lesson-date-control { min-width:0; }
+.lesson-date-trigger { display:flex; align-items:center; gap:.6rem; width:100%; min-height:42px; padding:.65rem .8rem; border:1px solid hsl(var(--input)); background:hsl(var(--background)); border-radius:12px; color:hsl(var(--foreground)); font:inherit; font-size:.88rem; text-align:left; }
+.lesson-date-trigger.is-empty { color:hsl(var(--muted-foreground)); }
+.lesson-date-trigger:focus-visible { outline:2px solid hsl(var(--primary)); outline-offset:2px; }
+.lesson-date-popover { position:fixed; display:grid; gap:.65rem; padding:1rem; border:1px solid hsl(var(--border)); border-radius:20px; background:hsl(var(--card)); color:hsl(var(--foreground)); box-shadow:0 12px 36px rgba(0,0,0,.22); overflow-y:auto; box-sizing:border-box; }
+.lesson-date-popover * { box-sizing:border-box; }
+.lesson-date-today { display:flex; align-items:center; justify-content:center; gap:.5rem; padding:.7rem 1rem; border-radius:12px; background:hsl(var(--primary)/.13); color:hsl(var(--primary)); border:1px solid hsl(var(--primary)/.35); font-weight:750; }
+.lesson-date-today:hover { background:hsl(var(--primary)/.23); }
+.lesson-date-popover label { font-size:.8rem; font-weight:650; }
+.lesson-date-popover input { width:100%; min-width:0; padding:.65rem .75rem; border:1px solid hsl(var(--input)); border-radius:12px; background:hsl(var(--background)); color:hsl(var(--foreground)); font:inherit; }
+.lesson-date-actions { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+.lesson-date-actions button { font-size:.8rem; }
+.lesson-date-popover p { font-size:.75rem; line-height:1.5; color:hsl(var(--muted-foreground)); margin:0; }
+.lesson-date-popover :is(button,input):focus-visible { outline:2px solid hsl(var(--primary)); outline-offset:2px; }
+@media print { .lesson-date-popover { display:none!important; } }

@@ -15,7 +15,10 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Avatar } from '../components/Avatar';
 import { db } from '../services/firebase';
-import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import {useScopedCollection} from '../features/schoolWorkflows/cloud';
+import {emptyReadReady} from '../features/liveResource';
+import ReadStatus from '../components/ReadStatus';
 import { isStudentEnrolledInCourse } from '../features/enrollment';
 import { courseResult } from '../features/gradebook/schoolResults';
 import { useCourseRecords } from '../features/gradebook/useCourseRecords';
@@ -66,8 +69,8 @@ const QUOTES_SQ = [
 
 const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const [note, setNote] = useState('');
-  const { moodHistory, addMoodEntry, getTodayMood } = useMood();
-  const { staffList = [], classesList = [], classesLoaded, classesError, classGroups = [], classGroupsLoaded, classGroupsError, eventsList = [], myStudentRecord, studentsVersion } = useSchoolData();
+  const { moodHistory, addMoodEntry, getTodayMood, saving:moodSaving, error:moodError } = useMood();
+  const { staffList = [],staffLoaded,staffError,eventsLoaded,eventsError, classesList = [], classesLoaded, classesError, classGroups = [], classGroupsLoaded, classGroupsError, eventsList = [], myStudentRecord, studentsVersion } = useSchoolData();
   const { currentUser, activeSchool, activeSchoolId } = useAuth();
   const { language, isAlbanian, t } = useLanguage();
   const todayEntry = getTodayMood();
@@ -78,9 +81,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const [pendingMood, setPendingMood] = useState(null);
 
   useEffect(() => {
-    if (todayEntry?.mood) {
-      setVibe(todayEntry.mood);
-    }
+    setVibe(todayEntry?.mood||'');
     if (todayEntry?.note !== undefined) {
       setMoodNote(todayEntry.note);
     }
@@ -90,43 +91,15 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   const isAdmin = userRole === 'admin';
 
   // Student specific tasks & interactive state
-  const [studentTasks, setStudentTasks] = useState([]);
+  const [localStudentTasks, setStudentTasks] = useState([]);
   const [newStudentTaskText, setNewStudentTaskText] = useState('');
-  const [savedNotes, setSavedNotes] = useState([]);
-  const { tasks, moveTask } = useTasks();
-
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-
-    const tasksCol = collection(db, 'users', currentUser.uid, 'studentTasks');
-    const unsubTasks = onSnapshot(tasksCol, (snapshot) => {
-      const items = [];
-      snapshot.forEach(docSnap => {
-        items.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      items.sort((a, b) => (b.createdAt?.toMillis?.() || b.rawTimestamp || 0) - (a.createdAt?.toMillis?.() || a.rawTimestamp || 0));
-      setStudentTasks(items);
-    }, (err) => {
-      console.warn('Notice listening to studentTasks:', err.message);
-    });
-
-    const notesCol = collection(db, 'users', currentUser.uid, 'dashboardNotes');
-    const unsubNotes = onSnapshot(notesCol, (snapshot) => {
-      const notes = [];
-      snapshot.forEach(docSnap => {
-        notes.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      notes.sort((a, b) => (b.createdAt?.toMillis?.() || b.rawTimestamp || 0) - (a.createdAt?.toMillis?.() || a.rawTimestamp || 0));
-      setSavedNotes(notes);
-    }, (err) => {
-      console.warn('Notice listening to dashboardNotes:', err.message);
-    });
-
-    return () => {
-      unsubTasks();
-      unsubNotes();
-    };
-  }, [currentUser?.uid]);
+  const [localNotes, setSavedNotes] = useState([]);
+  const ownTasksRead=useScopedCollection(currentUser?.uid?['users',currentUser.uid,'studentTasks']:null);
+  const notesRead=useScopedCollection(currentUser?.uid?['users',currentUser.uid,'dashboardNotes']:null);
+  const studentTasks=useMemo(()=>currentUser?.uid?[...ownTasksRead.rows].sort((a,b)=>(b.createdAt?.toMillis?.()||b.rawTimestamp||0)-(a.createdAt?.toMillis?.()||a.rawTimestamp||0)):localStudentTasks,[currentUser?.uid,ownTasksRead.rows,localStudentTasks]);
+  const savedNotes=useMemo(()=>currentUser?.uid?[...notesRead.rows].sort((a,b)=>(b.createdAt?.toMillis?.()||b.rawTimestamp||0)-(a.createdAt?.toMillis?.()||a.rawTimestamp||0)):localNotes,[currentUser?.uid,notesRead.rows,localNotes]);
+  const { tasks, moveTask, error:taskError } = useTasks();
+  const [dashboardError,setDashboardError]=useState(null);
 
   const toggleStudentTask = async (id) => {
     const task = studentTasks.find(t => t.id === id);
@@ -138,7 +111,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           completed: nextCompleted
         });
       } catch (err) {
-        console.warn('Error updating student task:', err.message);
+        setDashboardError(err);console.warn('Error updating student task:', err.message);
       }
     } else {
       setStudentTasks(prev => prev.map(t => t.id === id ? { ...t, completed: nextCompleted } : t));
@@ -166,8 +139,9 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
     if (currentUser?.uid) {
       try {
         await setDoc(doc(db, 'users', currentUser.uid, 'studentTasks', taskId), newTask);
+        setNewStudentTaskText(previous=>previous===newTask.text?'':previous);
       } catch (err) {
-        console.warn('Error creating student task in Firestore:', err.message);
+        setDashboardError(err);console.warn('Error creating student task in Firestore:', err.message);
       }
     } else {
       setStudentTasks(prev => [newTask, ...prev]);
@@ -179,7 +153,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       try {
         await deleteDoc(doc(db, 'users', currentUser.uid, 'studentTasks', String(id)));
       } catch (err) {
-        console.warn('Error deleting student task:', err.message);
+        setDashboardError(err);console.warn('Error deleting student task:', err.message);
       }
     } else {
       setStudentTasks(prev => prev.filter(t => t.id !== id));
@@ -201,21 +175,20 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
   };
 
   const handleMoodSelect = (selectedMood) => {
-    setVibe(selectedMood);
+    if(moodSaving)return;
     setPendingMood(selectedMood);
     // Immediately persist selected mood to Firestore Cloud & local state!
     const existingNote = todayEntry?.note || '';
-    addMoodEntry(selectedMood, existingNote);
+    void addMoodEntry(selectedMood, existingNote);
     if (existingNote) {
       setMoodNote(existingNote);
     }
     setIsMoodModalOpen(true);
   };
 
-  const submitMoodNote = () => {
+  const submitMoodNote = async () => {
     const activeVibe = pendingMood || vibe;
-    if (activeVibe) addMoodEntry(activeVibe, moodNote);
-    setIsMoodModalOpen(false);
+    if (activeVibe && await addMoodEntry(activeVibe, moodNote)) setIsMoodModalOpen(false);
   };
 
   const handleDragStart = (e, id) => {
@@ -224,7 +197,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
 
   const handleDrop = (e, status) => {
     const id = e.dataTransfer.getData('taskId');
-    if (id) moveTask(parseInt(id), status);
+    if (id) moveTask(id, status);
   };
 
   const handleDragOver = (e) => { e.preventDefault(); };
@@ -246,8 +219,9 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
     if (currentUser?.uid) {
       try {
         await setDoc(doc(db, 'users', currentUser.uid, 'dashboardNotes', newId), newNote);
+        setNote(previous=>previous.trim()===noteText?'':previous);
       } catch (err) {
-        console.warn('Error saving note to Firestore:', err.message);
+        setDashboardError(err);console.warn('Error saving note to Firestore:', err.message);
       }
     } else {
       setSavedNotes(prev => [newNote, ...prev]);
@@ -259,7 +233,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       try {
         await deleteDoc(doc(db, 'users', currentUser.uid, 'dashboardNotes', String(id)));
       } catch (err) {
-        console.warn('Error deleting note from Firestore:', err.message);
+        setDashboardError(err);console.warn('Error deleting note from Firestore:', err.message);
       }
     } else {
       setSavedNotes(prev => prev.filter(n => n.id !== id));
@@ -374,6 +348,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
       initial="hidden"
       animate="visible"
     >
+      {(dashboardError||moodError||taskError||notesRead.error||ownTasksRead.error)&&<p role="alert" className="workflow-error">{isAlbanian?'Të dhënat nuk u ruajtën ose nuk u ngarkuan. Provoni sërish.':'Data could not be saved or loaded. Please try again.'} {(dashboardError||moodError||taskError||notesRead.error||ownTasksRead.error).message}</p>}
       <header className="dashboard-hero">
         <motion.div className="hero-welcome" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
           <h1 className="gradient-text">
@@ -398,7 +373,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           <motion.div className="mood-widget glass bouncy" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
             <span className="mood-label">{isStudent ? t('dashboard.dailyVibe') : t('dashboard.todaysVibe')}</span>
             <div className="mood-options">
-              <button className={vibe === 'happy' ? 'active' : ''} onClick={() => handleMoodSelect('happy')} title={t('dashboard.great')}><Smile size={20} /></button>
+              <button className={vibe === 'happy' ? 'active' : ''} disabled={moodSaving} onClick={() => handleMoodSelect('happy')} title={t('dashboard.great')}><Smile size={20} /></button>
               <button className={vibe === 'neutral' ? 'active' : ''} onClick={() => handleMoodSelect('neutral')} title={t('dashboard.okay')}><Meh size={20} /></button>
               <button className={vibe === 'sad' ? 'active' : ''} onClick={() => handleMoodSelect('sad')} title={t('dashboard.tough')}><Frown size={20} /></button>
             </div>
@@ -439,7 +414,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
               />
               <div className="modal-actions">
                 <button className="text-btn" onClick={() => setIsMoodModalOpen(false)}>{t('common.skip')}</button>
-                <button className="btn-primary" onClick={submitMoodNote}>
+                <button className="btn-primary" disabled={moodSaving} onClick={submitMoodNote}>
                   <Send size={18} />
                   {t('dashboard.saveNote')}
                 </button>
@@ -467,6 +442,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
         </motion.div>
       </section>
 
+      <ReadStatus state={ownTasksRead} language={isAlbanian?'sq':'en'} loadingText={isAlbanian?'Duke ngarkuar detyrat personale…':'Loading personal tasks…'}/><ReadStatus state={notesRead} language={isAlbanian?'sq':'en'} loadingText={isAlbanian?'Duke ngarkuar shënimet…':'Loading notes…'}/>{(notesRead.error||ownTasksRead.error)&&<button type="button" className="btn-secondary" onClick={()=>{notesRead.retry();ownTasksRead.retry();}}>{isAlbanian?'Provo përsëri':'Try again'}</button>}
       {/* Metrics Cards Grid tailored to role */}
       <section className="stats-grid">
         {isStudent ? (
@@ -479,8 +455,8 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
         ) : isAdmin ? (
           <>
             <StatCard icon={GraduationCap} label={t('dashboard.studentsEnrolled')} value={totalStudents === undefined ? '…' : totalStudents.toLocaleString()} color="--primary" delay={0.1} subtext={t('dashboard.activeStudents')} />
-            <StatCard icon={Users} label={t('dashboard.staffFaculty')} value={staffList.length} color="--accent" delay={0.2} subtext={t('dashboard.facultyRoster')} />
-            <StatCard icon={Star} label={t('dashboard.campusEvents')} value={eventsList.length} color="--chart-1" delay={0.3} subtext={isAlbanian ? 'E Planifikuar' : 'Scheduled'} />
+            <StatCard icon={Users} label={t('dashboard.staffFaculty')} value={staffError?'—':staffLoaded?staffList.length:'…'} color="--accent" delay={0.2} subtext={t('dashboard.facultyRoster')} />
+            <StatCard icon={Star} label={t('dashboard.campusEvents')} value={eventsError?'—':eventsLoaded?eventsList.length:'…'} color="--chart-1" delay={0.3} subtext={isAlbanian ? 'E Planifikuar' : 'Scheduled'} />
             <StatCard label={t('dashboard.subjectsAndClasses')} delay={0.4} metrics={[
               { icon: BookOpen, label: t('dashboard.subjects'), value: classesError ? '—' : classesLoaded ? classesList.length : '…' },
               { icon: School, label: t('dashboard.classes'), value: classGroupsError ? '—' : classGroupsLoaded ? classGroups.length : '…' },
@@ -488,10 +464,10 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
           </>
         ) : (
           <>
-            <StatCard icon={BookOpen} label={t('dashboard.myClasses')} value={teacherClasses.length} color="--primary" delay={0.1} subtext={myHomerooms.length ? `${isAlbanian ? 'Kujdestar i' : 'Homeroom'} ${myHomerooms.map(group => group.label).join(', ')}` : t('dashboard.taughtByYou')} />
+            <StatCard icon={BookOpen} label={t('dashboard.myClasses')} value={classesError?'—':classesLoaded?teacherClasses.length:'…'} color="--primary" delay={0.1} subtext={myHomerooms.length ? `${isAlbanian ? 'Kujdestar i' : 'Homeroom'} ${myHomerooms.map(group => group.label).join(', ')}` : t('dashboard.taughtByYou')} />
             <StatCard icon={Users} label={t('dashboard.totalStudents')} value={totalStudents === undefined ? '…' : totalStudents.toLocaleString()} color="--accent" delay={0.2} subtext={t('dashboard.enrolledRoster')} />
-            <StatCard icon={Presentation} label={t('dashboard.curriculumCourses')} value={classesList.length} color="--chart-1" delay={0.3} subtext={t('dashboard.fullDepartment')} />
-            <StatCard icon={CheckCircle2} label={t('dashboard.upcomingEvents')} value={eventsList.length} color="--mood-happy" delay={0.4} subtext={t('dashboard.schoolCalendar')} />
+            <StatCard icon={Presentation} label={t('dashboard.curriculumCourses')} value={classesError?'—':classesLoaded?classesList.length:'…'} color="--chart-1" delay={0.3} subtext={t('dashboard.fullDepartment')} />
+            <StatCard icon={CheckCircle2} label={t('dashboard.upcomingEvents')} value={eventsError?'—':eventsLoaded?eventsList.length:'…'} color="--mood-happy" delay={0.4} subtext={t('dashboard.schoolCalendar')} />
           </>
         )}
       </section>
@@ -698,7 +674,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
               </div>
             </div>
             <div className="classes-today-list">
-              {teacherClasses.length === 0 ? (
+              {classesLoaded&&!classesError&&teacherClasses.length === 0 ? (
                 <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.88rem' }}>
                   {t('dashboard.noClassesAssigned')}
                 </div>
@@ -793,7 +769,7 @@ const Dashboard = ({ onNavigate, userRole = 'student' }) => {
             </button>
           </div>
           <div className="notes-list">
-            {savedNotes.length === 0 ? (
+            {emptyReadReady(notesRead)&&savedNotes.length === 0 ? (
               <div style={{ padding: '1.5rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem' }}>
                 {t('dashboard.noNotesSaved')}
               </div>

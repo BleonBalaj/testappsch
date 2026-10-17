@@ -1,3 +1,4 @@
+import FilterSelect from '../FilterSelect';
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { Search, Users } from 'lucide-react';
 import { Avatar } from '../Avatar';
@@ -51,9 +52,7 @@ export default function UsersView({ snapshot, range, schoolsById, now, onOpenUse
         </label>
         <label className="padm-select">
           <span>Sort</span>
-          <select className="custom-form-select" value={sort} onChange={event => resetPage(setSort)(event.target.value)}>
-            {USER_SORTS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-          </select>
+          <FilterSelect label="Sort accounts" value={sort} onChange={resetPage(setSort)} options={USER_SORTS.map(option=>({value:option.id,label:option.label}))} />
         </label>
       </div>
       <div className="padm-chips" role="group" aria-label="Filter accounts">

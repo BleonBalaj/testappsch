@@ -6,8 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   collection, doc, documentId, getCountFromServer, getDocs, limit, onSnapshot, or, orderBy, query, startAfter, where,
 } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, auth } from '../../services/firebase';
+import { callWorkflow } from '../schoolWorkflows/cloud';
 import { chooseSearchToken, matchesStudentSearch, normalizeSearchText, searchWordTokens } from './studentSearch';
+import { verifiedSnapshot } from '../liveResource';
 
 export const DIRECTORY_PAGE_SIZE = 30;
 export const SEARCH_RESULT_LIMIT = 100;
@@ -17,37 +19,21 @@ const COUNT_CONCURRENCY = 6;
 const ID_CHUNK = 30; // Firestore's limit for an "in" filter.
 const EXPORT_PAGE_SIZE = 1000;
 
-const CACHE_GRACE_MS = 4000;
-
 const studentsCollection = schoolId => collection(db, 'schools', schoolId, 'students');
 const toStudent = snapshot => ({ id: snapshot.id, ...snapshot.data() });
 const isIndexBuilding = error => error?.code === 'failed-precondition';
-const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 /**
  * onSnapshot that waits for the server's first answer. With the offline cache
  * on, a new query first reports whichever matching records happen to be
- * cached, which can be a few students out of a whole class. That cached
- * answer is used only when offline or when the server is slow to reply.
+ * cached, which can be a few students out of a whole class. A timeout or
+ * offline state cannot make that partial result authoritative.
  */
 function onServerSnapshot(target, onNext, onError) {
-  let delivered = false;
-  let latestCached = null;
-  let timer = null;
-  const deliver = snapshot => { delivered = true; onNext(snapshot); };
-  const unsubscribe = onSnapshot(target, { includeMetadataChanges: true }, snapshot => {
-    if (!delivered && snapshot.metadata.fromCache && !isOffline()) {
-      latestCached = snapshot;
-      if (!timer) timer = setTimeout(() => { timer = null; if (!delivered && latestCached) deliver(latestCached); }, CACHE_GRACE_MS);
-      return;
-    }
-    clearTimeout(timer);
-    timer = null;
-    // Skip metadata-only query updates once the data is showing.
-    if (delivered && typeof snapshot.docChanges === 'function' && snapshot.docChanges().length === 0) return;
-    deliver(snapshot);
+  return onSnapshot(target, { includeMetadataChanges: true }, snapshot => {
+    if (!verifiedSnapshot(snapshot)) return;
+    onNext(snapshot);
   }, onError);
-  return () => { clearTimeout(timer); unsubscribe(); };
 }
 
 // ── Search token ─────────────────────────────────────────────────────────
@@ -313,30 +299,31 @@ export function useStudentSearch(schoolId, term, { max = 20, enabled = true, deb
     const timer = setTimeout(() => setDebounced({ words, term }), words ? debounceMs : 0);
     return () => clearTimeout(timer);
   }, [words, term, debounceMs]);
-  const key = debounced.words && schoolId ? `${schoolId}|${debounced.words}` : '';
+  const key = enabled && debounced.words && schoolId ? JSON.stringify([auth.currentUser?.uid,schoolId,normalizeSearchText(debounced.term),max]) : '';
   const [state, setState] = useState({ key: '', items: [], raw: 0, error: null });
   useEffect(() => {
     if (!key) return undefined;
     let active = true;
-    const students = studentsCollection(schoolId);
-    // First matches in name order; unsorted while the search index builds.
-    pickSearchToken(schoolId, debounced.term)
-      .then(token => getDocs(query(students, where('searchTokens', 'array-contains', token), orderBy('nameLower'), limit(SEARCH_RESULT_LIMIT)))
-        .catch(error => {
-          if (!isIndexBuilding(error)) throw error;
-          return getDocs(query(students, where('searchTokens', 'array-contains', token), limit(SEARCH_RESULT_LIMIT)));
-        }))
-      .then(snapshot => { if (active) setState({ key, items: snapshot.docs.map(toStudent), raw: snapshot.size, error: null }); })
-      .catch(error => { if (active) setState({ key, items: [], raw: 0, error }); });
+    (async()=>{
+      let cursor=null,more=true,items=[];
+      while(active&&more&&items.length<max+1){
+        const response=(await callWorkflow({schoolId,action:'workflowSearch',module:'students',kind:'students',filters:{search:debounced.term,status:'all'},remaining:Math.min(101,max+1-items.length),cursor})).data;
+        if(!active)return;
+        if(response.more&&JSON.stringify(cursor)===JSON.stringify(response.cursor))throw new Error('Student search cursor did not advance.');
+        items.push(...response.rows);cursor=response.cursor;more=response.more;
+      }
+      if(active)setState({key,items,raw:items.length,error:null});
+    })().catch(error=>{if(active)setState({key,items:[],raw:0,error});});
     return () => { active = false; };
-  }, [key, schoolId, debounced.term]);
+  }, [key, schoolId, debounced.term,max]);
   const current = state.key === key ? state : null;
-  const results = useMemo(() => (current
+  const queryCurrent=enabled&&normalizeSearchText(term)===normalizeSearchText(debounced.term);
+  const results = useMemo(() => (current&&queryCurrent
     ? sortStudents(current.items.filter(student => matchesStudentSearch(student, debounced.term))).slice(0, max)
-    : []), [current, debounced.term, max]);
+    : []), [current, debounced.term, max,queryCurrent]);
   return {
     results,
-    loading: Boolean(words) && (words !== debounced.words || !current),
+    loading: Boolean(words) && (!queryCurrent || !current),
     error: current?.error || null,
     capped: Boolean(current && (current.raw >= SEARCH_RESULT_LIMIT || results.length >= max)),
     active: Boolean(words),
@@ -352,19 +339,29 @@ export async function fetchStudentsByIds(schoolId, ids = []) {
   return snapshots.flatMap(snapshot => snapshot.docs.map(toStudent));
 }
 
+const studentsByIdsCache = new Map();
+
 export function useStudentsByIds(schoolId, ids = []) {
   const idsKey = [...new Set(ids.map(String).filter(Boolean))].sort().join('|');
   const key = schoolId && idsKey ? `${schoolId}#${idsKey}` : '';
-  const [state, setState] = useState({ key: '', students: [], error: null });
+  const [state, setState] = useState(() => studentsByIdsCache.get(key) || { key: '', students: [], error: null });
   useEffect(() => {
     if (!key) return undefined;
     let active = true;
     fetchStudentsByIds(schoolId, idsKey.split('|'))
-      .then(students => { if (active) setState({ key, students, error: null }); })
-      .catch(error => { if (active) setState({ key, students: [], error }); });
+      .then(students => {
+        if (!active) return;
+        const nextState = { key, students, error: null };
+        studentsByIdsCache.set(key, nextState);
+        setState(nextState);
+      })
+      .catch(error => {
+        if (!active) return;
+        setState({ key, students: [], error });
+      });
     return () => { active = false; };
   }, [key, schoolId, idsKey]);
-  const current = state.key === key ? state : null;
+  const current = state.key === key ? state : (studentsByIdsCache.get(key) || null);
   const students = useMemo(() => current?.students || [], [current]);
   return { students, loading: Boolean(key) && !current, error: current?.error || null };
 }
@@ -390,7 +387,7 @@ export const countSpecKey = spec => [spec.kind, spec.value ?? '', spec.classGrou
 const countCache = new Map();
 
 export function fetchStudentCount(schoolId, spec, version = 0) {
-  const key = `${schoolId}|${version}|${countSpecKey(spec)}`;
+  const key = `${auth.currentUser?.uid||''}|${schoolId}|${version}|${countSpecKey(spec)}`;
   const cached = countCache.get(key);
   if (cached?.promise) return cached.promise;
   if (cached && Date.now() - cached.at < COUNT_TTL_MS) return Promise.resolve(cached.value);
@@ -402,6 +399,7 @@ export function fetchStudentCount(schoolId, spec, version = 0) {
     })
     .catch(error => { countCache.delete(key); throw error; });
   countCache.set(key, { promise, at: Date.now() });
+  if(countCache.size>300)countCache.delete(countCache.keys().next().value);
   return promise;
 }
 
@@ -450,7 +448,7 @@ export function useStudentCounts(schoolId, specs = [], version = 0) {
  * Every student matching the directory filters, read page by page for a CSV
  * export. Ordered by document id so no composite index is needed.
  */
-export async function fetchStudentsForExport(schoolId, { status = 'all', classGroupId = '', courseId = '', courseClassGroupId = '' } = {}) {
+export async function fetchStudentsForExport(schoolId, { status = 'all', classGroupId = '', courseId = '', courseClassGroupId = '' } = {}, onProgress) {
   const students = studentsCollection(schoolId);
   const filters = { status, classGroupId, courseId, courseClassGroupId };
   if (courseId || classGroupId) {
@@ -461,7 +459,9 @@ export async function fetchStudentsForExport(schoolId, { status = 'all', classGr
     const snapshots = await Promise.all(rosterQueries.map(rosterQuery => getDocs(rosterQuery)));
     const merged = new Map();
     snapshots.forEach(snapshot => snapshot.docs.forEach(item => merged.set(item.id, toStudent(item))));
-    return sortStudents([...merged.values()].filter(student => studentMatchesFilters(student, filters)));
+    const list = sortStudents([...merged.values()].filter(student => studentMatchesFilters(student, filters)));
+    if (typeof onProgress === 'function') onProgress(list.length);
+    return list;
   }
   const constraints = [];
   if (status === 'active' || status === 'archived') constraints.push(where('status', '==', status));
@@ -471,6 +471,7 @@ export async function fetchStudentsForExport(schoolId, { status = 'all', classGr
   for (;;) {
     const page = await getDocs(query(students, ...constraints, orderBy(documentId()), ...(cursor ? [startAfter(cursor)] : []), limit(EXPORT_PAGE_SIZE)));
     all.push(...page.docs.map(toStudent));
+    if (typeof onProgress === 'function') onProgress(all.length);
     if (page.size < EXPORT_PAGE_SIZE) break;
     cursor = page.docs[page.docs.length - 1];
   }

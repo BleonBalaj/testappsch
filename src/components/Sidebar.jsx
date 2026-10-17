@@ -17,6 +17,7 @@ import {
   Library,
   BarChart3,
   GraduationCap,
+  Package, UserRoundCheck,
   LogOut
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -66,6 +67,8 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
     { id: 'lesson-plans', label: t('nav.lessonPlans'), icon: BookOpen, teacherAndAdminOnly: true },
     { id: 'transcript', label: t('nav.transcript'), icon: GraduationCap, studentOnly: true },
     { id: 'tasks', label: t('nav.tasks'), icon: CheckSquare },
+    { id: 'school-requests', label: t('nav.schoolRequests'), icon: Package, staffOnly: true },
+    { id: 'coverage', label: t('nav.coverage'), icon: UserRoundCheck, teacherAndAdminOnly: true },
     { id: 'messages', label: t('nav.messages'), icon: MessageSquare },
     { id: 'students', label: t('nav.students'), icon: Users },
     { id: 'staff', label: t('nav.staff'), icon: UserSquare2 },
@@ -91,6 +94,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
   const visibleMenuItems = menuItems.filter(item => {
     // Settings is always accessible to manage profile
     if (item.id === 'settings') return true;
+    if (item.staffOnly && isStudent) return false;
     if (item.teacherAndAdminOnly && !['admin', 'teacher', 'dept_head'].includes(userRole)) return false;
     
     // Admins always see all management and school areas
@@ -160,6 +164,7 @@ const Sidebar = ({ currentPath, onNavigate, userRole = 'admin', lessonLanguage =
             <Avatar 
               src={currentUser?.photoURL} 
               alt={currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'User')} 
+              size="100%"
             />
           </div>
           {!collapsed && (

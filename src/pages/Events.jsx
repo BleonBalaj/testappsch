@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useLanguage } from '../context/LanguageContext';
+import ReadStatus from '../components/ReadStatus';
 import './Events.css';
 
 const containerVariants = {
@@ -85,7 +86,7 @@ const EventCard = ({ event, onToggleStar, t, isAlbanian }) => (
 );
 
 const Events = ({ userRole = 'student' }) => {
-  const { eventsList = [], addEvent, updateEvent } = useSchoolData();
+  const { eventsList = [], eventsLoaded,eventsError,retrySchoolData,addEvent, updateEvent } = useSchoolData();
   const { t, isAlbanian } = useLanguage();
   const [filter, setFilter] = useState('All');
   const [isNewEventOpen, setIsNewEventOpen] = useState(false);
@@ -217,18 +218,20 @@ const Events = ({ userRole = 'student' }) => {
               className={`filter-pill ${filter === filt ? 'active' : ''}`}
               onClick={() => setFilter(filt)}
             >
-              {getFilterLabel(filt)} {filt === 'All' ? `(${eventsList.length})` : `(${eventsList.filter(e => e.type === filt).length})`}
+              {getFilterLabel(filt)} {!eventsLoaded?'(…)':eventsError?'(—)':filt === 'All' ? `(${eventsList.length})` : `(${eventsList.filter(e => e.type === filt).length})`}
             </button>
           ))}
         </div>
       </motion.div>
 
+      <ReadStatus language={isAlbanian?'sq':'en'} state={{loading:!eventsLoaded,hasLoaded:eventsLoaded,rows:eventsList,error:eventsError}}/>
+      {eventsError&&<p role="alert">{isAlbanian?'Ngjarjet nuk u ngarkuan.':'Events could not be loaded.'} <button className="btn-secondary" onClick={retrySchoolData}>{isAlbanian?'Provo përsëri':'Try again'}</button></p>}
       <motion.div className="events-feed" variants={itemVariants}>
         <AnimatePresence>
           {filteredEvents.map(event => (
             <EventCard key={event.id} event={event} onToggleStar={toggleStar} t={t} isAlbanian={isAlbanian} />
           ))}
-          {filteredEvents.length === 0 && (
+          {eventsLoaded&&!eventsError&&filteredEvents.length === 0 && (
             <motion.div 
               className="empty-state glass"
               initial={{ opacity: 0 }}

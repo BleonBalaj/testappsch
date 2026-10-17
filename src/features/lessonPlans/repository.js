@@ -57,7 +57,7 @@ function writeEnvelope(storage, key, value) {
   storage.setItem(key, JSON.stringify(value));
 }
 
-function saveInCollection(storage, key, initial, collections, collection, item, owner, clock) {
+function saveInCollection(storage, key, initial, collections, collection, item, owner, clock, persist = true) {
   if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError('A record object is required');
   const data = readEnvelope(storage, key, initial, collections, true).data;
   const recordId = compact(item.id) || id();
@@ -67,7 +67,7 @@ function saveInCollection(storage, key, initial, collections, collection, item, 
   const saved = { ...copy(item), id: recordId, ...owner, createdAt: previous?.createdAt ?? item.createdAt ?? stamp, updatedAt: stamp };
   if (index >= 0) data[collection][index] = saved;
   else data[collection].push(saved);
-  writeEnvelope(storage, key, data);
+  if(persist)writeEnvelope(storage, key, data);
   return copy(saved);
 }
 
@@ -100,6 +100,19 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
   const belongsToOwner = (plan) => !ownerUid || !plan.ownerUid || plan.ownerUid === ownerUid;
 
   const api = {
+    mergeCloudCollection(collection, records, { schoolWide = false } = {}) {
+      const allowed=schoolWide?schoolCollections:personalCollections;
+      if(!allowed.includes(collection)||collection==='plans')throw new TypeError('Invalid auxiliary collection');
+      const key=schoolWide?schoolKey:personalKey,initial=schoolWide?initialSchool:initialPersonal;
+      const data=readEnvelope(store,key,initial,allowed,true).data;
+      const accepted=records.filter(record=>record?.id&&(schoolWide||!ownerUid||record.ownerUid===ownerUid));
+      const next=new Map(accepted.map(record=>[String(record.id),copy(record)]));
+      const known=new Set(data.cloudIds?.[collection]||[]);
+      data[collection]=data[collection].filter(record=>!known.has(String(record.id))&&!next.has(String(record.id))&&(!record.ownerUid||schoolWide||record.ownerUid===ownerUid));
+      data[collection].push(...next.values());
+      data.cloudIds={...data.cloudIds,[collection]:[...next.keys()]};
+      writeEnvelope(store,key,data);
+    },
     storageKeys: Object.freeze({ personal: personalKey, school: schoolKey }),
     getStorageStatus() {
       const personal = readPersonal();
@@ -153,7 +166,7 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
       if (!compact(template?.name)) throw new TypeError('Template name is required');
       // Templates are personal records. Clear reflection if the caller provides a full plan.
       const safe = { ...template, plan: template?.plan ? { ...template.plan, reflection: '' } : template?.plan };
-      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'templates', safe, { teacherId: teacher }, stamp);
+      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'templates', safe, { teacherId: teacher, ...(ownerUid?{ownerUid}:{}) }, stamp);
     },
     deleteTemplate(templateId) { return removeFromCollection(store, personalKey, initialPersonal, personalCollections, 'templates', templateId); },
     listReusableEntries(kind) { return copy(readPersonal().data.reusableEntries.filter((entry) => !kind || (entry.kind ?? entry.type) === kind)).sort(byUpdated); },
@@ -161,7 +174,7 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
       const kind = compact(entry?.kind ?? entry?.type);
       const value = compact(entry?.value ?? entry?.text);
       if (!kind || !value) throw new TypeError('Reusable entry kind and value are required');
-      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'reusableEntries', { ...entry, kind, value, type: kind, text: value }, { teacherId: teacher }, stamp);
+      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'reusableEntries', { ...entry, kind, value, type: kind, text: value }, { teacherId: teacher, ...(ownerUid?{ownerUid}:{}) }, stamp);
     },
     deleteReusableEntry(entryId) { return removeFromCollection(store, personalKey, initialPersonal, personalCollections, 'reusableEntries', entryId); },
     listTopics({ subject = '', classLabel = '', query = '', includeSchool = true } = {}) {
@@ -185,7 +198,7 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
         return saveInCollection(store, schoolKey, initialSchool, schoolCollections, 'topics', normalized, { schoolId: school, scope: 'school' }, stamp);
       }
       if (scope !== 'teacher') throw new TypeError('Unknown topic scope');
-      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'topics', normalized, { teacherId: teacher, scope: 'teacher' }, stamp);
+      return saveInCollection(store, personalKey, initialPersonal, personalCollections, 'topics', normalized, { teacherId: teacher, ...(ownerUid?{ownerUid}:{}), scope: 'teacher' }, stamp);
     },
     deleteTopic(topicId, { scope = 'teacher', isAdmin = false } = {}) {
       if (scope === 'school') {
@@ -195,22 +208,22 @@ export function createLessonPlanRepository(teacherId, { storage, schoolId = 'def
       return removeFromCollection(store, personalKey, initialPersonal, personalCollections, 'topics', topicId);
     },
     listSubjectMappings() { return copy(readSchool().data.subjectMappings); },
-    saveSubjectMapping(mapping, { isAdmin = false } = {}) {
+    saveSubjectMapping(mapping, { isAdmin = false, persist = true } = {}) {
       requireAdmin(isAdmin);
       if (!compact(mapping?.name ?? mapping?.subject) || !compact(mapping?.area ?? mapping?.curricularArea)) throw new TypeError('Subject name and curricular area are required');
-      return saveInCollection(store, schoolKey, initialSchool, schoolCollections, 'subjectMappings', { ...mapping, validated: true }, { schoolId: school }, stamp);
+      return saveInCollection(store, schoolKey, initialSchool, schoolCollections, 'subjectMappings', { ...mapping, validated: true }, { schoolId: school }, stamp, persist);
     },
     deleteSubjectMapping(mappingId, { isAdmin = false } = {}) {
       requireAdmin(isAdmin);
       return removeFromCollection(store, schoolKey, initialSchool, schoolCollections, 'subjectMappings', mappingId);
     },
     listStageMappings() { return copy(readSchool().data.stageMappings); },
-    saveStageMapping(mapping, { isAdmin = false } = {}) {
+    saveStageMapping(mapping, { isAdmin = false, persist = true } = {}) {
       requireAdmin(isAdmin);
       if (!compact(mapping?.stage) || (!compact(mapping?.classLabel) && !compact(mapping?.grade) && !(Array.isArray(mapping?.grades) && mapping.grades.length))) {
         throw new TypeError('Stage and class or grade are required');
       }
-      return saveInCollection(store, schoolKey, initialSchool, schoolCollections, 'stageMappings', { ...mapping, validated: true }, { schoolId: school }, stamp);
+      return saveInCollection(store, schoolKey, initialSchool, schoolCollections, 'stageMappings', { ...mapping, validated: true }, { schoolId: school }, stamp, persist);
     },
     deleteStageMapping(mappingId, { isAdmin = false } = {}) {
       requireAdmin(isAdmin);

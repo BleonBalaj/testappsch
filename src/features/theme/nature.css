@@ -118,20 +118,20 @@
   html.theme-nature .student-card { background: var(--nature-card-glass) !important; }
   html.theme-nature .student-card:not(.is-archived):not(:hover) { border-color: var(--nature-glass-border) !important; }
 
-  html.theme-nature :is(.stat-card, .content-card, .focus-card, .bulletin-card, .mood-widget, .student-card, .staff-card, .class-card, .student-class-card, .cg-card, .settings-section, .resource-card, .event-card-large, .not-found-card, .students-controls-container, .staff-controls-container, .events-controls, .lesson-stat-card, .lesson-list-panel, .lesson-settings-card, .lesson-editor-section, .lesson-ai-card, .lesson-preview-panel, .lesson-template-card, .lp-admin-card, .co-widget, .co-table, .sov-widget, .continuous-tracking-card, .week-selector-card, .schedule-filters-container, .schedule-unscheduled, .resources-toolbar, .tasks-progress-wrap, .mood-empty, .chart-card, .login-auth-card, .login-features-card, .padm-card, .chart-section, .history-section, .co-header, .sov-hero, .rankings-list, .podium-base, .task-card, .tstat, .lesson-editor-toolbar, .student-classes-summary-strip, .official-transcript-sheet, .students-empty-state, .empty-staff-state, .empty-classes-card, .empty-resources, .empty-schedule-card, .empty-leaderboard, .empty-state, .role-summary-card, .role-create-pane, .resource-list-item, .overdue-banner, .schedule-source-notice, .classes-view-switch, .classes-controls-bar, .classes-nav-tabs-bar) {
+  html.theme-nature :is(.stat-card, .content-card, .focus-card, .bulletin-card, .mood-widget, .student-card, .staff-card, .class-card, .student-class-card, .cg-card, .settings-section, .resource-card, .event-card-large, .not-found-card, .students-controls-container, .staff-controls-container, .events-controls, .lesson-stat-card, .lesson-list-panel, .lesson-settings-card, .lesson-editor-section, .lesson-ai-card, .lesson-preview-panel, .lesson-template-card, .lp-admin-card, .co-widget, .co-table, .sov-widget, .continuous-tracking-card, .week-selector-card, .schedule-filters-container, .schedule-unscheduled, .schedule-item, .resources-toolbar, .tasks-progress-wrap, .mood-empty, .chart-card, .login-auth-card, .login-features-card, .padm-card, .padm-stat, .chart-section, .history-section, .co-header, .sov-hero, .rankings-list, .podium-base, .task-card, .tstat, .lesson-editor-toolbar, .student-classes-summary-strip, .official-transcript-sheet, .students-empty-state, .empty-staff-state, .empty-classes-card, .empty-resources, .empty-schedule-card, .empty-leaderboard, .empty-state, .workflow-card, .role-summary-card, .role-create-pane, .resource-list-item, .overdue-banner, .schedule-source-notice, .classes-view-switch, .classes-controls-bar, .classes-nav-tabs-bar) {
     background: var(--nature-card-glass);
     border-color: var(--nature-glass-border);
     -webkit-backdrop-filter: var(--nature-card-blur);
     backdrop-filter: var(--nature-card-blur);
     box-shadow: var(--nature-glass-shadow), inset 0 1px 0 var(--nature-glass-highlight);
   }
-  html.theme-nature[data-nature-season="summer"][data-nature-phase="morning"] :is(.stat-card, .content-card, .focus-card, .bulletin-card, .mood-widget, .student-card, .staff-card, .class-card, .student-class-card, .cg-card, .settings-section, .resource-card, .event-card-large, .not-found-card, .students-controls-container, .staff-controls-container, .events-controls, .lesson-stat-card, .lesson-list-panel, .lesson-settings-card, .lesson-editor-section, .lesson-ai-card, .lesson-preview-panel, .lesson-template-card, .lp-admin-card, .co-widget, .co-table, .sov-widget, .continuous-tracking-card, .week-selector-card, .schedule-filters-container, .schedule-unscheduled, .resources-toolbar, .tasks-progress-wrap, .mood-empty, .chart-card, .login-auth-card, .login-features-card, .padm-card, .chart-section, .history-section, .co-header, .sov-hero, .rankings-list, .podium-base, .task-card, .tstat, .lesson-editor-toolbar, .student-classes-summary-strip, .official-transcript-sheet, .students-empty-state, .empty-staff-state, .empty-classes-card, .empty-resources, .empty-schedule-card, .empty-leaderboard, .empty-state, .role-summary-card, .role-create-pane, .resource-list-item, .overdue-banner, .schedule-source-notice, .classes-view-switch, .classes-controls-bar, .classes-nav-tabs-bar) {
+  html.theme-nature[data-nature-season="summer"][data-nature-phase="morning"] :is(.stat-card, .content-card, .focus-card, .bulletin-card, .mood-widget, .student-card, .staff-card, .class-card, .student-class-card, .cg-card, .settings-section, .resource-card, .event-card-large, .not-found-card, .students-controls-container, .staff-controls-container, .events-controls, .lesson-stat-card, .lesson-list-panel, .lesson-settings-card, .lesson-editor-section, .lesson-ai-card, .lesson-preview-panel, .lesson-template-card, .lp-admin-card, .co-widget, .co-table, .sov-widget, .continuous-tracking-card, .week-selector-card, .schedule-filters-container, .schedule-unscheduled, .schedule-item, .resources-toolbar, .tasks-progress-wrap, .mood-empty, .chart-card, .login-auth-card, .login-features-card, .padm-card, .padm-stat, .chart-section, .history-section, .co-header, .sov-hero, .rankings-list, .podium-base, .task-card, .tstat, .lesson-editor-toolbar, .student-classes-summary-strip, .official-transcript-sheet, .students-empty-state, .empty-staff-state, .empty-classes-card, .empty-resources, .empty-schedule-card, .empty-leaderboard, .empty-state, .workflow-card, .role-summary-card, .role-create-pane, .resource-list-item, .overdue-banner, .schedule-source-notice, .classes-view-switch, .classes-controls-bar, .classes-nav-tabs-bar) {
     --nature-card-glass: rgba(221, 236, 229, 0.48);
     --foreground: 210 26% 14%;
     --muted-foreground: 210 14% 30%;
     --nature-heading: 143 34% 25%;
   }
-  html.theme-nature[data-nature-season="summer"][data-nature-phase="golden"] :is(.stat-card, .content-card, .focus-card, .bulletin-card, .mood-widget, .student-card, .staff-card, .class-card, .student-class-card, .cg-card, .settings-section, .resource-card, .event-card-large, .not-found-card, .students-controls-container, .staff-controls-container, .events-controls, .lesson-stat-card, .lesson-list-panel, .lesson-settings-card, .lesson-editor-section, .lesson-ai-card, .lesson-preview-panel, .lesson-template-card, .lp-admin-card, .co-widget, .co-table, .sov-widget, .continuous-tracking-card, .week-selector-card, .schedule-filters-container, .schedule-unscheduled, .resources-toolbar, .tasks-progress-wrap, .mood-empty, .chart-card, .login-auth-card, .login-features-card, .padm-card, .chart-section, .history-section, .co-header, .sov-hero, .rankings-list, .podium-base, .task-card, .tstat, .lesson-editor-toolbar, .student-classes-summary-strip, .official-transcript-sheet, .students-empty-state, .empty-staff-state, .empty-classes-card, .empty-resources, .empty-schedule-card, .empty-leaderboard, .empty-state, .role-summary-card, .role-create-pane, .resource-list-item, .overdue-banner, .schedule-source-notice, .classes-view-switch, .classes-controls-bar, .classes-nav-tabs-bar) {
+  html.theme-nature[data-nature-season="summer"][data-nature-phase="golden"] :is(.stat-card, .content-card, .focus-card, .bulletin-card, .mood-widget, .student-card, .staff-card, .class-card, .student-class-card, .cg-card, .settings-section, .resource-card, .event-card-large, .not-found-card, .students-controls-container, .staff-controls-container, .events-controls, .lesson-stat-card, .lesson-list-panel, .lesson-settings-card, .lesson-editor-section, .lesson-ai-card, .lesson-preview-panel, .lesson-template-card, .lp-admin-card, .co-widget, .co-table, .sov-widget, .continuous-tracking-card, .week-selector-card, .schedule-filters-container, .schedule-unscheduled, .schedule-item, .resources-toolbar, .tasks-progress-wrap, .mood-empty, .chart-card, .login-auth-card, .login-features-card, .padm-card, .padm-stat, .chart-section, .history-section, .co-header, .sov-hero, .rankings-list, .podium-base, .task-card, .tstat, .lesson-editor-toolbar, .student-classes-summary-strip, .official-transcript-sheet, .students-empty-state, .empty-staff-state, .empty-classes-card, .empty-resources, .empty-schedule-card, .empty-leaderboard, .empty-state, .workflow-card, .role-summary-card, .role-create-pane, .resource-list-item, .overdue-banner, .schedule-source-notice, .classes-view-switch, .classes-controls-bar, .classes-nav-tabs-bar) {
     --nature-card-glass: rgba(255, 234, 207, 0.30);
     --nature-card-blur: blur(20px) saturate(130%);
   }
@@ -231,7 +231,7 @@
     backdrop-filter: var(--nature-card-blur);
     box-shadow: var(--nature-glass-shadow), inset 0 1px 0 var(--nature-glass-highlight);
   }
-  html.theme-nature :is(.lesson-language-switch, .lesson-mobile-pane-switch, .lesson-search, .lesson-filters > select, .lesson-filters > input) {
+  html.theme-nature :is(.lesson-language-switch, .lesson-header-actions .lesson-workspace-tabs, .lesson-mobile-pane-switch, .lesson-search, .lesson-filters > select, .lesson-filters > input) {
     background: hsl(var(--nature-control-surface) / var(--nature-control-opacity));
     color: hsl(var(--nature-control-foreground));
     border-color: hsl(var(--nature-control-border) / .55);
@@ -312,7 +312,339 @@
   html.theme-nature .nature-performance-notice { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); z-index: 6500; padding: 1.1rem 3rem 1.1rem 1.25rem; width: min(90vw, 520px); background: hsl(var(--nature-dialog-surface)); border: 1px solid hsl(var(--nature-dialog-border)); border-radius: 18px; box-shadow: var(--nature-glass-shadow); }
   html.theme-nature .nature-performance-notice p { font-size: .82rem; margin-top: .3rem; line-height: 1.5; }
   html.theme-nature .nature-performance-notice button { position: absolute; top: .7rem; right: .7rem; background: none; border: none; color: inherit; font-size: 1.5rem; cursor: pointer; }
+  html.theme-nature :is(.plan-unread-marker,.lesson-history-feedback) { background: hsl(var(--nature-dialog-surface) / .93); color: hsl(var(--foreground)); border-color: hsl(var(--nature-dialog-border) / .6); }
+  html.theme-nature .plan-unread-marker { border-left-color: #df3446; }
+  html.theme-nature .plan-unread-marker button { color: hsl(var(--nature-heading)); }
+  html.theme-nature .plan-unread-dot { background: #db293f; box-shadow: 0 0 0 2px hsl(var(--nature-dialog-surface)); }
+  html.theme-nature[data-nature-phase="night"] .plan-unread-dot { background: #ff788b; }
+  /* Platform administration: same seasonal materials, separate semantic inks. */
+  html.theme-nature :is(.lp-admin-field input,.lp-admin-field .app-filter-trigger) { background: hsl(var(--nature-control-surface) / .94); color: hsl(var(--nature-control-foreground)); border-color: hsl(var(--nature-control-border) / .6); }
+  html.theme-nature .lp-admin-field input::placeholder { color: hsl(var(--nature-control-foreground) / .8); }
+  html.theme-nature :is(.lp-admin-approved,.lp-admin-unapproved) { background: hsl(var(--nature-dialog-surface) / .93); color: hsl(var(--nature-status-archived-ink)); border: 1px solid hsl(var(--nature-dialog-border) / .5); }
+  html.theme-nature .lp-admin-approved { color: hsl(var(--nature-status-completed-ink)); background: color-mix(in srgb,hsl(var(--nature-dialog-surface)) 84%,hsl(var(--nature-status-completed-fill))); }
+  html.theme-nature .lp-admin-record-actions button { background: hsl(var(--nature-control-surface) / .88); color: hsl(var(--nature-control-foreground)); }
+  html.theme-nature .lp-admin-record-actions button:hover { background: hsl(var(--nature-control-hover) / .95); }
+  html.theme-nature .lp-admin-confirm-card.glass { background: hsl(var(--nature-dialog-surface)); border-color: hsl(var(--nature-dialog-border)); }
+  html.theme-nature .padm { background: transparent; --padm-bar: var(--nature-heading); --padm-bar-muted: var(--muted-foreground); --padm-grid: var(--nature-dialog-border); --padm-row-hover: var(--nature-control-hover); --padm-good: var(--nature-status-completed-ink); --padm-warn: var(--nature-status-draft-ink); --padm-info: var(--nature-review-active-ink); --padm-crit: 2 66% 32%; }
+  html.theme-nature[data-nature-phase="night"] .padm { --padm-crit: 3 80% 82%; }
+  html.theme-nature .padm::before, html.theme-nature .padm::after { display: none; }
+  html.theme-nature .padm-nav { background: var(--nature-glass); border-color: var(--nature-glass-border); backdrop-filter: var(--nature-card-blur); -webkit-backdrop-filter: var(--nature-card-blur); }
+  html.theme-nature :is(.padm-identity,.padm-health-item,.padm-health-sample,.padm-fact,.padm-loading) { background: hsl(var(--nature-dialog-surface) / .83); border-color: hsl(var(--nature-dialog-border) / .6); box-shadow: none; }
+  html.theme-nature :is(.padm-chip,.padm-icon-btn,.padm .btn-secondary,.padm-search input) { background: hsl(var(--nature-control-surface) / .94); color: hsl(var(--nature-control-foreground)); border-color: hsl(var(--nature-control-border) / .6); }
+  html.theme-nature :is(.padm-chip,.padm-icon-btn,.padm .btn-secondary):hover:not(:disabled), html.theme-nature .padm-nav-link:hover { background: hsl(var(--nature-control-hover) / .95); color: hsl(var(--nature-control-foreground)); }
+  html.theme-nature .padm-chip.is-active, html.theme-nature .padm-nav-link.is-active { background: hsl(var(--nature-action-surface)); color: hsl(var(--primary-foreground)); border-color: hsl(var(--nature-action-surface)); }
+  html.theme-nature :is(.padm-search input,.padm-chip,.padm-nav-link,.padm-icon-btn):focus-visible { outline: 2px solid hsl(var(--nature-heading)); outline-offset: 2px; }
+  html.theme-nature .padm-search input::placeholder { color: hsl(var(--nature-control-foreground) / .8); }
+  html.theme-nature .padm-select .app-filter-select { min-width: 190px; text-transform: none; letter-spacing: normal; }
+  html.theme-nature .padm-table th, html.theme-nature .padm-table td { border-color: hsl(var(--nature-dialog-border) / .45); }
+  html.theme-nature .padm-table tbody tr:hover, html.theme-nature .padm-list-row:hover:not(:disabled) { background: hsl(var(--nature-control-hover) / .6); }
+  html.theme-nature .padm-tooltip { background: hsl(var(--nature-dialog-surface)); border-color: hsl(var(--nature-dialog-border)); }
+  html.theme-nature .padm-badge { color: hsl(var(--foreground)); background: hsl(var(--nature-dialog-surface) / .93); border: 1px solid hsl(var(--nature-dialog-border) / .5); }
+  html.theme-nature .padm-badge-primary { color: hsl(var(--nature-heading)); }
+  html.theme-nature .padm-badge-warning { color: hsl(var(--padm-warn)); background: color-mix(in srgb,hsl(var(--nature-dialog-surface)) 84%,hsl(var(--nature-status-draft-fill))); }
+  html.theme-nature .padm-badge-critical { color: hsl(var(--padm-crit)); background: color-mix(in srgb,hsl(var(--nature-dialog-surface)) 88%,hsl(var(--padm-crit))); }
+  html.theme-nature .padm-inline-alert { background: hsl(var(--nature-dialog-surface) / .93); border: 1px solid hsl(var(--padm-info) / .4); }
+  html.theme-nature .padm-inline-alert.is-error { border-color: hsl(var(--padm-crit) / .6); }
+  html.theme-nature .padm-inline-alert.is-success { border-color: hsl(var(--padm-good) / .6); }
+  /* Workflow dialogs are solid seasonal reading surfaces. Nested records use
+     stable tints without another frost or page-scale shadow. */
+  html.theme-nature .workflow-dialog { background: linear-gradient(145deg,hsl(var(--nature-dialog-surface)),hsl(var(--nature-dialog-tint))); border-color: hsl(var(--nature-dialog-border)); }
+  html.theme-nature :is(.workflow-record,.workflow-note,.workflow-item-inputs,.workflow-history > article,.workflow-feedback-message,.workflow-deliveries > div) { background: hsl(var(--nature-dialog-surface) / .78); border-color: hsl(var(--nature-dialog-border) / .6); box-shadow: none; }
+  html.theme-nature :is(.workflow-dialog,.workflow-page) :is(.btn-secondary,.workflow-icon), html.theme-nature .workflow-feedback-trigger { background: hsl(var(--nature-control-surface) / .94); border: 1px solid hsl(var(--nature-control-border) / .6); color: hsl(var(--nature-control-foreground)); }
+  html.theme-nature :is(.workflow-dialog,.workflow-page) :is(.btn-secondary,.workflow-icon):hover:not(:disabled), html.theme-nature .workflow-feedback-trigger:hover:not(:disabled) { background: hsl(var(--nature-control-hover) / .98); }
+  html.theme-nature :is(.workflow-page input,.workflow-dialog input,.workflow-dialog textarea,.workflow-search) { background: hsl(var(--nature-control-surface) / .94); color: hsl(var(--nature-control-foreground)); border-color: hsl(var(--nature-control-border) / .6); }
+  html.theme-nature .workflow-search input { background: transparent; color: inherit; }
+  html.theme-nature :is(.workflow-page,.workflow-dialog) input::placeholder, html.theme-nature .workflow-dialog textarea::placeholder { color: hsl(var(--nature-control-foreground) / .8); }
+  html.theme-nature .workflow-status { --workflow-ink: var(--nature-status-archived-ink); --workflow-fill: var(--nature-status-archived-fill); color: hsl(var(--workflow-ink)); background: color-mix(in srgb,hsl(var(--nature-dialog-surface)) 82%,hsl(var(--workflow-fill))); border-color: hsl(var(--workflow-ink) / .36); }
+  html.theme-nature .workflow-status:is([data-status="needed"],[data-status="needs_cover"],[data-status="changes_requested"],[data-status="urgent"]) { --workflow-ink: var(--nature-status-draft-ink); --workflow-fill: var(--nature-status-draft-fill); }
+  html.theme-nature .workflow-status:is([data-status="completed"],[data-status="covered"],[data-status="reviewed"]) { --workflow-ink: var(--nature-status-completed-ink); --workflow-fill: var(--nature-status-completed-fill); }
+  html.theme-nature .workflow-status:is([data-status="partial"],[data-status="in_progress"],[data-status="assigned"],[data-status="resubmitted"]) { --workflow-ink: var(--nature-review-active-ink); --workflow-fill: var(--nature-review-active-fill); }
+  html.theme-nature .workflow-feedback-trigger { border-radius: 999px; padding: .5rem .8rem; }
+  /* Editor actions have different roles: conversation, audit, tools and state.
+     Keep their seasonal reading surfaces while preserving that hierarchy. */
+  html.theme-nature .lesson-page .lesson-editor-actions .workflow-feedback-trigger { background:hsl(var(--nature-action-surface)); color:hsl(var(--primary-foreground)); border-color:hsl(var(--nature-action-surface)); border-radius:12px; }
+  html.theme-nature .lesson-page .lesson-editor-actions .workflow-feedback-trigger:hover:not(:disabled) { background:hsl(var(--nature-action-hover)); color:hsl(var(--primary-foreground)); }
+  html.theme-nature .lesson-editor-actions .lesson-action-history { background:hsl(var(--nature-dialog-surface) / .92); color:hsl(var(--nature-review-active-ink)); border-color:hsl(var(--nature-review-active-ink) / .6); border-radius:12px; box-shadow:none; }
+  html.theme-nature .lesson-editor-actions .lesson-action-tool { background:hsl(var(--nature-control-surface) / .7); border-color:transparent; color:hsl(var(--nature-control-foreground)); border-radius:9px; box-shadow:none; }
+  html.theme-nature .lesson-editor-actions .lesson-action-share { color:hsl(var(--nature-heading)); background:hsl(var(--nature-dialog-surface) / .9); border-color:hsl(var(--nature-heading) / .5); }
+  html.theme-nature .lesson-editor-actions .lesson-action-share[data-shared="true"] { border-style:dashed; color:hsl(var(--nature-chrome-muted)); }
+  html.theme-nature .lesson-editor-actions .lesson-action-complete { color:hsl(var(--nature-status-completed-ink)); background:color-mix(in srgb,hsl(var(--nature-dialog-surface)) 84%,hsl(var(--nature-status-completed-fill))); border-color:hsl(var(--nature-status-completed-ink) / .45); }
+  html.theme-nature .lesson-editor-actions .lesson-action-complete:hover:not(:disabled) { color:hsl(var(--nature-status-completed-ink)); background:color-mix(in srgb,hsl(var(--nature-dialog-surface)) 72%,hsl(var(--nature-status-completed-fill))); }
+  html.theme-nature .lesson-editor-actions .lesson-action-complete[data-completed="true"] { color:hsl(var(--nature-chrome-muted)); background:hsl(var(--nature-control-surface) / .88); border-color:hsl(var(--nature-control-border) / .55); }
+  html.theme-nature .lesson-editor-metadata { color:hsl(var(--nature-chrome-muted)); }
+  html.theme-nature :is(.lesson-date-trigger,.lesson-date-popover input) { background:hsl(var(--nature-control-surface) / .94); color:hsl(var(--nature-control-foreground)); border-color:hsl(var(--nature-control-border) / .6); }
+  html.theme-nature .lesson-date-trigger:hover { background:hsl(var(--nature-control-hover) / .98); }
+  html.theme-nature .lesson-date-popover { background:hsl(var(--nature-dialog-surface)); color:hsl(var(--foreground)); border-color:hsl(var(--nature-dialog-border)); }
+  html.theme-nature .lesson-date-today { color:hsl(var(--nature-heading)); background:hsl(var(--nature-control-surface) / .95); border-color:hsl(var(--nature-control-border) / .6); }
+  html.theme-nature .lesson-date-today:hover { background:hsl(var(--nature-control-hover)); }
+  html.theme-nature .lesson-date-popover p { color:hsl(var(--nature-chrome-muted)); }
+  html.theme-nature .lesson-ai-generation-error { color:hsl(var(--foreground)); background:hsl(var(--nature-dialog-surface) / .96); border-color:hsl(var(--nature-control-border) / .7); }
+  html.theme-nature .lesson-ai-generation-error a { color:hsl(var(--nature-heading)); }
+  html.theme-nature :is(.lesson-date-trigger,.lesson-date-popover button,.lesson-date-popover input):focus-visible { outline-color:hsl(var(--nature-heading)); }
+  html.theme-nature .lesson-history-list > li[data-event-kind="review"] { background:color-mix(in srgb,hsl(var(--nature-dialog-surface)) 92%,hsl(var(--nature-review-active-fill))); border-color:hsl(var(--nature-review-active-ink) / .35); }
+  html.theme-nature .lesson-history-list > li[data-event-kind="system"] { background:hsl(var(--nature-dialog-tint) / .28); border-color:hsl(var(--nature-dialog-border) / .6); }
+  html.theme-nature .lesson-history-list .lesson-history-event-icon { color:hsl(var(--nature-heading)); background:hsl(var(--nature-control-surface) / .8); }
+  html.theme-nature .lesson-history-list > li[data-event-kind="review"] .lesson-history-event-icon { color:hsl(var(--nature-review-active-ink)); background:color-mix(in srgb,hsl(var(--nature-dialog-surface)) 80%,hsl(var(--nature-review-active-fill))); }
+  html.theme-nature .lesson-history-list > li[data-event-kind="comment"] .lesson-history-event-icon { color:hsl(var(--nature-status-completed-ink)); background:color-mix(in srgb,hsl(var(--nature-dialog-surface)) 80%,hsl(var(--nature-status-completed-fill))); }
+  html.theme-nature :is(.lesson-history-status-change,.lesson-history-event-content .lesson-history-reassignment) { color:hsl(var(--nature-chrome-muted)); }
+  html.theme-nature .plan-comments-list .workflow-feedback-message { background:hsl(var(--nature-dialog-tint) / .48); border-color:hsl(var(--nature-dialog-border) / .48); box-shadow:none; backdrop-filter:none; }
+  html.theme-nature .plan-comments-list .workflow-feedback-message.is-mine { border-left-color:hsl(var(--primary)); }
+  html.theme-nature .plan-comments-dialog > footer { background:hsl(var(--nature-dialog-surface)); border-color:hsl(var(--nature-dialog-border) / .5); }
+  html.theme-nature :is(.plan-comments-send > span,.plan-comments-access,.plan-comments-list time,.plan-comments-list header span,.lesson-history-event-heading span,.lesson-history-about,.lesson-version-notice) { color:hsl(var(--nature-chrome-muted)); }
+  html.theme-nature .lesson-version-dialog .workflow-dialog-body { background:hsl(var(--nature-dialog-tint) / .28); }
+  /* Shared lesson plan review heading & reviewer badge in Nature theme */
+  html.theme-nature .lesson-shared-review-heading {
+    background: hsl(var(--nature-dialog-surface) / 0.88);
+    border: 1px solid hsl(var(--nature-dialog-border) / 0.75);
+    border-radius: 20px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    backdrop-filter: var(--nature-card-blur);
+    -webkit-backdrop-filter: var(--nature-card-blur);
+    align-items: center;
+  }
+  html.theme-nature .lesson-shared-review-heading h2 {
+    color: hsl(var(--nature-heading));
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin-bottom: 0.3rem;
+  }
+  html.theme-nature .lesson-shared-review-heading p {
+    color: hsl(var(--nature-chrome-muted));
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 0.45rem;
+  }
+  html.theme-nature .lesson-shared-review-heading .plan-reviewer-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.75rem;
+    border-radius: 10px;
+    background: hsl(var(--nature-dialog-tint) / 0.45);
+    border: 1px solid hsl(var(--nature-dialog-border) / 0.6);
+    color: hsl(var(--nature-control-foreground));
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  html.theme-nature[data-nature-phase="night"] .lesson-shared-review-heading {
+    background: hsl(var(--nature-dialog-surface) / 0.72);
+    border-color: hsl(var(--nature-dialog-border) / 0.6);
+  }
+  /* Tasks done-circle checkbox in Nature theme: crisp contrast against nature backgrounds */
+  html.theme-nature .done-circle {
+    background: hsl(var(--nature-control-surface) / 0.88);
+    border: 2px solid hsl(var(--nature-control-border) / 0.95);
+    color: hsl(var(--nature-control-foreground));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+  html.theme-nature .done-circle:hover {
+    border-color: hsl(var(--nature-heading));
+    background: hsl(var(--nature-control-hover) / 0.95);
+    box-shadow: 0 2px 6px hsl(var(--nature-heading) / 0.2);
+  }
+  html.theme-nature .done-circle.done {
+    background: hsl(var(--nature-action-surface));
+    border-color: hsl(var(--nature-action-surface));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 2px 8px hsl(var(--nature-heading) / 0.25);
+  }
+  /* Task priority badges in Nature theme: high readability across all seasons */
+  html.theme-nature .priority-badge {
+    background: hsl(var(--nature-control-surface) / 0.92);
+    border: 1px solid hsl(var(--nature-control-border) / 0.7);
+    color: hsl(var(--nature-control-foreground));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+  html.theme-nature .priority-badge.priority-low {
+    background: color-mix(in srgb, hsl(var(--nature-dialog-surface)) 78%, #10b981 22%);
+    color: color-mix(in srgb, hsl(var(--foreground)) 50%, #065f46 50%);
+    border-color: color-mix(in srgb, hsl(var(--nature-dialog-border)) 60%, #10b981 40%);
+  }
+  html.theme-nature .priority-badge.priority-medium {
+    background: color-mix(in srgb, hsl(var(--nature-dialog-surface)) 78%, #f59e0b 22%);
+    color: color-mix(in srgb, hsl(var(--foreground)) 45%, #92400e 55%);
+    border-color: color-mix(in srgb, hsl(var(--nature-dialog-border)) 60%, #f59e0b 40%);
+  }
+  html.theme-nature .priority-badge.priority-high {
+    background: color-mix(in srgb, hsl(var(--nature-dialog-surface)) 78%, #ef4444 22%);
+    color: color-mix(in srgb, hsl(var(--foreground)) 45%, #991b1b 55%);
+    border-color: color-mix(in srgb, hsl(var(--nature-dialog-border)) 60%, #ef4444 40%);
+  }
+  html.theme-nature[data-nature-phase="night"] .priority-badge.priority-low {
+    background: hsl(150 45% 44% / .24);
+    color: hsl(153 56% 79%);
+    border-color: hsl(153 56% 79% / .35);
+  }
+  html.theme-nature[data-nature-phase="night"] .priority-badge.priority-medium {
+    background: hsl(38 65% 45% / .24);
+    color: hsl(42 84% 78%);
+    border-color: hsl(42 84% 78% / .35);
+  }
+  html.theme-nature[data-nature-phase="night"] .priority-badge.priority-high {
+    background: hsl(0 65% 45% / .24);
+    color: hsl(0 80% 82%);
+    border-color: hsl(0 80% 82% / .35);
+  }
+  /* Tasks column headers & empty states in Nature theme */
+  html.theme-nature .task-group-header {
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  }
+  html.theme-nature .task-count-badge {
+    background: hsl(var(--nature-control-surface) / 0.9) !important;
+    color: hsl(var(--nature-control-foreground)) !important;
+    border: 1px solid hsl(var(--nature-control-border) / 0.6);
+  }
+  html.theme-nature :is(.group-empty, .kanban-empty) {
+    color: hsl(var(--nature-heading, var(--foreground))) !important;
+    background: hsl(var(--nature-control-surface) / 0.65);
+    border: 1px dashed hsl(var(--nature-control-border) / 0.6);
+    border-radius: 12px;
+    padding: 0.6rem 0.95rem;
+    width: fit-content;
+  }
+  /* ── Schedule & Calendar Readability in Nature theme ── */
+  html.theme-nature .day-selector-container {
+    padding: 0.75rem 0.25rem 1.25rem;
+    gap: 0.85rem;
+  }
+  html.theme-nature .day-btn {
+    background: hsl(var(--nature-dialog-surface) / 0.7) !important;
+    border: 1px solid var(--nature-glass-border) !important;
+    color: hsl(var(--foreground)) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    backdrop-filter: blur(14px) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06), inset 0 1px 0 var(--nature-glass-highlight) !important;
+    font-weight: 700;
+  }
+  html.theme-nature .day-btn:hover {
+    background: hsl(var(--nature-dialog-surface) / 0.9) !important;
+    color: hsl(var(--nature-heading, var(--primary))) !important;
+    border-color: hsl(var(--nature-heading, var(--primary)) / 0.45) !important;
+    transform: translateY(-2px);
+  }
+  html.theme-nature .day-btn.active {
+    background: hsl(var(--nature-dialog-surface) / 0.96) !important;
+    border: 1.5px solid hsl(var(--nature-heading, var(--primary))) !important;
+    color: hsl(var(--nature-heading, var(--primary))) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1), inset 0 1px 0 var(--nature-glass-highlight) !important;
+    font-weight: 800;
+  }
+  html.theme-nature .day-count-badge {
+    background: hsl(var(--nature-control-surface) / 0.85) !important;
+    border: 1px solid var(--nature-glass-border) !important;
+    color: hsl(var(--nature-chrome-muted, var(--muted-foreground))) !important;
+  }
+  html.theme-nature .day-btn.active .day-count-badge {
+    background: hsl(var(--nature-heading, var(--primary)) / 0.18) !important;
+    border-color: hsl(var(--nature-heading, var(--primary)) / 0.45) !important;
+    color: hsl(var(--nature-heading, var(--primary))) !important;
+  }
+  html.theme-nature .timeline-labels {
+    background: hsl(var(--nature-dialog-surface) / 0.72);
+    border: 1px solid var(--nature-glass-border);
+    border-radius: 16px;
+    padding: 1.25rem 0.75rem;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: var(--nature-glass-shadow), inset 0 1px 0 var(--nature-glass-highlight);
+    align-items: center;
+  }
+  html.theme-nature .timeline-labels span {
+    color: hsl(var(--foreground)) !important;
+    font-weight: 800;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+  }
+  html.theme-nature .schedule-item {
+    background: hsl(var(--nature-dialog-surface) / 0.88) !important;
+    border: 1px solid var(--nature-glass-border) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+    backdrop-filter: blur(16px) saturate(140%) !important;
+    box-shadow: var(--nature-glass-shadow), inset 0 1px 0 var(--nature-glass-highlight) !important;
+  }
+  html.theme-nature .schedule-item:hover {
+    background: hsl(var(--nature-dialog-surface) / 0.96) !important;
+    border-color: hsl(var(--nature-heading, var(--primary)) / 0.5) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), inset 0 1px 0 var(--nature-glass-highlight) !important;
+    transform: translateY(-2px);
+  }
+  html.theme-nature .schedule-content h3 {
+    color: hsl(var(--foreground)) !important;
+    font-weight: 800;
+  }
+  html.theme-nature .schedule-item .class-time {
+    color: hsl(var(--foreground)) !important;
+    font-weight: 800;
+  }
+  html.theme-nature .schedule-item .category-tag {
+    background: hsl(var(--nature-heading, var(--primary)) / 0.14) !important;
+    color: hsl(var(--nature-heading, var(--primary))) !important;
+    border: 1px solid hsl(var(--nature-heading, var(--primary)) / 0.28) !important;
+    font-weight: 700;
+  }
+  html.theme-nature .schedule-item .class-room {
+    background: hsl(var(--nature-dialog-tint) / 0.85) !important;
+    color: hsl(var(--foreground)) !important;
+    border: 1px solid var(--nature-glass-border) !important;
+    font-weight: 700;
+  }
+  html.theme-nature .schedule-item .teacher-name {
+    color: hsl(var(--nature-chrome-muted, var(--muted-foreground))) !important;
+    font-weight: 600;
+  }
+  html.theme-nature .schedule-segmented-toggle {
+    background: hsl(var(--nature-dialog-surface) / 0.7) !important;
+    border: 1px solid var(--nature-glass-border) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    backdrop-filter: blur(14px) !important;
+  }
+  html.theme-nature .segmented-tab {
+    color: hsl(var(--nature-chrome-muted, var(--muted-foreground)));
+    font-weight: 700;
+  }
+  html.theme-nature .segmented-tab:hover {
+    background: hsl(var(--nature-dialog-surface) / 0.88);
+    color: hsl(var(--foreground));
+  }
+  html.theme-nature .segmented-tab.active {
+    background: hsl(var(--nature-heading, var(--primary))) !important;
+    color: #ffffff !important;
+    box-shadow: 0 3px 12px hsl(var(--nature-heading, var(--primary)) / 0.35);
+  }
+  html.theme-nature .schedule-filters-container label {
+    color: hsl(var(--nature-heading, var(--foreground))) !important;
+    font-weight: 800;
+  }
+  html.theme-nature .type-toggle-pills {
+    background: hsl(var(--nature-control-surface) / 0.6) !important;
+    border: 1px solid var(--nature-glass-border) !important;
+  }
+  html.theme-nature .type-pill {
+    color: hsl(var(--nature-chrome-muted, var(--muted-foreground)));
+    font-weight: 700;
+  }
+  html.theme-nature .type-pill.active {
+    background: hsl(var(--nature-heading, var(--primary))) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px hsl(var(--nature-heading, var(--primary)) / 0.35);
+  }
+  html.theme-nature .event-date-box {
+    background: hsl(var(--nature-dialog-surface) / 0.88) !important;
+    border: 1px solid var(--nature-glass-border) !important;
+  }
+  html.theme-nature .event-date-box .event-month {
+    color: hsl(var(--nature-heading, var(--primary))) !important;
+    font-weight: 800;
+  }
+  html.theme-nature .event-date-box .event-day {
+    color: hsl(var(--foreground)) !important;
+    font-weight: 800;
+  }
   @media (prefers-reduced-transparency: reduce) {
     html.theme-nature :is(.glass, .student-card, .staff-card, .class-card, .login-features-card, .sidebar) { background: var(--nature-glass-strong) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
   }
 }
+

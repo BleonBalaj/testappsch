@@ -8,6 +8,8 @@ export const PAGE_PATHS = Object.freeze({
   'lesson-plans-settings': '/lesson-plans/settings',
   transcript: '/transcript',
   tasks: '/tasks',
+  'school-requests': '/school-requests',
+  coverage: '/coverage',
   messages: '/messages',
   students: '/students',
   staff: '/staff',

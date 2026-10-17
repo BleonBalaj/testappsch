@@ -197,12 +197,38 @@
   overflow: hidden;
   background: hsl(var(--secondary));
   border: 2px solid hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.avatar .blank-person-avatar,
+.avatar .avatar-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  border-radius: inherit !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+}
+
+.avatar .blank-avatar-svg {
+  width: 22px !important;
+  height: 22px !important;
+  margin: auto !important;
+  display: block !important;
 }
 
 .user-name {

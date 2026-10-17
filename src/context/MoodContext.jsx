@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { collection, doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { collection, doc, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './AuthContext';
 import { MOODS, localDateKey } from '../features/moods';
@@ -7,12 +7,15 @@ import { MOODS, localDateKey } from '../features/moods';
 const MoodContext = createContext();
 
 export const MoodProvider = ({ children }) => {
-  const { currentUser, activeSchoolId } = useAuth();
+  const { currentUser, activeSchoolId, activeSchool, currentRole } = useAuth();
+  const [saving,setSaving]=useState(false),[error,setError]=useState(null);
+  const running=useRef(false),account=useRef(currentUser?.uid);account.current=currentUser?.uid;
   const [moodHistory, setMoodHistory] = useState(() => {
     try {
       if (currentUser?.uid) {
         const cached = localStorage.getItem(`lumi-cached-moods-${currentUser.uid}`);
-        return cached ? JSON.parse(cached) : [];
+        const parsed=cached?JSON.parse(cached):[];
+        return Array.isArray(parsed)?parsed.filter(entry=>entry&&MOODS.includes(entry.mood)&&typeof entry.date==='string'):[];
       }
       return [];
     } catch {
@@ -21,13 +24,14 @@ export const MoodProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid) {setMoodHistory([]);return;}
 
     // Load initial cache for this user
     try {
       const cached = localStorage.getItem(`lumi-cached-moods-${currentUser.uid}`);
       if (cached) {
-        setMoodHistory(JSON.parse(cached));
+        const parsed=JSON.parse(cached);
+        setMoodHistory(Array.isArray(parsed)?parsed.filter(entry=>entry&&MOODS.includes(entry.mood)&&typeof entry.date==='string'):[]);
       }
     } catch { /* Ignore an invalid local cache and use the cloud snapshot. */ }
 
@@ -43,6 +47,7 @@ export const MoodProvider = ({ children }) => {
         localStorage.setItem(`lumi-cached-moods-${currentUser.uid}`, JSON.stringify(moods));
       } catch { /* Ignore an invalid local cache and use the cloud snapshot. */ }
     }, (err) => {
+      setMoodHistory([]);setError(err);
       console.warn('Notice listening to moods:', err.message);
     });
 
@@ -63,46 +68,20 @@ export const MoodProvider = ({ children }) => {
       note: cleanNote 
     };
 
-    // Optimistically update local state
-    setMoodHistory(prev => {
-      const filtered = prev.filter(item => item.date !== today);
-      const updated = [newEntry, ...filtered];
-      if (currentUser?.uid) {
-        try {
-          localStorage.setItem(`lumi-cached-moods-${currentUser.uid}`, JSON.stringify(updated));
-        } catch { /* Storage is optional; Firestore remains the source of truth. */ }
-      }
-      return updated;
-    });
+    if(!currentUser?.uid||running.current)return false;
+    const uid=currentUser.uid;
+    running.current=true;setSaving(true);setError(null);
+    try {
+      const batch=writeBatch(db);
+      batch.set(doc(db,'users',uid,'moods',today),{...newEntry,updatedAt:serverTimestamp()},{merge:true});
+      const audience=currentRole==='student'?'student':'teacher';
+      if(activeSchoolId&&(currentRole==='admin'||activeSchool?.rolePermissions?.[audience]?.['mood-insights']!==false))batch.set(doc(db,'schools',activeSchoolId,'moodEntries',uid+'_'+today),{id:uid+'_'+today,userId:uid,userName:currentUser.displayName||'School Member',mood:cleanMood,date:today,updatedAt:serverTimestamp()},{merge:true});
+      await batch.commit();
+      if(account.current===uid)setMoodHistory(previous=>{const next=[newEntry,...previous.filter(entry=>entry.date!==today)];try{localStorage.setItem('lumi-cached-moods-'+uid,JSON.stringify(next));}catch{/* Optional cache. */}return next;});
+      return true;
+    }catch(error){if(account.current===uid)setError(error);return false;}
+    finally{running.current=false;if(account.current===uid)setSaving(false);}
 
-    // Persist to Firestore Cloud in real-time
-    if (currentUser?.uid) {
-      try {
-        const moodDocRef = doc(db, 'users', currentUser.uid, 'moods', today);
-        await setDoc(moodDocRef, {
-          id: today,
-          date: today,
-          mood: cleanMood,
-          note: cleanNote,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-
-        // If school is active, record in school mood entries collection
-        if (activeSchoolId) {
-          const schoolMoodRef = doc(db, 'schools', activeSchoolId, 'moodEntries', `${currentUser.uid}_${today}`);
-          await setDoc(schoolMoodRef, {
-            id: `${currentUser.uid}_${today}`,
-            userId: currentUser.uid,
-            userName: currentUser.displayName || 'School Member',
-            mood: cleanMood,
-            date: today,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        }
-      } catch (err) {
-        console.error('Error saving mood to Firestore:', err);
-      }
-    }
   };
 
   const getTodayMood = () => {
@@ -111,7 +90,7 @@ export const MoodProvider = ({ children }) => {
   };
 
   return (
-    <MoodContext.Provider value={{ moodHistory, addMoodEntry, getTodayMood }}>
+    <MoodContext.Provider value={{ moodHistory, addMoodEntry, getTodayMood, saving, error }}>
       {children}
     </MoodContext.Provider>
   );

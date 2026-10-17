@@ -1,3 +1,4 @@
+import FilterSelect from '../FilterSelect';
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { AlertTriangle, School as SchoolIcon, Search } from 'lucide-react';
 import { Card, EmptyState, Pagination } from './shared';
@@ -45,9 +46,7 @@ export default function SchoolsView({ snapshot, range, activity, now, onOpenScho
         </label>
         <label className="padm-select">
           <span>Sort</span>
-          <select className="custom-form-select" value={sort} onChange={event => { setSort(event.target.value); setPage(1); }}>
-            {SORTS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-          </select>
+          <FilterSelect label="Sort schools" value={sort} onChange={value=>{setSort(value);setPage(1);}} options={SORTS.map(option=>({value:option.id,label:option.label}))} />
         </label>
       </div>
 

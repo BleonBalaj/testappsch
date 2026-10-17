@@ -11,7 +11,7 @@ export default function LessonSharingDialog({ title, children, side = false, onC
     const onKey = event => {
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); }
       if (event.key !== 'Tab') return;
-      const elements = [...ref.current.querySelectorAll('button:not(:disabled), input, select, textarea, a[href], summary, [tabindex="0"]')];
+      const elements = [...ref.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], summary, [tabindex="0"]')].filter(element=>element.getClientRects().length);
       const first = elements[0], last = elements.at(-1);
       if (!elements.length) { event.preventDefault(); return; }
       if (event.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { event.preventDefault(); last.focus(); }

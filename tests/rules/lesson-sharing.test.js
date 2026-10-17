@@ -26,10 +26,25 @@ beforeEach(async () => {
 });
 async function setupShared() {
   const db = as(teacher);
+  await env.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),'schools/s1/lessonPlanReviews/p1'),{ownerUid:'teacher',reviewerUid:'admin',reviewerName:'Administrator',reviewerEmail:'admin@school.test',revision:1}));
   await writeOwnedLessonPlan(db, plan, 's1', teacher);
   await setPlanShared(db, 's1', plan.id, teacher, true);
   return { db, adb: as(admin), record: (await getDoc(ref(as(admin), 'lessonPlanInbox'))).data() };
 }
+
+test('undated plans can be saved and shared, and clearing a selected date updates the inbox and preserves both immutable versions',async()=>{
+ const db=as(teacher),adb=as(admin),undated={...plan,date:''};
+ await assertSucceeds(writeOwnedLessonPlan(db,undated,'s1',teacher));
+ await assertSucceeds(setPlanShared(db,'s1',plan.id,teacher,true));
+ assert.equal((await getDoc(ref(adb,'lessonPlanInbox'))).data().lessonDate,'');
+ await assertSucceeds(writeOwnedLessonPlan(db,{...plan,date:'2026-10-17'},'s1',teacher));
+ assert.equal((await getDoc(ref(adb,'lessonPlanInbox'))).data().lessonDate,'2026-10-17');
+ await assertSucceeds(writeOwnedLessonPlan(db,undated,'s1',teacher));
+ assert.equal((await getDoc(ref(adb,'lessonPlanInbox'))).data().lessonDate,'');
+ const versions=await getDocs(collection(db,'schools/s1/lessonPlanReviewHistory/p1/events'));
+ assert.equal(versions.size,3);assert.equal(versions.docs.filter(row=>row.data().plan.date==='').length,2);
+ assert.equal(versions.docs.filter(row=>row.data().plan.date==='2026-10-17').length,1);
+});
 
 test('author and admin history readers paginate equal timestamps accurately and receive new live events after loading older pages', { timeout: 15000 }, async () => {
   await setupShared();
@@ -63,6 +78,20 @@ test('author and admin history readers paginate equal timestamps accurately and 
       finally { clearTimeout(timeout); }
       assert.equal(state.rows.length, expected.length + 1);
       assert.equal(new Set(state.rows.map(row => row.eventId)).size, state.rows.length);
+      // A closed drawer retains verified pages and reconnects to events that
+      // arrived while it was closed, for both author and administrator.
+      reader.pause();const retained=reader.snapshot().rows.length;
+      assert.equal(reader.snapshot().refreshing,true);
+      const closedId=`closed-${user.uid}`;
+      await env.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),`schools/s1/lessonPlanReviewHistory/p1/events/${closedId}`),{
+        action:'update',actorUid:teacher.uid,at:new Timestamp(2600000000,123456000),plan,
+      }));
+      const reopened=new Promise(resolve=>{resolveLive=()=>{if(state.rows.some(row=>row.eventId===closedId))resolve();};});
+      await reader.start();assert.equal(reader.snapshot().loading,false);assert.equal(reader.snapshot().rows.length,retained);
+      try{await Promise.race([reopened,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('No history update after reopening')),5000);})]);}
+      finally{clearTimeout(timeout);}
+      assert.equal(state.rows.length,retained+1);
+      assert.equal(state.rows.find(row=>row.eventId===closedId).at.nanoseconds,123456000);
     } finally { reader.dispose(); }
   }
 });
@@ -96,6 +125,7 @@ test('actual share transaction publishes an inbox item and immutable history; ad
 });
 test('archive, unshare, reshare automatically reopens the inbox and logs the user and system separately', async () => {
   const { db, adb, record } = await setupShared();
+  await reviewSharedPlan(adb, 's1', record, admin, 'reviewing');
   await reviewSharedPlan(adb, 's1', record, admin, 'archived');
   assert.equal((await getDoc(ref(adb, 'lessonPlanInbox'))).data().reviewStatus, 'archived');
   assert.equal((await getDoc(ref(db, 'lessonPlans'))).data().status, 'draft');
@@ -103,7 +133,7 @@ test('archive, unshare, reshare automatically reopens the inbox and logs the use
   assert.equal((await getDoc(ref(adb, 'lessonPlanInbox'))).exists(), false);
   await assertFails(getDoc(ref(adb, 'lessonPlans')));
   const before = await getDocs(collection(db, 'schools/s1/lessonPlanReviewHistory/p1/events'));
-  assert.equal(before.size, 3);
+  assert.equal(before.size, 4);
   await setPlanShared(db, 's1', plan.id, teacher, true);
   const newRecord = (await getDoc(ref(adb, 'lessonPlanInbox'))).data();
   assert.equal(newRecord.reviewStatus, 'pending');
@@ -117,6 +147,7 @@ test('archive, unshare, reshare automatically reopens the inbox and logs the use
 });
 test('editing a shared archived plan reopens review and records the exact new version; stale reviews cannot archive it', async () => {
   const { db, adb, record } = await setupShared();
+  await reviewSharedPlan(adb, 's1', record, admin, 'reviewing');
   await reviewSharedPlan(adb, 's1', record, admin, 'archived');
   const changed = { ...plan, lessonUnit: 'Counting sets', updatedAt: '2026-10-16T12:30:00Z' };
   await writeOwnedLessonPlan(db, changed, 's1', teacher);

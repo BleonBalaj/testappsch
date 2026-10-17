@@ -1,4 +1,5 @@
 import DialogPortal from '../components/DialogPortal';
+import FilterSelect from '../components/FilterSelect';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { BookOpen, Layers3, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { CURRICULAR_AREAS, parseClassLabel } from '../features/lessonPlans';
@@ -190,36 +191,19 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
   const [subjectError, setSubjectError] = useState('');
   const [stageError, setStageError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const writeRef=useRef({busy:false,ids:{}});
 
-  // Real-time synchronization of curriculum mappings from Firestore
-  useEffect(() => {
-    if (!activeSchoolId) return;
-
-    const subCol = collection(db, 'schools', activeSchoolId, 'subjectMappings');
-    const unsubSub = onSnapshot(subCol, (snap) => {
-      snap.forEach(docSnap => {
-        try {
-          repository.saveSubjectMapping({ id: docSnap.id, ...docSnap.data() }, { isAdmin: true });
-        } catch { /* Ignore invalid mapping records and keep the valid ones. */ }
-      });
-      setSubjects(repository.listSubjectMappings());
-    }, (err) => console.warn('Subject mappings cloud sync notice:', err.message));
-
-    const stageCol = collection(db, 'schools', activeSchoolId, 'stageMappings');
-    const unsubStage = onSnapshot(stageCol, (snap) => {
-      snap.forEach(docSnap => {
-        try {
-          repository.saveStageMapping({ id: docSnap.id, ...docSnap.data() }, { isAdmin: true });
-        } catch { /* Ignore invalid mapping records and keep the valid ones. */ }
-      });
-      setStages(repository.listStageMappings());
-    }, (err) => console.warn('Stage mappings cloud sync notice:', err.message));
-
-    return () => {
-      unsubSub();
-      unsubStage();
-    };
-  }, [activeSchoolId, repository]);
+  useEffect(()=>{
+    if(!activeSchoolId)return;
+    let active=true;
+    const listen=(kind,set,list,error)=>onSnapshot(collection(db,'schools',activeSchoolId,kind),{includeMetadataChanges:true},snapshot=>{
+      if(!active||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites)return;
+      try{repository.mergeCloudCollection(kind,snapshot.docs.map(doc=>({...doc.data(),id:doc.id})),{schoolWide:true});set(repository[list]());}catch(problem){error(problem.message);}
+    },problem=>{if(active)error(problem.message);});
+    const offSub=listen('subjectMappings',setSubjects,'listSubjectMappings',setSubjectError),offStage=listen('stageMappings',setStages,'listStageMappings',setStageError);
+    return()=>{active=false;offSub();offStage();};
+  },[activeSchoolId,repository]);
 
   const closeConfirmation = () => {
     setConfirmDelete(null);
@@ -267,8 +251,10 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
     setStageError('');
   };
 
-  const saveSubject = (event) => {
+  const saveSubject = async (event) => {
     event.preventDefault();
+    if(writeRef.current.busy)return;
+    writeRef.current.busy=true;setSaving(true);
     try {
       const name = subjectDraft.name.trim();
       if (!name) throw validationError(t('subjectNameRequired'));
@@ -279,6 +265,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
       const previous = subjects.find((record) => record.id === editingSubjectId);
       const saved = repository.saveSubjectMapping({
         ...(previous ?? {}),
+        id: previous?.id || (writeRef.current.ids.subject ||= crypto.randomUUID()),
         name,
         area: subjectDraft.area,
         aliases: splitValues(subjectDraft.aliases),
@@ -286,21 +273,24 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
         classes: subjectDraft.scope === 'classes' ? targets : [],
         active: subjectDraft.active,
         validated: true,
-      }, { isAdmin: true });
+      }, { isAdmin: true, persist: false });
       if (activeSchoolId && saved?.id) {
-        setDoc(doc(db, 'schools', activeSchoolId, 'subjectMappings', String(saved.id)), saved, { merge: true }).catch(() => {});
+        await setDoc(doc(db, 'schools', activeSchoolId, 'subjectMappings', String(saved.id)), JSON.parse(JSON.stringify(saved)), { merge: true });
       }
+      repository.saveSubjectMapping(saved,{isAdmin:true});writeRef.current.ids.subject=null;
       const wasEditing = Boolean(editingSubjectId);
       resetSubject();
       refresh();
       notify?.(t(wasEditing ? 'subjectUpdated' : 'subjectAdded'));
     } catch (error) {
       setSubjectError(error.isAdminValidation ? error.message : t('subjectSaveFailed'));
-    }
+    } finally {writeRef.current.busy=false;setSaving(false);}
   };
 
-  const saveStage = (event) => {
+  const saveStage = async (event) => {
     event.preventDefault();
+    if(writeRef.current.busy)return;
+    writeRef.current.busy=true;setSaving(true);
     try {
       const parsed = parseClassLabel(stageDraft.target.trim());
       if (!parsed || (stageDraft.scope === 'grade' && parsed.section) || (stageDraft.scope === 'class' && !parsed.section)) {
@@ -317,57 +307,64 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
       const previous = stages.find((record) => record.id === editingStageId);
       const saved = repository.saveStageMapping({
         ...(previous ?? {}),
+        id: previous?.id || (writeRef.current.ids.stage ||= crypto.randomUUID()),
         grade: stageDraft.scope === 'grade' ? parsed.gradeLabel : undefined,
         classLabel: stageDraft.scope === 'class' ? parsed.classLabel : '',
         grades: [],
         stage,
         validated: true,
-      }, { isAdmin: true });
+      }, { isAdmin: true, persist: false });
       if (activeSchoolId && saved?.id) {
-        setDoc(doc(db, 'schools', activeSchoolId, 'stageMappings', String(saved.id)), saved, { merge: true }).catch(() => {});
+        await setDoc(doc(db, 'schools', activeSchoolId, 'stageMappings', String(saved.id)), JSON.parse(JSON.stringify(saved)), { merge: true });
       }
+      repository.saveStageMapping(saved,{isAdmin:true});writeRef.current.ids.stage=null;
       const wasEditing = Boolean(editingStageId);
       resetStage();
       refresh();
       notify?.(t(wasEditing ? 'stageUpdated' : 'stageAdded'));
     } catch (error) {
       setStageError(error.isAdminValidation ? error.message : t('stageSaveFailed'));
-    }
+    } finally {writeRef.current.busy=false;setSaving(false);}
   };
 
-  const removeSubject = (record) => {
+  const removeSubject = async (record) => {
     try {
-      repository.deleteSubjectMapping(record.id, { isAdmin: true });
       if (activeSchoolId && record?.id) {
-        deleteDoc(doc(db, 'schools', activeSchoolId, 'subjectMappings', String(record.id))).catch(() => {});
+        await deleteDoc(doc(db, 'schools', activeSchoolId, 'subjectMappings', String(record.id)));
       }
+      repository.deleteSubjectMapping(record.id, { isAdmin: true });
       if (editingSubjectId === record.id) resetSubject();
       refresh();
       notify?.(t('subjectRemoved'));
+      return true;
     } catch {
       setSubjectError(t('subjectRemoveFailed'));
+      return false;
     }
   };
 
-  const removeStage = (record) => {
+  const removeStage = async (record) => {
     try {
-      repository.deleteStageMapping(record.id, { isAdmin: true });
       if (activeSchoolId && record?.id) {
-        deleteDoc(doc(db, 'schools', activeSchoolId, 'stageMappings', String(record.id))).catch(() => {});
+        await deleteDoc(doc(db, 'schools', activeSchoolId, 'stageMappings', String(record.id)));
       }
+      repository.deleteStageMapping(record.id, { isAdmin: true });
       if (editingStageId === record.id) resetStage();
       refresh();
       notify?.(t('stageRemoved'));
+      return true;
     } catch {
       setStageError(t('stageRemoveFailed'));
+      return false;
     }
   };
 
-  const confirmRemoval = () => {
-    if (!confirmDelete) return;
-    if (confirmDelete.kind === 'subject') removeSubject(confirmDelete.record);
-    else removeStage(confirmDelete.record);
-    closeConfirmation();
+  const confirmRemoval = async () => {
+    if (!confirmDelete || writeRef.current.busy) return;
+    writeRef.current.busy=true;setSaving(true);
+    try{const removed=confirmDelete.kind==='subject'?await removeSubject(confirmDelete.record):await removeStage(confirmDelete.record);
+      if(removed)closeConfirmation();
+    }finally{writeRef.current.busy=false;setSaving(false);}
   };
 
   return (
@@ -389,17 +386,11 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
             </label>
             <label className="lp-admin-field">
               <span>{t('curricularArea')}</span>
-              <select value={subjectDraft.area} onChange={(event) => setSubjectDraft({ ...subjectDraft, area: event.target.value })}>
-                {CURRICULAR_AREAS.map((area) => <option key={area} value={area}>{translateCatalogValue(language, area)}</option>)}
-              </select>
+              <FilterSelect label={t('curricularArea')} value={subjectDraft.area} onChange={area => setSubjectDraft({ ...subjectDraft, area })} options={CURRICULAR_AREAS.map(area => ({value:area,label:translateCatalogValue(language,area)}))} />
             </label>
             <label className="lp-admin-field">
               <span>{t('scope')}</span>
-              <select value={subjectDraft.scope} onChange={(event) => setSubjectDraft({ ...subjectDraft, scope: event.target.value, targets: '' })}>
-                <option value="all">{t('allClasses')}</option>
-                <option value="grades">{t('byGrade')}</option>
-                <option value="classes">{t('byClass')}</option>
-              </select>
+              <FilterSelect label={t('scope')} value={subjectDraft.scope} onChange={scope => setSubjectDraft({ ...subjectDraft, scope, targets:'' })} options={[{value:'all',label:t('allClasses')},{value:'grades',label:t('byGrade')},{value:'classes',label:t('byClass')}]} />
             </label>
             {subjectDraft.scope !== 'all' && (
               <label className="lp-admin-field">
@@ -415,7 +406,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
           <label className="lp-admin-check"><input type="checkbox" checked={subjectDraft.active} onChange={(event) => setSubjectDraft({ ...subjectDraft, active: event.target.checked })} /> {t('active')}</label>
           {subjectError && <p className="lp-admin-error" role="alert">{subjectError}</p>}
           <div className="lp-admin-form-actions">
-            <button type="submit" className="btn-primary"><Plus size={16} /> {t(editingSubjectId ? 'saveChanges' : 'addSubject')}</button>
+            <button type="submit" disabled={saving} className="btn-primary"><Plus size={16} /> {t(editingSubjectId ? 'saveChanges' : 'addSubject')}</button>
             {editingSubjectId && <button type="button" className="btn-secondary" onClick={resetSubject}><X size={16} /> {t('cancel')}</button>}
           </div>
         </form>
@@ -452,10 +443,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
           <div className="lp-admin-form-grid">
             <label className="lp-admin-field">
               <span>{t('scope')}</span>
-              <select value={stageDraft.scope} onChange={(event) => setStageDraft({ ...stageDraft, scope: event.target.value, target: '' })}>
-                <option value="grade">{t('gradeSingular')}</option>
-                <option value="class">{t('classSingular')}</option>
-              </select>
+              <FilterSelect label={t('scope')} value={stageDraft.scope} onChange={scope => setStageDraft({ ...stageDraft, scope, target:'' })} options={[{value:'grade',label:t('gradeSingular')},{value:'class',label:t('classSingular')}]} />
             </label>
             <label className="lp-admin-field">
               <span>{t(stageDraft.scope === 'grade' ? 'gradeSingular' : 'classSingular')}</span>
@@ -469,7 +457,7 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
           </div>
           {stageError && <p className="lp-admin-error" role="alert">{stageError}</p>}
           <div className="lp-admin-form-actions">
-            <button type="submit" className="btn-primary"><Plus size={16} /> {t(editingStageId ? 'saveChanges' : 'addStage')}</button>
+            <button type="submit" disabled={saving} className="btn-primary"><Plus size={16} /> {t(editingStageId ? 'saveChanges' : 'addStage')}</button>
             {editingStageId && <button type="button" className="btn-secondary" onClick={resetStage}><X size={16} /> {t('cancel')}</button>}
           </div>
         </form>
@@ -506,9 +494,10 @@ export default function LessonPlanAdminSettings({ repository, onChange, notify, 
             <p id={`${idPrefix}-confirm-description`}>{confirmDelete.kind === 'subject'
               ? t('removeSubjectConfirm', { value: translateCatalogValue(language, confirmDelete.record.name ?? confirmDelete.record.subject) })
               : t('removeStageConfirm', { value: describeStageScope(confirmDelete.record, t, language) })}</p>
+            {(subjectError||stageError)&&<p role="alert">{subjectError||stageError}</p>}
             <div className="lp-admin-confirm-actions">
               <button type="button" className="btn-secondary" onClick={closeConfirmation} autoFocus>{t('cancel')}</button>
-              <button type="button" className="lp-admin-confirm-remove" onClick={confirmRemoval}><Trash2 size={16} /> {t('remove')}</button>
+              <button type="button" className="lp-admin-confirm-remove" disabled={saving} onClick={confirmRemoval}><Trash2 size={16} /> {t('remove')}</button>
             </div>
           </div>
         </div></DialogPortal>

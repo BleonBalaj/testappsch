@@ -21,7 +21,6 @@ const timestamp = (now) => {
 export function createPlan({ preferences = {}, schoolData = {}, scheduledLesson = null, teacherId, now = new Date() } = {}) {
   if (!teacherId || !String(teacherId).trim()) throw new TypeError('teacherId is required');
   const scheduled = scheduledLesson ?? {};
-  const timeZone = schoolData.timeZone || preferences.timeZone || 'Europe/Belgrade';
   const classLabel = asText(scheduled.classLabel ?? scheduled.className ?? scheduled.class)
     || asText(preferences.defaultClass)
     || asText(schoolData.defaultClass)
@@ -31,7 +30,7 @@ export function createPlan({ preferences = {}, schoolData = {}, scheduledLesson 
     || asText(preferences.defaultSubject)
     || asText(schoolData.defaultSubject)
     || (preferences.rememberLastUsed ? asText(preferences.lastUsedSubject) : '');
-  const date = asText(scheduled.date ?? scheduled.scheduledDate) || dateInTimeZone(now, timeZone);
+  const date = asText(scheduled.date ?? scheduled.scheduledDate);
   const schoolSubjects = asList(schoolData.subjectMappings ?? schoolData.subjects);
   const schoolStages = asList(schoolData.stageMappings);
   const stamp = timestamp(now);
@@ -122,14 +121,14 @@ export function applyTopic(plan, topic, { confirmReplace = false } = {}) {
   return { plan: { ...plan, topic: title, topicLearningOutcome: outcome || existing }, needsConfirmation: false };
 }
 
-export function duplicatePlan(plan, { now = new Date(), timeZone = 'Europe/Belgrade', date, teacherId } = {}) {
+export function duplicatePlan(plan, { now = new Date(), date = '', teacherId } = {}) {
   if (!plan || typeof plan !== 'object') throw new TypeError('plan is required');
   const stamp = timestamp(now);
   return {
     ...plan,
     id: null,
     status: 'draft',
-    date: date || dateInTimeZone(now, timeZone),
+    date: asText(date),
     teacherId: teacherId ?? plan.teacherId,
     createdAt: stamp,
     updatedAt: stamp,

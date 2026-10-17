@@ -23,10 +23,15 @@ export default function FilterSelect({ label, value, options, onChange }) {
     const place = () => {
       const box = trigger.current?.getBoundingClientRect();
       if (!box) return;
+      // A body portal must appear above its dialog's entire stacking context.
+      let layer = 6000;
+      for (let parent = trigger.current.parentElement; parent; parent = parent.parentElement) {
+        layer = Math.max(layer, (Number.parseInt(getComputedStyle(parent).zIndex, 10) || 0) + 1);
+      }
       const width = Math.min(Math.max(box.width, 230), window.innerWidth - 24);
       const below = window.innerHeight - box.bottom - 20, above = box.top - 20;
       const upward = below < 180 && above > below;
-      setPosition({ width, left: Math.max(12, Math.min(box.left, window.innerWidth - width - 12)),
+      setPosition({ zIndex: layer, width, left: Math.max(12, Math.min(box.left, window.innerWidth - width - 12)),
         maxHeight: Math.max(90, Math.min(340, upward ? above : below)),
         ...(upward ? { bottom: window.innerHeight - box.top + 7 } : { top: box.bottom + 7 }) });
     };

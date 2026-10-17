@@ -7,6 +7,7 @@ import {
   limit,
   onSnapshot, 
   query,
+  runTransaction,
   setDoc, 
   updateDoc, 
   deleteDoc, 
@@ -23,6 +24,7 @@ import { provisionNewUser } from '../services/userProvisioningService';
 import { classGroupLabel, cleanSection, sortClassGroups } from '../features/classGroups';
 import { explicitCourseAssignments } from '../features/enrollment';
 import { studentSearchFields } from '../features/students/studentSearch';
+import {verifiedSnapshot,readDenied} from '../features/liveResource';
 
 // Keep in step with DIRECTORY_VERSION in functions/schoolDirectory.js.
 const DIRECTORY_VERSION = 1;
@@ -47,6 +49,8 @@ const INITIAL_ROLES = [
 
 export const DEFAULT_ROLE_PERMISSIONS = {
   student: {
+    'school-requests': false,
+    coverage: false,
     dashboard: true,
     schedule: true,
     classes: true,
@@ -62,6 +66,8 @@ export const DEFAULT_ROLE_PERMISSIONS = {
     'lesson-plans': false,
   },
   teacher: {
+    'school-requests': true,
+    coverage: true,
     dashboard: true,
     schedule: true,
     classes: true,
@@ -87,6 +93,7 @@ export const SchoolDataProvider = ({ children }) => {
 
   const [staffList, setStaffList] = useState([]);
   const [staffLoaded, setStaffLoaded] = useState(false);
+  const [staffError,setStaffError]=useState(null);
   const [rolesList, setRolesList] = useState(INITIAL_ROLES);
   const [classesList, setClassesList] = useState([]);
   const [classesLoaded, setClassesLoaded] = useState(false);
@@ -95,6 +102,10 @@ export const SchoolDataProvider = ({ children }) => {
   const [classGroupsLoaded, setClassGroupsLoaded] = useState(false);
   const [classGroupsError, setClassGroupsError] = useState(null);
   const [eventsList, setEventsList] = useState([]);
+  const [eventsLoaded,setEventsLoaded]=useState(false);
+  const [eventsError,setEventsError]=useState(null);
+  const [readAttempt,setReadAttempt]=useState(0);
+  const retrySchoolData=useCallback(()=>setReadAttempt(value=>value+1),[]);
   const [rolePermissions, setRolePermissions] = useState(DEFAULT_ROLE_PERMISSIONS);
   // Bumped after this browser changes students so server-side counts refresh.
   const [studentsVersion, setStudentsVersion] = useState(0);
@@ -103,13 +114,16 @@ export const SchoolDataProvider = ({ children }) => {
 
   const isSeedingRolesRef = useRef(false);
   const preparedSchoolsRef = useRef(new Set());
+  const creatorRepairRef = useRef(new Set());
   const bumpStudentsVersion = useCallback(() => setStudentsVersion(version => version + 1), []);
 
   // Realtime listeners partitioned strictly by activeSchoolId
   useEffect(() => {
-    if (!activeSchoolId) {
+    let active=true;
+    if (!activeSchoolId || !currentUser?.uid || !roleReady) {
       setStaffList([]);
       setStaffLoaded(true);
+      setStaffError(null);
       setClassesList([]);
       setClassesLoaded(true);
       setClassesError(null);
@@ -117,6 +131,7 @@ export const SchoolDataProvider = ({ children }) => {
       setClassGroupsLoaded(true);
       setClassGroupsError(null);
       setEventsList([]);
+      setEventsLoaded(true);setEventsError(null);
       setRolesList(INITIAL_ROLES);
       setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
       return;
@@ -124,6 +139,7 @@ export const SchoolDataProvider = ({ children }) => {
 
     setStaffList([]);
     setStaffLoaded(false);
+    setStaffError(null);
     setClassesList([]);
     setClassesLoaded(false);
     setClassesError(null);
@@ -131,20 +147,28 @@ export const SchoolDataProvider = ({ children }) => {
     setClassGroupsLoaded(false);
     setClassGroupsError(null);
     setEventsList([]);
+    setEventsLoaded(false);setEventsError(null);
     setRolesList(INITIAL_ROLES);
     setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
 
     const handleSnapshotError = (colName) => (err) => {
+      if(!active)return;
       console.warn(`Snapshot listener notice for ${colName}:`, err.message);
+      if(readDenied(err)&&colName==='classes')setClassesList([]);
+      if(readDenied(err)&&colName==='classGroups')setClassGroups([]);
+      if(readDenied(err)&&colName==='staff')setStaffList([]);
+      if(readDenied(err)&&colName==='events')setEventsList([]);
       if (colName === 'classes') { setClassesLoaded(true); setClassesError(err.message || 'Course data is unavailable.'); }
       if (colName === 'classGroups') { setClassGroupsLoaded(true); setClassGroupsError(err.message || 'Class data is unavailable.'); }
-      if (colName === 'staff') setStaffLoaded(true);
+      if (colName === 'staff') {setStaffLoaded(true);setStaffError(err);}
+      if (colName === 'events') {setEventsLoaded(true);setEventsError(err);}
     };
 
     // 1. Roles Listener
     const rolesCol = collection(db, 'schools', activeSchoolId, 'roles');
-    const unsubRoles = onSnapshot(rolesCol, async (snapshot) => {
-      if (snapshot.empty && !isSeedingRolesRef.current) {
+    const unsubRoles = onSnapshot(rolesCol, {includeMetadataChanges:true}, async (snapshot) => {
+      if(!active)return;
+      if (snapshot.empty && roleReady && currentRole==='admin' && !snapshot.metadata.fromCache && !isSeedingRolesRef.current) {
         // Seed default roles schema if completely missing
         isSeedingRolesRef.current = true;
         try {
@@ -169,96 +193,19 @@ export const SchoolDataProvider = ({ children }) => {
 
     // 2. Staff Listener (Live production data from Firestore, empty initially)
     const staffCol = collection(db, 'schools', activeSchoolId, 'staff');
-    const unsubStaff = onSnapshot(staffCol, async (snapshot) => {
-      const staff = [];
-      snapshot.forEach(docSnap => {
-        staff.push({ id: docSnap.id, ...docSnap.data() });
-      });
-
-      // Self-heal: if the school creator (admin) has no staff doc yet, write one now
-      const schoolSnap = await import('firebase/firestore').then(({ getDoc }) =>
-        getDoc(doc(db, 'schools', activeSchoolId))
-      ).catch(() => null);
-      if (schoolSnap?.exists()) {
-        const schoolData = schoolSnap.data();
-        const creatorUid = schoolData?.creatorUid;
-
-        const computeAdminName = (currentDocName, email) => {
-          if (currentDocName && currentDocName.toLowerCase() !== 'administrator' && currentDocName.toLowerCase() !== 'admin') {
-            return currentDocName;
-          }
-          if (currentUser?.uid === creatorUid && currentUser?.displayName) {
-            return currentUser.displayName;
-          }
-          if (schoolData.creatorName && schoolData.creatorName.toLowerCase() !== 'administrator' && schoolData.creatorName.toLowerCase() !== 'admin') {
-            return schoolData.creatorName;
-          }
-          const userEmail = email || (currentUser?.uid === creatorUid ? currentUser?.email : schoolData.creatorEmail) || '';
-          if (userEmail) {
-            const prefix = userEmail.split('@')[0];
-            return prefix.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-          }
-          return 'Administrator';
-        };
-
-        if (creatorUid && !staff.some(s => String(s.id) === String(creatorUid))) {
-          const adminEmail = schoolData.creatorEmail || (currentUser?.uid === creatorUid ? currentUser?.email : '');
-          const adminName = computeAdminName(null, adminEmail);
-          const adminStaffDoc = {
-            id: creatorUid,
-            staffId: 'STF-001',
-            name: adminName,
-            email: adminEmail,
-            phone: '',
-            roleId: 'admin',
-            roleName: 'Administrator',
-            department: 'Administration',
-            subject: 'School Management',
-            classes: 0,
-            experience: '',
-            room: '',
-            bio: '',
-            rating: '5.0',
-            status: 'active',
-            joinDate: new Date().toISOString().split('T')[0],
-            createdAt: serverTimestamp()
-          };
-          try {
-            await setDoc(doc(db, 'schools', activeSchoolId, 'staff', creatorUid), adminStaffDoc);
-            // The snapshot listener will re-fire and include this doc — return early
-            return;
-          } catch (e) {
-            console.warn('Could not auto-create admin staff doc:', e.message);
-            // Fall through and show what we have
-            staff.push({ ...adminStaffDoc, createdAt: null });
-          }
-        } else {
-          // If admin doc already exists in staff, check if name is generic 'Administrator' and heal it
-          for (const s of staff) {
-            if (s.roleId === 'admin' || String(s.id) === String(creatorUid)) {
-              if (!s.name || s.name.toLowerCase() === 'administrator' || s.name.toLowerCase() === 'admin') {
-                const betterName = computeAdminName(s.name, s.email);
-                if (betterName && betterName.toLowerCase() !== 'administrator' && betterName.toLowerCase() !== 'admin') {
-                  s.name = betterName;
-                  try {
-                    await updateDoc(doc(db, 'schools', activeSchoolId, 'staff', s.id), { name: betterName });
-                  } catch (error) { console.warn('Could not update the school creator name:', error); }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      setStaffList(staff);
+    const unsubStaff = onSnapshot(staffCol,{includeMetadataChanges:true}, snapshot => {
+      if(!active||!verifiedSnapshot(snapshot))return;
+      setStaffList(snapshot.docs.map(entry=>({...entry.data(),id:entry.id})));
       setStaffLoaded(true);
+      setStaffError(null);
     }, handleSnapshotError('staff'));
 
     // 3. Homeroom classes (10A, 10B...). A school has tens of these, so one
     // live listener serves every page. Student records are never loaded in
     // bulk; pages query the students they show (see features/students).
     const classGroupsCol = collection(db, 'schools', activeSchoolId, 'classGroups');
-    const unsubClassGroups = onSnapshot(classGroupsCol, (snapshot) => {
+    const unsubClassGroups = onSnapshot(classGroupsCol,{includeMetadataChanges:true}, (snapshot) => {
+      if(!active||!verifiedSnapshot(snapshot))return;
       setClassGroups(sortClassGroups(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))));
       setClassGroupsLoaded(true);
       setClassGroupsError(null);
@@ -266,7 +213,8 @@ export const SchoolDataProvider = ({ children }) => {
 
     // 4. Classes Listener (Live production data from Firestore, empty initially)
     const classesCol = collection(db, 'schools', activeSchoolId, 'classes');
-    const unsubClasses = onSnapshot(classesCol, (snapshot) => {
+    const unsubClasses = onSnapshot(classesCol,{includeMetadataChanges:true}, (snapshot) => {
+      if(!active||!verifiedSnapshot(snapshot))return;
       const cls = [];
       snapshot.forEach(docSnap => {
         cls.push({ id: docSnap.id, ...docSnap.data() });
@@ -278,12 +226,14 @@ export const SchoolDataProvider = ({ children }) => {
 
     // 5. Events Listener (Live production data from Firestore, empty initially)
     const eventsCol = collection(db, 'schools', activeSchoolId, 'events');
-    const unsubEvents = onSnapshot(eventsCol, (snapshot) => {
+    const unsubEvents = onSnapshot(eventsCol,{includeMetadataChanges:true}, (snapshot) => {
+      if(!active||!verifiedSnapshot(snapshot))return;
       const evs = [];
       snapshot.forEach(docSnap => {
         evs.push({ id: docSnap.id, ...docSnap.data() });
       });
       setEventsList(evs);
+      setEventsLoaded(true);setEventsError(null);
     }, handleSnapshotError('events'));
 
     // 6. School Document Listener (rolePermissions)
@@ -301,6 +251,7 @@ export const SchoolDataProvider = ({ children }) => {
     }, handleSnapshotError('school'));
 
     return () => {
+      active=false;
       unsubRoles();
       unsubStaff();
       unsubClassGroups();
@@ -308,7 +259,24 @@ export const SchoolDataProvider = ({ children }) => {
       unsubEvents();
       unsubSchool();
     };
-  }, [activeSchoolId]);
+  }, [activeSchoolId,currentUser?.uid,currentRole,roleReady,readAttempt]);
+
+  // A missing creator profile is repaired once by the verified creator only.
+  // Directory listeners themselves are read-only and never fabricate staff.
+  useEffect(()=>{
+    const uid=currentUser?.uid,key=`${uid}:${activeSchoolId}`;
+    if(!roleReady||!staffLoaded||!uid||activeSchool?.id!==activeSchoolId||activeSchool.creatorUid!==uid||creatorRepairRef.current.has(key))return;
+    const profile=staffList.find(person=>person.id===uid);
+    if(profile?.name&&!['admin','administrator'].includes(profile.name.toLowerCase()))return;
+    const name=currentUser.displayName||activeSchool.creatorName||currentUser.email?.split('@')[0]||'Administrator';
+    creatorRepairRef.current.add(key);
+    runTransaction(db,async tx=>{
+      const target=doc(db,'schools',activeSchoolId,'staff',uid),snapshot=await tx.get(target);
+      if(snapshot.exists()){
+        if(!snapshot.data().name||['admin','administrator'].includes(snapshot.data().name.toLowerCase()))tx.update(target,{name});
+      }else tx.set(target,{id:uid,staffId:'STF-001',name,email:currentUser.email||'',roleId:'admin',roleName:'Administrator',department:'Administration',subject:'School Management',status:'active',createdAt:serverTimestamp()});
+    }).catch(error=>{creatorRepairRef.current.delete(key);console.warn('Could not repair the creator directory profile:',error);});
+  },[activeSchoolId,activeSchool,staffLoaded,staffList,currentUser?.uid,currentUser?.displayName,currentUser?.email,roleReady]);
 
   // The signed-in person's own student record (none for staff).
   const myStudentKey = activeSchoolId && currentUser?.uid ? `${activeSchoolId}|${currentUser.uid}` : '';
@@ -352,14 +320,14 @@ export const SchoolDataProvider = ({ children }) => {
     let active = true;
     Promise.resolve()
       .then(() => { if (active) setDirectoryState({ schoolId, status: 'preparing' }); })
-      .then(() => httpsCallable(functions, 'prepareSchoolDirectory')({ schoolId }))
-      .then(() => { setDirectoryState({ schoolId, status: 'done' }); setStudentsVersion(version => version + 1); })
+      .then(() => active ? httpsCallable(functions, 'prepareSchoolDirectory')({ schoolId }) : null)
+      .then(() => { if(active){setDirectoryState({ schoolId, status: 'done' }); setStudentsVersion(version => version + 1);} })
       .catch((error) => {
         console.warn('Could not prepare the student directory:', error?.message || error);
         preparedSchoolsRef.current.delete(schoolId);
-        setDirectoryState({ schoolId, status: 'error' });
+        if(active)setDirectoryState({ schoolId, status: 'error' });
       });
-    return () => { active = false; };
+      return () => { active = false; preparedSchoolsRef.current.delete(schoolId); };
   }, [activeSchoolId, schoolDocCurrent, directoryReady, canPrepareDirectory]);
   const directoryStatus = directoryReady ? 'ready'
     : directoryState.schoolId === activeSchoolId && directoryState.status !== 'idle' ? directoryState.status : 'pending';
@@ -629,6 +597,7 @@ export const SchoolDataProvider = ({ children }) => {
     <SchoolDataContext.Provider value={{
       staffList,
       staffLoaded,
+      staffError,
       rolesList,
       classesList,
       classesLoaded,
@@ -637,6 +606,7 @@ export const SchoolDataProvider = ({ children }) => {
       classGroupsLoaded,
       classGroupsError,
       eventsList,
+      eventsLoaded,eventsError,retrySchoolData,
       rolePermissions,
       loading: !staffLoaded || !classesLoaded || !classGroupsLoaded,
       myStudentRecord,
@@ -676,6 +646,7 @@ export const useSchoolData = () => {
     return {
       staffList: [],
       staffLoaded: false,
+      staffError: null,
       rolesList: [],
       classesList: [],
       classesLoaded: false,
@@ -684,6 +655,7 @@ export const useSchoolData = () => {
       classGroupsLoaded: false,
       classGroupsError: null,
       eventsList: [],
+      eventsLoaded:false,eventsError:null,retrySchoolData:()=>{},
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
       loading: false,
       myStudentRecord: null,

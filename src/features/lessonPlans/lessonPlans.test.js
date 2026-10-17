@@ -16,6 +16,26 @@ const memoryStorage = () => {
 };
 const now = '2026-09-26T12:00:00Z';
 
+test('preparing a school curriculum write cannot publish an unconfirmed mapping locally',()=>{
+ const repository=createLessonPlanRepository('teacher@test.school',{storage:memoryStorage(),schoolId:'s1'});
+ const prepared=repository.saveSubjectMapping({name:'Math',area:'Mathematics'},{isAdmin:true,persist:false});
+ assert.ok(prepared.id);assert.equal(repository.listSubjectMappings().length,0);
+ repository.saveSubjectMapping(prepared,{isAdmin:true});assert.equal(repository.listSubjectMappings().length,1);
+});
+
+test('cloud auxiliary reconciliation preserves source timestamps, removes known deletions and keeps unsent drafts',()=>{
+ const repository=createLessonPlanRepository('teacher@test.school',{storage:memoryStorage(),schoolId:'s1',ownerUid:'u1'});
+ const local=repository.saveTemplate({id:'draft',name:'Unsent draft'});
+ const cloud={id:'cloud',name:'Cloud template',ownerUid:'u1',teacherId:'teacher@test.school',updatedAt:'2026-09-01T00:00:00Z'};
+ repository.mergeCloudCollection('templates',[cloud,{...cloud,id:'foreign',ownerUid:'u2'}]);
+ assert.equal(repository.listTemplates().find(item=>item.id==='cloud').updatedAt,cloud.updatedAt);
+ assert.equal(repository.listTemplates().some(item=>item.id==='foreign'),false);
+ repository.mergeCloudCollection('templates',[]);
+ assert.deepEqual(repository.listTemplates().map(item=>item.id),[local.id]);
+ repository.mergeCloudCollection('subjectMappings',[{id:'mapping',name:'Math',area:'Math',updatedAt:'old'}],{schoolWide:true});
+ repository.mergeCloudCollection('subjectMappings',[],{schoolWide:true});assert.equal(repository.listSubjectMappings().length,0);
+});
+
 test('cloud merge preserves remote timestamp and cannot replace a newer local edit', () => {
   const repository = createLessonPlanRepository('teacher@example.com', { storage: memoryStorage(), schoolId: 'school', now: () => new Date(now) });
   const local = repository.savePlan({ id: 'plan-1', teacherId: 'teacher@example.com', status: 'draft', topic: 'newer' });
@@ -69,11 +89,12 @@ test('new plan uses explicit defaults; scheduled lesson takes precedence; teache
   assert.equal(plan.curriculumStage, 'Shkalla III');
   assert.equal(plan.curricularArea, 'Matematika');
   assert.equal(plan.teacherName, 'Arta Hoxha');
-  assert.equal(plan.date, '2026-09-26');
+  assert.equal(plan.date, '');
   assert.equal(plan.topicLearningOutcome, '');
   assert.deepEqual(plan.competencyOutcomes, []);
   const scheduled = createPlan({ preferences, teacherId: 'arta', now, scheduledLesson: { date: '2026-10-01', classLabel: 'VII/1', subject: 'Gjuhë shqipe', period: '3' } });
   assert.equal(scheduled.classLabel, 'VII/1');
+  assert.equal(scheduled.date, '2026-10-01');
   assert.equal(scheduled.subject, 'Gjuhë shqipe');
   assert.equal(scheduled.period, '3');
   assert.equal(scheduled.curriculumStage, 'Shkalla III');
@@ -103,7 +124,21 @@ test('topic selection asks before replacing authored text and duplicate clears r
   assert.equal(duplicate.id, null);
   assert.equal(duplicate.status, 'draft');
   assert.equal(duplicate.reflection, '');
-  assert.equal(duplicate.date, '2026-09-27');
+  assert.equal(duplicate.date, '');
+  assert.equal(duplicatePlan({...plan,date:'2026-10-17'}, {date:'2026-10-20'}).date, '2026-10-20');
+  assert.equal(plan.date, '');
+});
+
+test('blank dates survive saving, templates and duplication while explicitly selected timetable dates are retained',()=>{
+  const repo=createLessonPlanRepository('arta',{storage:memoryStorage(),schoolId:'school-a',now:()=>new Date(now)});
+  const original=repo.savePlan({...createPlan({teacherId:'arta',now}),date:'2026-10-17'});
+  assert.equal(repo.getPlan(original.id).date,'2026-10-17');
+  const template=repo.saveTemplate({name:'Dated source',plan:original});
+  assert.equal(duplicatePlan(template.plan).date,'');
+  assert.equal(duplicatePlan(original).date,'');
+  repo.savePlan({...original,date:''});
+  assert.equal(repo.getPlan(original.id).date,'');
+  assert.equal(createPlan({teacherId:'arta',now,scheduledLesson:{scheduledDate:'2026-10-23'}}).date,'2026-10-23');
 });
 
 test('date presets are inclusive and weeks start Monday', () => {
@@ -177,5 +212,13 @@ test('lesson plan preferences are isolated strictly per-user, per-school', () =>
   assert.equal(repoSchoolB.getPreferences().duration, '15 min');
   assert.equal(repoSchoolB.getPreferences().defaultClass, 'IX/1');
   assert.equal(repoSchoolB.getPreferences().defaultSubject, 'Fizikë');
+});
+
+test('lesson editor sections are static non-minimizable cards without toggle buttons', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const content = await readFile(new URL('../../pages/LessonPlans.jsx', import.meta.url), 'utf8');
+  assert.ok(!content.includes('lesson-section-toggle'), 'Sections must not contain toggle buttons');
+  assert.ok(content.includes('lesson-section-header'), 'Sections must use static section headers');
+  assert.ok(!content.includes('toggleSection'), 'Toggle section function must not exist');
 });
 

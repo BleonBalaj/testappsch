@@ -1,3 +1,5 @@
+import {useWorkflowSearch} from '../features/schoolWorkflows/cloud';
+import {WorkflowSearchFooter} from '../components/workflows/WorkflowUI';
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -13,7 +15,7 @@ import {
   courseMatchesReference, displayCourse, enrolledCoursesForStudent, explicitCourseAssignments, normalizeAssignedCourseIds,
 } from '../features/enrollment';
 import { classGroupsById, findClassGroupByLabel, hasValidClass, studentClassLabel } from '../features/classGroups';
-import { fetchStudentsForExport, useStudentCounts, useStudentDirectory } from '../features/students/studentData';
+import { fetchStudentsForExport, useStudentCounts } from '../features/students/studentData';
 import './Students.css';
 
 const containerVariants = {
@@ -361,6 +363,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   const [studentToDelete, setStudentToDelete] = useState(null);
   const [isSubmittingStudent, setIsSubmittingStudent] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   const [studentForm, setStudentForm] = useState(EMPTY_STUDENT_FORM);
   const [editingStudent, setEditingStudent] = useState(null);
   const [editStudentForm, setEditStudentForm] = useState({ ...EMPTY_STUDENT_FORM, status: 'active' });
@@ -376,33 +379,14 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
 
   const validClassFilter = classFilter && groupsById.has(classFilter) ? classFilter : '';
   const selectedCourse = courseFilter ? classesList.find(course => String(course.id) === courseFilter) : null;
-  const directory = useStudentDirectory({
-    schoolId: activeSchoolId,
-    search: searchTerm,
-    status: statusFilter,
-    classGroupId: statusFilter === 'unassigned' ? '' : validClassFilter,
-    courseId: selectedCourse ? String(selectedCourse.id) : '',
-    courseClassGroupId: selectedCourse?.classGroupId ? String(selectedCourse.classGroupId) : '',
-    ordered: directoryReady,
-    pageResults: true,
-  });
+  const matching=useWorkflowSearch(activeSchoolId,'students',{search:searchTerm,status:statusFilter,classId:statusFilter==='unassigned'?'':validClassFilter,courseId:selectedCourse?String(selectedCourse.id):'',ordered:directoryReady});
+  const directory={students:matching.rows,loading:matching.loading,loadingMore:matching.refreshing,error:matching.error,hasMore:matching.more,loadMore:matching.next,mode:searchTerm?'search':'paged',matched:undefined,capped:false};
+    useEffect(()=>{matching.refresh();},[studentsVersion,matching.refresh]);
   const statusCounts = useStudentCounts(activeSchoolId, STATUS_COUNT_SPECS, studentsVersion);
   const countFor = spec => statusCounts.get(spec);
   const totalCount = countFor(STATUS_COUNT_SPECS[0]);
   const students = directory.students;
   const filtersActive = Boolean(searchTerm.trim() || statusFilter !== 'all' || validClassFilter || selectedCourse);
-
-  // Load the next page as the end of the list scrolls into view.
-  const { hasMore, loadingMore, loadMore } = directory;
-  useEffect(() => {
-    const target = sentinelRef.current;
-    if (!hasMore || loadingMore || !target || typeof IntersectionObserver === 'undefined') return undefined;
-    const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) loadMore();
-    }, { rootMargin: '600px 0px' });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore, loadMore]);
 
   const resetFilters = () => { setSearchInput(''); setSearchTerm(''); setStatusFilter('all'); setClassFilter(''); setCourseFilter(''); };
 
@@ -538,13 +522,14 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
   // page), or the current search results when searching.
   const handleExportStudents = async () => {
     setIsExporting(true);
+    setExportProgress(0);
     try {
       const rows = searchTerm.trim() ? students : await fetchStudentsForExport(activeSchoolId, {
         status: statusFilter,
         classGroupId: statusFilter === 'unassigned' ? '' : validClassFilter,
         courseId: selectedCourse ? String(selectedCourse.id) : '',
         courseClassGroupId: selectedCourse?.classGroupId ? String(selectedCourse.classGroupId) : '',
-      });
+      }, count => setExportProgress(count));
       const header = ['Name', 'Student ID', 'Class', 'Status', 'Courses', 'Email', 'Phone', 'GPA', 'Guardian'];
       const lines = [header, ...rows.map(s => [s.name, s.studentId, studentClassLabel(s, groupsById), s.status || 'active',
         enrolledCoursesForStudent(s, classesList).map(displayCourse).join('; '), s.email, s.phone, s.gpa ?? '', s.guardian])];
@@ -561,6 +546,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       addNotification?.('error', err.message || (isAlbanian ? 'Eksportimi dështoi.' : 'Export failed.'));
     } finally {
       setIsExporting(false);
+      setExportProgress(0);
     }
   };
 
@@ -573,23 +559,11 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
     );
   };
 
-  const matched = directory.matched ?? students.length;
-  // Paged mode only filters by status, so its total is that status count.
-  const statusTotal = countFor(STATUS_COUNT_SPECS[{ all: 0, active: 1, archived: 2, unassigned: 3 }[statusFilter] ?? 0]);
-  const shownOf = total => (students.length < total
-    ? (isAlbanian ? `Po shfaqen ${students.length.toLocaleString()} nga ${total.toLocaleString()} nxënës` : `Showing ${students.length.toLocaleString()} of ${total.toLocaleString()} students`)
-    : (isAlbanian ? `${total.toLocaleString()} nxënës` : `${total.toLocaleString()} ${total === 1 ? 'student' : 'students'}`));
-  const resultSummary = directory.loading ? '' : directory.mode === 'search'
-    ? (directory.capped
-      ? (isAlbanian ? `Po shfaqen përputhjet e para (${matched}). Shkruani më shumë për t'i ngushtuar.` : `Showing the first ${matched} matches. Type more to narrow them down.`)
-      : directory.hasMore
-        ? (directory.loadingMore
-          ? (isAlbanian ? `${students.length} përputhje deri tani · duke kërkuar më shumë…` : `${students.length} ${students.length === 1 ? 'match' : 'matches'} so far · searching for more…`)
-          : (isAlbanian ? `${students.length === 1 ? 'Po shfaqet përputhja e parë' : `Po shfaqen ${students.length} përputhjet e para`} · lëvizni poshtë për më shumë` : `Showing the first ${students.length} ${students.length === 1 ? 'match' : 'matches'} · scroll for more`))
-        : (isAlbanian ? `${matched} përputhje` : `${matched} ${matched === 1 ? 'match' : 'matches'}`))
-    : directory.mode === 'paged'
-      ? (statusTotal !== undefined ? shownOf(statusTotal) : (isAlbanian ? `Po shfaqen ${students.length.toLocaleString()} nxënës` : `Showing ${students.length.toLocaleString()} ${students.length === 1 ? 'student' : 'students'}`))
-      : shownOf(matched);
+  const resultSummary = directory.loading || directory.error || (!students.length && directory.loadingMore)
+    ? ''
+    : (matching.more || matching.page)
+      ? `${isAlbanian ? 'Faqja' : 'Page'} ${(matching.page || 0) + 1} · ${students.length} ${isAlbanian ? 'rezultate në këtë faqe' : 'results on this page'}`
+      : `${students.length} ${students.length === 1 ? (isAlbanian ? 'rezultat' : 'result') : (isAlbanian ? 'rezultate' : 'results')}`;
 
   const addFormGroup = studentForm.classGroupId ? groupsById.get(studentForm.classGroupId) : null;
   const editFormGroup = editStudentForm.classGroupId ? groupsById.get(editStudentForm.classGroupId) : null;
@@ -615,7 +589,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
         <div className="header-actions">
           <button className="btn-secondary glass" onClick={handleExportStudents} disabled={isExporting} title={isAlbanian ? "Eksporto Regjistrin e Nxënësve" : "Export Student Directory"}>
             <Download size={18} />
-            {isExporting ? (isAlbanian ? 'Duke eksportuar…' : 'Exporting…') : (isAlbanian ? 'Eksporto Regjistrin' : 'Export Roster')}
+            {isExporting ? (exportProgress > 0 ? `${isAlbanian ? 'Duke eksportuar' : 'Exporting'} (${exportProgress.toLocaleString()})…` : (isAlbanian ? 'Duke eksportuar…' : 'Exporting…')) : (isAlbanian ? 'Eksporto Regjistrin' : 'Export Roster')}
           </button>
           {canCreate && <button className="btn-primary" onClick={openAddStudent}>
             <UserPlus size={20} />
@@ -623,6 +597,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
           </button>}
         </div>
       </motion.header>
+
 
       {directoryStatus === 'preparing' && (
         <div className="students-notice" role="status">
@@ -683,7 +658,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
       {resultSummary && <p className="students-result-summary" aria-live="polite">{resultSummary}</p>}
 
       <motion.div className="students-grid" variants={itemVariants}>
-        {directory.loading || (students.length === 0 && directory.hasMore) ? (
+          {directory.loading || (students.length === 0 && (directory.hasMore||directory.loadingMore)) ? (
           <div className="students-empty-state glass" role="status">
             <Users size={32} />
             <h3>{directory.mode === 'search' ? (isAlbanian ? 'Duke kërkuar…' : 'Searching…') : (isAlbanian ? 'Po ngarkohen nxënësit…' : 'Loading students…')}</h3>
@@ -693,7 +668,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
             <AlertCircle size={32} />
             <h3>{isAlbanian ? 'Nxënësit nuk mund të ngarkohen' : 'Students could not be loaded'}</h3>
             <p>{isAlbanian ? 'Kontrolloni lidhjen dhe lejet, pastaj provoni sërish.' : 'Check your connection and permissions, then try again.'}</p>
-            <button className="btn-secondary btn-sm" onClick={resetFilters}><RotateCcw size={14} /> {isAlbanian ? 'Provo sërish' : 'Try again'}</button>
+            <button className="btn-secondary btn-sm" onClick={()=>{resetFilters();matching.refresh();}}><RotateCcw size={14} /> {isAlbanian ? 'Provo sërish' : 'Try again'}</button>
           </div>
         ) : students.length === 0 ? (
           <div className="students-empty-state glass">
@@ -730,16 +705,7 @@ const Students = ({ onStudentSelect, userRole = 'admin', addNotification }) => {
         )}
       </motion.div>
 
-      {!directory.loading && directory.hasMore && (
-        <div className="students-load-more" ref={sentinelRef}>
-          <button type="button" className="btn-secondary" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? (isAlbanian ? 'Duke ngarkuar…' : 'Loading…') : (isAlbanian ? 'Shfaq më shumë' : 'Show more')}
-          </button>
-        </div>
-      )}
-      {directory.capped && directory.mode !== 'search' && (
-        <p className="students-result-summary">{isAlbanian ? 'Lista është shumë e gjatë; përdorni kërkimin për ta ngushtuar.' : 'This list is very long; use search to narrow it down.'}</p>
-      )}
+      <WorkflowSearchFooter list={matching} language={isAlbanian?'sq':'en'}/>
 
       {/* ── MODAL: Delete Confirmation ── */}
       <AnimatePresence>

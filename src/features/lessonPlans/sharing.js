@@ -15,13 +15,14 @@ export function inboxRecord(plan, share) {
   };
 }
 
-export function filterSharedPlans(records, { search = '', ownerUid = 'all', subject = 'all', date = 'all', dateBasis = 'lesson', from = '', to = '', now = new Date() } = {}) {
+export function filterSharedPlans(records, { search = '', ownerUid = 'all', reviewerUid = 'all', subject = 'all', date = 'all', dateBasis = 'lesson', from = '', to = '', now = new Date() } = {}) {
   const needle = normalizePlanSearch(search);
   const range = date === 'all' ? null : date === 'custom'
     ? { startDate: from || '0000-01-01', endDate: to || '9999-12-31' }
     : getDateRange(date, { now });
   return records.filter(record => {
     if (ownerUid !== 'all' && record.ownerUid !== ownerUid) return false;
+    if (reviewerUid === 'unassigned' ? Boolean(record.reviewerUid) : reviewerUid !== 'all' && record.reviewerUid !== reviewerUid) return false;
     if (subject !== 'all' && record.subject !== subject) return false;
     if (needle && !normalizePlanSearch([record.ownerName, record.ownerEmail, record.lessonUnit, record.subject, record.topic, record.classLabel].join(' ')).includes(needle)) return false;
     const stamp = record.sharedAt?.toDate?.() || (record.sharedAt ? new Date(record.sharedAt) : null);
@@ -32,7 +33,7 @@ export function filterSharedPlans(records, { search = '', ownerUid = 'all', subj
 
 export const historyTime = (stamp, language) => {
   const value = stamp?.toDate?.() || new Date(stamp || 0);
-  return Number.isNaN(value.getTime()) ? '' : new Intl.DateTimeFormat(language === 'sq' ? 'sq-AL' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(value);
+  return Number.isNaN(value.getTime()) ? '' : new Intl.DateTimeFormat(language === 'sq' ? 'sq-AL' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short',hourCycle:'h23',timeZone:'Europe/Belgrade' }).format(value);
 };
 const skipChanges = new Set(['id', 'ownerUid', 'teacherId', 'createdAt', 'updatedAt', 'schoolLogo']);
 export function changedPlanFields(previous, next) {

@@ -1,3 +1,6 @@
+import { LessonReviewProvider } from './context/LessonReviewContext';
+import { dataScope } from './features/dataScope';
+import AppErrorBoundary from './components/AppErrorBoundary';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ThemeRuntime from './components/theme/ThemeRuntime';
 import { AppReleaseProvider } from './context/AppReleaseContext';
@@ -5,6 +8,9 @@ import AppUpdateNotice from './components/AppUpdateNotice';
 import Sidebar from './components/Sidebar';
 import StarryBackground from './components/StarryBackground';
 import Dashboard from './pages/Dashboard';
+import SchoolRequests from './pages/SchoolRequests';
+import Coverage from './pages/Coverage';
+import WorkflowNotifications from './components/workflows/WorkflowNotifications';
 import Students from './pages/Students';
 import StudentOverview from './pages/StudentOverview';
 import Staff from './pages/Staff';
@@ -97,6 +103,8 @@ function AppContent() {
     if (path === 'transcript') return userRole === 'student' && Boolean(rolePermissions?.student?.transcript ?? DEFAULT_ROLE_PERMISSIONS.student.transcript);
     const moduleByPath = { 'class-overview': 'classes', 'student-overview': 'students', teachers: 'staff' };
     const moduleId = moduleByPath[path] || path;
+    if (moduleId === 'school-requests' && userRole === 'student') return false;
+    if (moduleId === 'coverage' && !['admin','teacher','dept_head'].includes(userRole)) return false;
     if (moduleId === 'lesson-plans' && !['admin', 'teacher', 'dept_head'].includes(userRole)) return false;
     if (userRole === 'admin') return true;
     const permissionRole = userRole === 'student' ? 'student' : 'teacher';
@@ -120,7 +128,9 @@ function AppContent() {
     }
   }, [currentPath, canAccessPath, roleSettled]);
 
+  const [workflowTarget,setWorkflowTarget]=useState(null);
   const handleNavigate = (path) => {
+    setWorkflowTarget(null);
     if (path !== 'lesson-plans') setPendingScheduledLesson(null);
     setPendingDetail(null);
     setCurrentPath(path);
@@ -370,6 +380,10 @@ function AppContent() {
     if (!canAccessPath(currentPath)) return roleSettled ? <Settings addNotification={addNotification} lessonLanguage={lessonLanguage} onNavigate={handleNavigate} onLogout={logoutUser} /> : null;
 
     switch (currentPath) {
+      case 'school-requests':
+        return <SchoolRequests key={`${activeSchoolId}:${currentUser.uid}:${workflowTarget?.target==='school-requests'?workflowTarget.nonce:''}`} initialId={workflowTarget?.schoolId===activeSchoolId?workflowTarget.recordId:null} />;
+      case 'coverage':
+        return <Coverage key={`${activeSchoolId}:${currentUser.uid}:${workflowTarget?.target==='coverage'?workflowTarget.nonce:''}`} initialNotice={workflowTarget?.schoolId===activeSchoolId?workflowTarget:null} />;
       case 'dashboard':
         return <Dashboard onNavigate={setCurrentPath} userRole={userRole} />;
       case 'students':
@@ -403,6 +417,7 @@ function AppContent() {
         />;
       case 'class-overview':
         return <ClassOverview 
+          key={`${activeSchoolId}:${selectedClass?.id}`}
           classData={classesList.find(course => String(course.id) === String(selectedClass?.id)) || selectedClass}
           userRole={userRole}
           onBack={() => setCurrentPath('classes')}
@@ -416,6 +431,7 @@ function AppContent() {
         />;
       case 'student-overview':
         return <StudentOverview
+          key={`${activeSchoolId}:${selectedStudent?.id}`}
           student={selectedStudent}
           onBack={() => setCurrentPath(studentReturnPath || 'students')}
         />;
@@ -426,6 +442,7 @@ function AppContent() {
         return (
           <LessonPlans 
             key={`${currentPath}-${activeSchoolId}`} 
+            notification={workflowTarget?.schoolId===activeSchoolId&&workflowTarget.target==='lesson-plans'?workflowTarget:null}
             initialView={currentPath === 'lesson-plans-settings' ? 'settings' : 'plans'} 
             userRole={userRole} 
             currentUser={{ uid: currentUser?.uid, name: currentUser?.displayName, email: currentUser?.email, role: userRole }} 
@@ -520,6 +537,7 @@ function AppContent() {
             </div>
             <div className="header-actions">
               <SchoolSwitcher addNotification={addNotification} />
+              {userRole !== 'student' && activeSchoolId ? <WorkflowNotifications key={`${activeSchoolId}:${currentUser.uid}`} schoolId={activeSchoolId} uid={currentUser.uid} language={language} onNotice={addNotification} onNavigate={(path,notice)=>{handleNavigate(path);setWorkflowTarget({...notice,schoolId:activeSchoolId,nonce:crypto.randomUUID()});}} /> : (
               <button 
                 type="button" 
                 className="notification-btn bouncy" 
@@ -530,6 +548,7 @@ function AppContent() {
                 <span className="notification-emoji" aria-hidden="true">🔔</span>
                 <Bell size={19} className="notification-nature-icon" aria-hidden="true" />
               </button>
+              )}
               <div className="date-display">
                 <Calendar size={15} className="date-icon" />
                 <span>
@@ -599,6 +618,14 @@ function useAdminRoute() {
   return route;
 }
 
+function SchoolSession() {
+  const {currentUser,activeSchoolId,currentRole,roleReady}=useAuth();
+  // Reset page-local records, selections and dialogs synchronously when their
+  // authority changes. Old async handlers must also guard their own writes.
+  const scope=dataScope(currentUser?.uid,activeSchoolId,currentRole,roleReady);
+  return <AppErrorBoundary key={scope}><MoodProvider key={currentUser?.uid||'signed-out'}><SchoolDataProvider><LessonReviewProvider><TasksProvider><AppContent/></TasksProvider></LessonReviewProvider></SchoolDataProvider></MoodProvider></AppErrorBoundary>;
+}
+
 export default function App() {
   const adminRoute = useAdminRoute();
   return (
@@ -610,13 +637,7 @@ export default function App() {
           {adminRoute ? (
             <PlatformAdminRoute view={adminRoute.view} />
           ) : (
-            <SchoolDataProvider>
-              <TasksProvider>
-                <MoodProvider>
-                  <AppContent />
-                </MoodProvider>
-              </TasksProvider>
-            </SchoolDataProvider>
+            <SchoolSession/>
           )}
         </AppReleaseProvider>
       </LanguageProvider>

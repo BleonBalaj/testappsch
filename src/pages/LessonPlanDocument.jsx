@@ -60,9 +60,8 @@ export default function LessonPlanDocument({ plan, language = 'sq', showSchoolNa
       <h2>{t('title')}</h2>
       <div className="lesson-document-meta">
         <span><strong>{t('teacher')}</strong> {present(plan.teacherName)}</span>
-        <span><strong>{t('date')}</strong> {formattedDate}</span>
+        {String(plan.date||'').trim()&&<span><strong>{t('date')}</strong> {formattedDate}</span>}
         <span><strong>{t('schoolYear')}</strong> {present(plan.academicYear)}</span>
-        {plan.period && <span><strong>{t('period')}</strong> {plan.period}</span>}
       </div>
     </header>
 

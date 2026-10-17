@@ -5,7 +5,7 @@ import { Avatar } from '../components/Avatar';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { buildSchoolRankings } from '../features/gradebook/schoolResults';
+import { buildSchoolRankings, calculateCandidateRanks } from '../features/gradebook/schoolResults';
 import { useCourseRecords } from '../features/gradebook/useCourseRecords';
 import { enrolledCoursesForStudent, isStudentEnrolledInCourse } from '../features/enrollment';
 import { classGroupsById, studentClassLabel } from '../features/classGroups';
@@ -75,17 +75,31 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
     return classesList;
   }, [scopeCourse, scopeClassId, classRoster.students, classesList]);
   const { records, loading: gradesLoading, error: gradesError } = useCourseRecords(activeSchoolId, scopeCourses);
-  const gradedStudentIds = useMemo(() => {
+  const candidateOverallRanks = useMemo(() => {
     if (scopeCourse || scopeClassId || gradesLoading) return [];
     const ids = new Set();
     for (const record of Object.values(records)) {
       for (const grade of record?.grades || []) Object.keys(grade.scores || {}).forEach(id => ids.add(id));
     }
-    return [...ids];
-  }, [records, scopeCourse, scopeClassId, gradesLoading]);
+    return calculateCandidateRanks(ids, scopeCourses, records);
+  }, [records, scopeCourse, scopeClassId, scopeCourses, gradesLoading]);
+
+  const candidateRanksById = useMemo(() => new Map(candidateOverallRanks.map(item => [item.id, item.rank])), [candidateOverallRanks]);
+
+  const gradedStudentIds = useMemo(() => {
+    if (scopeCourse || scopeClassId || gradesLoading) return [];
+    // At scale (e.g. 50,000 students), only fetch profiles for the top 50 performers
+    // plus the authenticated student so the leaderboard loads instantly.
+    const topIds = candidateOverallRanks.slice(0, 50).map(item => item.id);
+    if (isStudent && currentUser?.uid && !topIds.includes(String(currentUser.uid))) {
+      topIds.push(String(currentUser.uid));
+    }
+    return topIds;
+  }, [scopeCourse, scopeClassId, gradesLoading, candidateOverallRanks, isStudent, currentUser?.uid]);
   const gradedStudents = useStudentsByIds(activeSchoolId, gradedStudentIds);
   const rankingStudents = scopeCourse ? courseRoster.students : scopeClassId ? classRoster.students : gradedStudents.students;
   const studentsLoading = scopeCourse ? courseRoster.loading : scopeClassId ? classRoster.loading : gradedStudents.loading;
+
 
   const dropdownGroups = useMemo(() => {
     const visibleClasses = isStudent ? classGroups.filter(group => group.id === myClassId) : classGroups;
@@ -139,9 +153,15 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
   const studentsById = useMemo(() => new Map(rankingStudents.map(student => [String(student.id), student])), [rankingStudents]);
   const filteredRankings = useMemo(() => {
     if (gradesLoading || gradesError || studentsLoading) return [];
+    const isOverall = !scopeCourse && !scopeClassId;
     return buildSchoolRankings(rankingStudents, scopeCourses, records, scopeCourse ? `course:${scopeCourse.id}` : 'overall')
-      .map(row => ({ ...row, classLabel: studentClassLabel(studentsById.get(String(row.id)), groupsById) }));
-  }, [rankingStudents, scopeCourses, records, scopeCourse, gradesLoading, gradesError, studentsLoading, studentsById, groupsById]);
+      .map(row => ({
+        ...row,
+        rank: isOverall && candidateRanksById.has(String(row.id)) ? candidateRanksById.get(String(row.id)) : row.rank,
+        classLabel: studentClassLabel(studentsById.get(String(row.id)), groupsById),
+      }));
+  }, [rankingStudents, scopeCourses, records, scopeCourse, scopeClassId, gradesLoading, gradesError, studentsLoading, studentsById, groupsById, candidateRanksById]);
+
 
   const handleStudentClick = (student) => {
     if (isStudent) return; // Students do not access administrative student overview
@@ -284,7 +304,7 @@ const Leaderboard = ({ onStudentSelect, userRole = 'student' }) => {
           <h3>{isAlbanian ? 'Notat nuk mund të ngarkohen' : 'Grades could not be loaded'}</h3>
           <p>{isAlbanian ? 'Kontrolloni lejet e lëndëve dhe provoni përsëri.' : 'Check course access and try again.'}</p>
         </section>
-      ) : (gradesLoading || studentsLoading || !classesLoaded) ? (
+      ) : (gradesLoading || studentsLoading || !classesLoaded) && filteredRankings.length === 0 ? (
         <section className="empty-leaderboard glass" style={{ padding: '3rem 2rem', textAlign: 'center', borderRadius: '24px', margin: '2rem 0' }}>
           <p>{isAlbanian ? 'Po ngarkohen notat...' : 'Loading course grades...'}</p>
         </section>

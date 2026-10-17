@@ -19,6 +19,9 @@ export function LessonAiAssistanceCard({
 }) {
   const isSq = language === 'sq';
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState(null);
+  const errorKey = JSON.stringify([accountId, schoolId, language, activePlan?.id]);
+  const visibleError = generationError?.key === errorKey ? generationError : null;
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [quota, setQuota] = useState(null);
   const [undoSnapshot, setUndoSnapshot] = useState(null);
@@ -101,6 +104,7 @@ export function LessonAiAssistanceCard({
 
   const handleGenerate = async () => {
     if (!isReady || isGenerating || limitReached) return;
+    setGenerationError(null);
     setIsGenerating(true);
     const controller = new AbortController();
     requestRef.current = controller;
@@ -130,8 +134,8 @@ export function LessonAiAssistanceCard({
       }
       updatePlan(next, { immediate: true });
 
-      if (notify) {
-        notify(isSq 
+      if (latestScopeRef.current.schoolId === schoolId && latestScopeRef.current.language === language && latestPlanRef.current?.id === activePlan?.id) {
+        notify?.(isSq
           ? `U krijua drafti për Orën ${currentPeriodNum}. Kontrolloni përmbajtjen para përdorimit.`
           : `Period ${currentPeriodNum} draft generated. Review the content before use.`);
       }
@@ -141,7 +145,7 @@ export function LessonAiAssistanceCard({
       if (err.details?.kind === 'lesson-ai-quota') setQuota(err.details);
       else getLessonAiUsage().then(usage => { if (latestScopeRef.current.accountId === accountId) setQuota(usage); }).catch(() => {});
       console.error('AI generation error:', err);
-      if (notify) {
+      if (latestScopeRef.current.schoolId === schoolId && latestScopeRef.current.language === language && latestPlanRef.current?.id === activePlan?.id) {
         const albanianErrors = {
           'functions/unauthenticated': 'Hyni në llogari për të gjeneruar planin.',
           'functions/permission-denied': 'Vetëm mësuesit dhe administratorët aktivë të kësaj shkolle mund të gjenerojnë plane.',
@@ -152,13 +156,17 @@ export function LessonAiAssistanceCard({
           'functions/internal': 'Shërbimi i gjenerimit ka një problem konfigurimi. Provoni më vonë.',
           'functions/failed-precondition': 'Plani i gjeneruar nuk u pranua ose shërbimi AI nuk është gati. Provoni përsëri.',
         };
-        notify(err.details?.kind === 'lesson-ai-quota'
+        const message = err.details?.kind==='lesson-ai-billing'
+          ? (isSq?'Gjenerimi me AI është ndalur sepse shërbimi nuk ka më kredite të parapaguara. Përgjegjësi i shërbimit duhet të shtojë kredite në Google AI Studio.':'AI generation is unavailable because the service has run out of prepaid credits. The service owner needs to restore credits in Google AI Studio.')
+          : err.details?.kind === 'lesson-ai-quota'
           ? (err.details.reserved > 0 && err.details.used < err.details.limit
             ? (isSq ? 'Të gjitha gjenerimet e disponueshme për sot janë duke u përdorur. Prisni të përfundojnë.' : 'All available generation slots for today are in use. Wait for the current generations to finish.')
             : (isSq ? 'Keni përdorur të 50 gjenerimet me AI për sot. Limiti rinovohet në mesnatë.' : 'You have used all 50 AI generations for today. Your allowance resets at midnight.'))
           : isSq
             ? 'Gabim gjatë gjenerimit me AI: ' + (albanianErrors[err.code] || err.message || 'Provoni përsëri.')
-            : 'Failed to generate lesson plan: ' + (err.message || 'Please try again.'));
+            : 'Failed to generate lesson plan: ' + (err.message || 'Please try again.');
+        setGenerationError({ key: errorKey, message, billing: err.details?.kind === 'lesson-ai-billing' });
+        notify?.(message);
       }
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
@@ -190,7 +198,7 @@ export function LessonAiAssistanceCard({
             <div className="lesson-ai-title-row">
               <h3>{isSq ? 'Asistenca Inteligjente me AI' : 'AI Pedagogical Assistant'}</h3>
               <span className="lesson-ai-pill-badge">{LESSON_AI_MODEL}</span>
-              {isReady ? (
+              {visibleError?.billing ? <span className="lesson-ai-status-pill pending"><AlertCircle size={12}/>{isSq?'Shërbimi AI është ndalur':'AI service unavailable'}</span> : isReady ? (
                 <span className="lesson-ai-status-pill ready">
                   <Check size={12} /> {isSq ? 'Gati për gjenerim' : 'Ready'}
                 </span>
@@ -294,6 +302,7 @@ export function LessonAiAssistanceCard({
         </div>
       )}
 
+      {visibleError && <div className="lesson-ai-generation-error" role="alert"><AlertCircle size={18}/><div><p>{visibleError.message}</p>{visibleError.billing&&<a href="https://ai.studio/projects" target="_blank" rel="noopener noreferrer">{isSq?'Google AI Studio — për përgjegjësin e shërbimit':'Google AI Studio — for the service owner'}</a>}</div></div>}
       {/* Footer Actions */}
       {activePlan.aiReference && <div className="lesson-ai-reference" aria-live="polite">
         <strong>{isSq ? 'Burimi për gjenerimin e fundit' : 'Reference for the last generation'}</strong>

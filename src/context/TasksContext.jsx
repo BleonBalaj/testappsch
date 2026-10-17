@@ -3,6 +3,8 @@ import {
   collection, 
   doc, 
   onSnapshot, 
+  query,
+  where,
   setDoc, 
   updateDoc, 
   deleteDoc, 
@@ -11,24 +13,29 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './AuthContext';
+import {verifiedSnapshot} from '../features/liveResource';
 
 const TasksContext = createContext(null);
 
 export const TasksProvider = ({ children }) => {
-  const { activeSchoolId, currentUser } = useAuth();
+  const { activeSchoolId, currentUser, currentRole, roleReady } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error,setError]=useState(null);
 
   useEffect(() => {
-    if (!activeSchoolId) {
+    if (!activeSchoolId || !currentUser?.uid || !roleReady) {
       setTasks([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    const tasksCol = collection(db, 'schools', activeSchoolId, 'tasks');
-    const unsubscribe = onSnapshot(tasksCol, (snapshot) => {
+    setTasks([]);setError(null);let active=true;
+    const source = collection(db, 'schools', activeSchoolId, 'tasks');
+    const tasksCol = currentRole==='student'?query(source,where('role','==','student')):source;
+    const unsubscribe = onSnapshot(tasksCol,{includeMetadataChanges:true}, (snapshot) => {
+      if(!active||!verifiedSnapshot(snapshot))return;
       const loadedTasks = [];
       snapshot.forEach((docSnap) => {
         loadedTasks.push({ id: docSnap.id, ...docSnap.data() });
@@ -36,45 +43,49 @@ export const TasksProvider = ({ children }) => {
       setTasks(loadedTasks);
       setLoading(false);
     }, (err) => {
+      if(!active)return;
       console.warn('Notice listening to tasks:', err.message);
+      setTasks([]);setError(err);
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [activeSchoolId, currentUser?.uid]);
+    return () => {active=false;unsubscribe();};
+  }, [activeSchoolId, currentUser?.uid,currentRole,roleReady]);
+
+  const perform=useCallback(async work=>{setError(null);try{if(!activeSchoolId||!currentUser?.uid)throw new Error('Select a school and sign in first.');await work();return true;}catch(error){setError(error);return false;}},[activeSchoolId,currentUser?.uid]);
 
   const addTask = useCallback(async (task) => {
-    if (!activeSchoolId) return;
-    const taskId = task.id || `tsk_${Date.now()}`;
+    const taskId = task.id || `tsk_${crypto.randomUUID()}`;
     const taskDocRef = doc(db, 'schools', activeSchoolId, 'tasks', String(taskId));
-    await setDoc(taskDocRef, {
+    return perform(()=>setDoc(taskDocRef, {
       ...task,
       id: taskId,
       createdAt: serverTimestamp(),
-      createdByUid: currentUser?.uid || 'user'
-    });
-  }, [activeSchoolId, currentUser?.uid]);
+      createdByUid: currentUser?.uid,
+      role: currentRole==='student'?'student':(task.role||currentRole)
+    }));
+  }, [activeSchoolId, currentUser?.uid,currentRole,perform]);
 
   const updateTask = useCallback(async (id, changes) => {
     if (!activeSchoolId) return;
     const taskDocRef = doc(db, 'schools', activeSchoolId, 'tasks', String(id));
-    await updateDoc(taskDocRef, { ...changes, updatedAt: serverTimestamp() });
-  }, [activeSchoolId]);
+    return perform(()=>updateDoc(taskDocRef, { ...changes, updatedAt: serverTimestamp() }));
+  }, [activeSchoolId,perform]);
 
   const deleteTask = useCallback(async (id) => {
     if (!activeSchoolId) return;
     const taskDocRef = doc(db, 'schools', activeSchoolId, 'tasks', String(id));
-    await deleteDoc(taskDocRef);
-  }, [activeSchoolId]);
+    return perform(()=>deleteDoc(taskDocRef));
+  }, [activeSchoolId,perform]);
 
   const moveTask = useCallback(async (id, status) => {
     if (!activeSchoolId) return;
     const taskDocRef = doc(db, 'schools', activeSchoolId, 'tasks', String(id));
-    await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() });
-  }, [activeSchoolId]);
+    return perform(()=>updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() }));
+  }, [activeSchoolId,perform]);
 
   return (
-    <TasksContext.Provider value={{ tasks, loading, addTask, updateTask, deleteTask, moveTask }}>
+    <TasksContext.Provider value={{ tasks, loading, error, addTask, updateTask, deleteTask, moveTask }}>
       {children}
     </TasksContext.Provider>
   );

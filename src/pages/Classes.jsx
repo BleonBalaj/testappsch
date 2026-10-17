@@ -5,6 +5,7 @@ import {
   Download, Sparkles, BookOpen, Layers, X, Check,
   GraduationCap, Clock, MapPin, Edit3, Trash2, AlertTriangle
 } from 'lucide-react';
+import ReadStatus from '../components/ReadStatus';
 import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -181,7 +182,7 @@ const ClassCard = ({
 const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotification, viewRequest = null }) => {
   const { 
     staffList = [], 
-    classesList = [], 
+    classesList = [],classesLoaded,classesError,classGroupsLoaded,classGroupsError,retrySchoolData, 
     classGroups = [],
     myStudentRecord,
     studentsVersion,
@@ -623,7 +624,9 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
         </motion.div>
       )}
 
-      {showGroups ? (
+      <ReadStatus state={{loading:showGroups?!classGroupsLoaded:!classesLoaded,hasLoaded:showGroups?classGroupsLoaded:classesLoaded,rows:showGroups?classGroups:classesList,error:showGroups?classGroupsError:classesError}} language={isAlbanian?'sq':'en'}/>
+      {(showGroups?classGroupsError:classesError)&&<p role="alert">{isAlbanian?'Të dhënat nuk u ngarkuan.':'Data could not be loaded.'} <button className="btn-secondary" onClick={retrySchoolData}>{isAlbanian?'Provo përsëri':'Try again'}</button></p>}
+      {showGroups ? (classGroupsLoaded&&!classGroupsError&&
         <ClassGroupsView
           userRole={userRole}
           canEditMembership={canEditStudentMembership}
@@ -774,7 +777,7 @@ const Classes = ({ onClassSelect, onOpenSchedule, userRole = 'student', addNotif
                 onDelete={(cls) => setClassToDelete(cls)}
               />
             ))
-          ) : (
+          ) : classesLoaded&&!classesError&&(
             <motion.div 
               className="empty-classes-card glass"
               initial={{ opacity: 0, y: 15 }}

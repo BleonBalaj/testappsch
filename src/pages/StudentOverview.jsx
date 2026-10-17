@@ -53,8 +53,8 @@ const StudentOverview = ({ student, onBack }) => {
   const { activeSchoolId } = useAuth();
   const { t, isAlbanian } = useLanguage();
   // Live copy of this one record, so edits elsewhere show up immediately.
-  const { student: freshStudent } = useStudentRecord(activeSchoolId, student?.id);
-  const liveStudent = freshStudent || student;
+  const { student: freshStudent, loading:studentLoading, error:studentError } = useStudentRecord(activeSchoolId, student?.id);
+  const liveStudent = studentLoading ? student : freshStudent;
   const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
   const studentId = liveStudent?.id;
   const enrolledClasses = useMemo(() => enrolledCoursesForStudent(liveStudent, classesList), [classesList, liveStudent]);
@@ -121,6 +121,7 @@ const StudentOverview = ({ student, onBack }) => {
   ];
 
   if (!student) return null;
+  if(!liveStudent)return <div className="content-card glass" role="status"><button className="btn-secondary" onClick={onBack}>{isAlbanian?'Kthehu':'Back'}</button><p>{studentError?(isAlbanian?'Profili nuk mund të ngarkohet. Kontrolloni qasjen.':'The profile could not be loaded. Check your access.'):(isAlbanian?'Ky profil nuk është më i disponueshëm.':'This profile is no longer available.')}</p></div>;
 
   // Retrieve freshest student record if present in Context
   const isArchived = liveStudent.status === 'archived';

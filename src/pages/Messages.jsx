@@ -46,6 +46,7 @@ const Messages = ({ userRole = 'admin' }) => {
   const [chats, setChats] = useState(INITIAL_CHATS);
   const [activeChat, setActiveChat] = useState(null);
   const [threads, setThreads] = useState(INITIAL_THREAD);
+  const [syncError, setSyncError] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [chatSearch, setChatSearch] = useState('');
   const [filterTab, setFilterTab] = useState('all'); // 'all', 'direct', 'groups', 'starred'
@@ -172,19 +173,20 @@ const Messages = ({ userRole = 'admin' }) => {
 
       const finalChats = Array.from(mergedMap.values());
       setChats(finalChats);
+      setSyncError('');
 
       setActiveChat(prev => {
         if (!prev && finalChats.length > 0) return finalChats[0];
         if (prev) {
           const updated = finalChats.find(c => c.id === prev.id);
-          return updated ? { ...prev, ...updated } : prev;
+          return updated ? { ...prev, ...updated } : finalChats[0] || null;
         }
         return prev;
       });
-    }, (err) => console.warn('Conversations sync notice:', err.message));
+    }, (err) => { console.warn('Conversations sync notice:', err.message); setChats([]); setActiveChat(null); setThreads({}); setSyncError(err.message); });
 
     return () => unsub();
-  }, [activeSchoolId, staffList, classmates.students, studentLabel, currentUser?.uid, applyPeerName]);
+  }, [activeSchoolId, staffList, classmates.students, studentLabel, currentUser?.uid, currentUser?.displayName, currentUser?.email, applyPeerName]);
 
   useEffect(() => {
     if (!activeSchoolId) return;
@@ -219,7 +221,7 @@ const Messages = ({ userRole = 'admin' }) => {
         ...prev,
         [activeChat.id]: msgs
       }));
-    }, (err) => console.warn('Messages sync notice:', err.message));
+    }, (err) => { console.warn('Messages sync notice:', err.message); setThreads(previous => ({...previous,[activeChat.id]:[]})); setSyncError(err.message); });
 
     return () => unsub();
   }, [activeSchoolId, activeChat?.id, activeChatPersisted, currentUser?.uid]);
@@ -562,6 +564,7 @@ const Messages = ({ userRole = 'admin' }) => {
     <div className="messages-page full-immersion">
       {/* ── Left Sidebar ── */}
       <div className="messages-sidebar glass">
+        {syncError && <p role="alert" className="workflow-error">{isAlbanian ? 'Mesazhet nuk u ngarkuan. ' : 'Messages could not be loaded. '}{syncError}</p>}
         <div className="messages-header">
           <div className="messages-title-row">
             <div className="title-with-badge">

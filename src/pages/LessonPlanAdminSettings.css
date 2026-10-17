@@ -41,7 +41,8 @@
 .lp-admin-field > span { color: hsl(var(--muted-foreground)); font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
 
 .lp-admin-field input,
-.lp-admin-field select {
+.lp-admin-field select,
+.lp-admin-field .app-filter-trigger {
   width: 100%;
   min-width: 0;
   min-height: 42px;
@@ -60,7 +61,7 @@
 .lp-admin-field input:focus,
 .lp-admin-field select:focus { border-color: hsl(var(--primary)); box-shadow: 0 0 0 2px hsla(var(--primary), .22); }
 [data-theme='light'] .lp-admin-field input,
-[data-theme='light'] .lp-admin-field select { background: #fff; border-color: hsl(270 25% 75%); }
+[data-theme='light'] .lp-admin-field select, [data-theme='light'] .lp-admin-field .app-filter-trigger { background: #fff; border-color: hsl(270 25% 75%); }
 
 .lp-admin-check { display: inline-flex; align-items: center; gap: .55rem; color: hsl(var(--foreground)); font-size: .8rem; font-weight: 600; }
 .lp-admin-check input { width: 16px; height: 16px; accent-color: hsl(var(--primary)); }

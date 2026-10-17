@@ -515,6 +515,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
   const [manualOverrideModal, setManualOverrideModal] = useState(null);
   const [materials, setMaterials]         = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [syncErrors, setSyncErrors] = useState({});
   const [gradeModal, setGradeModal]       = useState(null); // assignment obj
   const [weightsModal, setWeightsModal]   = useState(false);
   const [addModal, setAddModal]           = useState(false);
@@ -569,7 +570,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
       const items = [];
       snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
       setAssignments(items);
-    }, (err) => console.warn('Assignments sync notice:', err.message));
+      setSyncErrors(previous=>({...previous,assignments:null}));
+    }, (err) => { setAssignments([]); setSyncErrors(previous=>({...previous,assignments:err.message})); });
     return () => unsub();
   }, [activeSchoolId, classData?.id]);
 
@@ -589,7 +591,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
         });
       });
       setGrades(newGrades);
-    }, (err) => console.warn('Grades sync notice:', err.message));
+      setSyncErrors(previous=>({...previous,grades:null}));
+    }, (err) => { setGrades({}); setSyncErrors(previous=>({...previous,grades:err.message})); });
     return () => unsub();
   }, [activeSchoolId, classData?.id]);
 
@@ -603,7 +606,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
         items[docSnap.id] = docSnap.data();
       });
       setStudentTracking(items);
-    }, (err) => console.warn('StudentTracking sync notice:', err.message));
+      setSyncErrors(previous=>({...previous,studentTracking:null}));
+    }, (err) => { setStudentTracking({}); setSyncErrors(previous=>({...previous,studentTracking:err.message})); });
     return () => unsub();
   }, [activeSchoolId, classData?.id]);
 
@@ -615,7 +619,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
       const items = [];
       snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
       setMaterials(items);
-    }, (err) => console.warn('Materials sync notice:', err.message));
+      setSyncErrors(previous=>({...previous,materials:null}));
+    }, (err) => { setMaterials([]); setSyncErrors(previous=>({...previous,materials:err.message})); });
     return () => unsub();
   }, [activeSchoolId, classData?.id]);
 
@@ -627,7 +632,8 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
       const items = [];
       snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
       setAttendanceRecords(items);
-    }, (err) => console.warn('Attendance sync notice:', err.message));
+      setSyncErrors(previous=>({...previous,attendance:null}));
+    }, (err) => { setAttendanceRecords([]); setSyncErrors(previous=>({...previous,attendance:err.message})); });
     return () => unsub();
   }, [activeSchoolId, classData?.id]);
 
@@ -772,6 +778,7 @@ const ClassOverview = ({ classData, onBack, onStudentSelect, userRole = 'student
 
   return (
     <motion.div className="co-page" initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}>
+      {(roster.error || Object.values(syncErrors).some(Boolean)) && <p role="alert" className="workflow-error">{t('common.loadFailed', 'Some course data could not be loaded. Do not rely on incomplete totals.')} {roster.error?.message || Object.values(syncErrors).filter(Boolean).join(' · ')}</p>}
 
       {/* ── Hero Header ── */}
       <div className="co-header glass" style={{ borderLeft: `5px solid hsl(var(${classData.color}))` }}>

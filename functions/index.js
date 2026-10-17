@@ -1,9 +1,21 @@
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { reportErrors } from './callableErrors.js';
 
+export const lessonPlanActivityCreated = onDocumentCreated({document:'schools/{schoolId}/lessonPlanReviewHistory/{planId}/events/{eventId}',region:'us-central1',retry:true,maxInstances:5}, async event=>{
+  const [{ensureDefaultApp},{getFirestore},{processReviewEvent}]=await Promise.all([import('./adminApp.js'),import('firebase-admin/firestore'),import('./reviewActivity.js')]);
+  ensureDefaultApp(); if(event.data)await processReviewEvent(getFirestore(),event.params.schoolId,event.params.planId,event.params.eventId,event.data.data());
+});
+
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const permittedRoles = new Set(['admin', 'teacher', 'dept_head']);
+
+export const schoolWorkflow = onCall({ region: 'us-central1', invoker: 'public', timeoutSeconds: 120, maxInstances: 10 }, request =>
+  reportErrors('schoolWorkflow', request, async () => {
+    const { schoolWorkflow: execute } = await import('./schoolWorkflows.js');
+    return execute(request);
+  }));
 
 export const checkPasswordRecoveryAccount = onCall({
   region: 'us-central1', invoker: 'public', timeoutSeconds: 30, maxInstances: 5,
@@ -170,6 +182,8 @@ export const generateLessonPlan = onCall({
     if (/too generic/i.test(message)) throw new HttpsError('failed-precondition', message);
     // Never return upstream API details or the key to the browser.
     console.error('Lesson generation failed:', error);
+    const {lessonAiBillingError}=await import('./lessonAiServiceError.js');
+    const billingError=lessonAiBillingError(error);if(billingError)throw billingError;
     if (error?.status === 401 || error?.status === 403) {
       throw new HttpsError('failed-precondition', 'The app’s AI service key was rejected. Contact the school administrator.');
     }

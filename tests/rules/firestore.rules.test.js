@@ -61,6 +61,34 @@ beforeEach(async () => {
 });
 
 // ── users/{uid} profiles ────────────────────────────────────────────────
+
+test('student task queries and mutations cannot cross into the staff board',async()=>{
+ const admin=as(OWNER),student=as(STUDENT_A);
+ const task={content:'Review lesson',status:'todo',priority:'medium',role:'teacher',createdByUid:OWNER};
+ await assertSucceeds(setDoc(doc(admin,'schools/sch1/tasks/staff'),task));
+ await assertFails(getDoc(doc(student,'schools/sch1/tasks/staff')));
+ await assertFails(getDocs(collection(student,'schools/sch1/tasks')));
+ await assertFails(updateDoc(doc(student,'schools/sch1/tasks/staff'),{role:'student'}));
+ await assertFails(deleteDoc(doc(student,'schools/sch1/tasks/staff')));
+ await assertSucceeds(setDoc(doc(student,'schools/sch1/tasks/personal'),{...task,role:'student',createdByUid:STUDENT_A}));
+ await assertSucceeds(getDocs(query(collection(student,'schools/sch1/tasks'),where('role','==','student'))));
+ await assertSucceeds(updateDoc(doc(student,'schools/sch1/tasks/personal'),{status:'done'}));
+ await assertFails(updateDoc(doc(student,'schools/sch1/tasks/personal'),{createdByUid:OWNER}));
+ await assertFails(setDoc(doc(student,'schools/sch1/tasks/forged'),task));
+});
+
+test('personal planning templates and reusable entries stay private even from other admins',async()=>{
+ for(const kind of ['templates','reusableEntries']){
+  const own=doc(as(TEACHER),`schools/sch1/${kind}/personal`);await assertSucceeds(setDoc(own,{ownerUid:TEACHER,name:'Personal'}));
+  await assertSucceeds(getDocs(query(collection(as(TEACHER),`schools/sch1/${kind}`),where('ownerUid','==',TEACHER))));
+  await assertFails(getDoc(doc(as(OWNER),`schools/sch1/${kind}/personal`)));
+  await assertFails(updateDoc(doc(as(OWNER),`schools/sch1/${kind}/personal`),{name:'Changed'}));
+  await assertFails(updateDoc(own,{ownerUid:OWNER}));await assertSucceeds(deleteDoc(own));
+ }
+ await assertSucceeds(setDoc(doc(as(OWNER),'schools/sch1/topics/shared'),{scope:'school',title:'Shared topic'}));
+ await assertSucceeds(getDocs(query(collection(as(TEACHER),'schools/sch1/topics'),where('scope','==','school'))));
+ await assertFails(updateDoc(doc(as(TEACHER),'schools/sch1/topics/shared'),{title:'Change'}));
+});
 test('a user can create their own complete profile', async () => {
   await assertSucceeds(setDoc(doc(as(STUDENT_A), 'users', STUDENT_A), {
     uid: STUDENT_A, email: 'studenta@school.test', displayName: 'A', name: 'A',

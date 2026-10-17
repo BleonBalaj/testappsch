@@ -207,6 +207,81 @@ service cloud.firestore {
       allow delete: if false;
 
       // Roles
+      function workflowRequestReader(requestId) {
+        return (isSchoolAdmin(schoolId) || (isSchoolMember(schoolId) && getMemberRole(schoolId) != 'student')) &&
+          canUseModule(schoolId, 'school-requests', true, false) &&
+          (isSchoolAdmin(schoolId) || request.auth.uid in get(/databases/$(database)/documents/schools/$(schoolId)/schoolRequests/$(requestId)).data.participantUids);
+      }
+      function workflowFeedbackReader(planId) {
+        return isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false) &&
+          (isSchoolAdmin(schoolId) || get(/databases/$(database)/documents/schools/$(schoolId)/lessonPlans/$(planId)).data.ownerUid == request.auth.uid);
+      }
+      match /schoolRequests/{requestId} {
+        allow read: if (isSchoolAdmin(schoolId) || (isSchoolMember(schoolId) && getMemberRole(schoolId) != 'student')) &&
+          canUseModule(schoolId, 'school-requests', true, false) &&
+          (isSchoolAdmin(schoolId) || request.auth.uid in resource.data.participantUids);
+        allow write: if false;
+        match /events/{eventId} { allow read: if workflowRequestReader(requestId); allow write: if false; }
+        match /photos/{photoId} { allow read: if workflowRequestReader(requestId); allow write: if false; }
+      }
+      match /teacherAbsences/{absenceId} {
+        allow read: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'coverage', true, false) &&
+          (isSchoolAdmin(schoolId) || resource.data.teacherUid == request.auth.uid);
+        allow write: if false;
+        match /events/{eventId} {
+          allow read: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'coverage', true, false) && (isSchoolAdmin(schoolId) ||
+            get(/databases/$(database)/documents/schools/$(schoolId)/teacherAbsences/$(absenceId)).data.teacherUid == request.auth.uid);
+          allow write: if false;
+        }
+      }
+      // Public dated timetable exceptions contain no private absence reason.
+      match /lessonCoverage/{coverageId} {
+        allow read: if canUseModule(schoolId, 'schedule', true, true) || canUseModule(schoolId, 'coverage', true, false);
+        allow write: if false;
+        match /events/{eventId} {
+          allow read: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'coverage', true, false) && (isSchoolAdmin(schoolId) ||
+            request.auth.uid in get(/databases/$(database)/documents/schools/$(schoolId)/lessonCoverage/$(coverageId)).data.participantUids);
+          allow write: if false;
+        }
+      }
+      match /lessonPlanReviews/{planId} {
+        allow get: if lessonAuthor() && (resource == null || isSchoolAdmin(schoolId) || resource.data.ownerUid == request.auth.uid);
+        allow list: if lessonAuthor() && (isSchoolAdmin(schoolId) || resource.data.ownerUid == request.auth.uid);
+        allow write: if false;
+      }
+      match /reviewEventReceipts/{eventId} { allow read,write: if false; }
+      match /lessonPlanActivity/{activityUid}/plans/{planId} {
+        allow read: if lessonAuthor() && request.auth.uid == activityUid;
+        function readCursor(kind) {
+          let at = kind + 'At'; let event = kind + 'EventId';
+          let seenAt = 'seen' + kind + 'At'; let seenEvent = 'seen' + kind + 'EventId';
+          return request.resource.data[seenAt] is timestamp && request.resource.data[seenEvent] is string && request.resource.data[seenEvent].size() <= 180 &&
+            request.resource.data[seenAt] <= resource.data[at] &&
+            (request.resource.data[seenAt] < resource.data[at] || request.resource.data[seenEvent] <= resource.data[event]) &&
+            request.resource.data[seenAt] >= resource.data.get(seenAt,timestamp.date(1970,1,1)) &&
+            (request.resource.data[seenAt] > resource.data.get(seenAt,timestamp.date(1970,1,1)) || request.resource.data[seenEvent] >= resource.data.get(seenEvent,''));
+        }
+        allow update: if lessonAuthor() && request.auth.uid == activityUid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenhistoryAt','seenhistoryEventId','seenfeedbackAt','seenfeedbackEventId']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['seenhistoryAt','seenhistoryEventId']) || readCursor('history')) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['seenfeedbackAt','seenfeedbackEventId']) || readCursor('feedback'));
+        allow create,delete: if false;
+      }
+      match /lessonPlanFeedback/{planId} {
+        allow read: if workflowFeedbackReader(planId);
+        allow write: if false;
+        match /messages/{messageId} { allow read: if workflowFeedbackReader(planId); allow write: if false; }
+      }
+      match /workflowCommands/{commandId} { allow read, write: if false; }
+      match /workflowNotices/{noticeId} {
+        allow read: if isSchoolMember(schoolId) && getMemberRole(schoolId) != 'student' && request.auth.uid in resource.data.recipientUids;
+        allow update: if isSchoolMember(schoolId) && getMemberRole(schoolId) != 'student' && request.auth.uid in resource.data.recipientUids &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']) &&
+          request.resource.data.readBy.diff(resource.data.readBy).affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.readBy[request.auth.uid] == true;
+        allow create, delete: if false;
+      }
+
       match /roles/{roleId} {
         allow read: if isSchoolMember(schoolId);
         allow write: if isSchoolAdmin(schoolId);
@@ -320,6 +395,12 @@ service cloud.firestore {
       function inboxPath(planId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlanInbox/$(planId); }
       function planPath(planId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlans/$(planId); }
       function historyPath(planId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlanReviewHistory/$(planId); }
+      function assignedReviewer(planId) {
+        return isSchoolAdmin(schoolId) && get(/databases/$(database)/documents/schools/$(schoolId)/lessonPlanReviews/$(planId)).data.get('reviewerUid', '') == request.auth.uid;
+      }
+      function reviewTransition(before, after) {
+        return (before == 'pending' && after == 'reviewing') || (before == 'reviewing' && after in ['pending','archived']) || (before == 'archived' && after == 'pending');
+      }
       function eventPath(planId, eventId) { return /databases/$(database)/documents/schools/$(schoolId)/lessonPlanReviewHistory/$(planId)/events/$(eventId); }
       function logged(planId, action, eventId) {
         let event = getAfter(eventPath(planId, eventId)).data;
@@ -382,7 +463,7 @@ service cloud.firestore {
         allow create: if lessonAuthor() && validInbox(planId);
         allow update: if (lessonAuthor() && validInbox(planId) &&
           (request.resource.data.revisionId != resource.data.revisionId || request.resource.data.shareToken != resource.data.shareToken)) ||
-          (isSchoolAdmin(schoolId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewStatus', 'reviewedByUid', 'reviewedAt', 'lastEventId']) &&
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewStatus', 'reviewedByUid', 'reviewedAt', 'lastEventId']) && assignedReviewer(planId) && reviewTransition(resource.data.reviewStatus, request.resource.data.reviewStatus) &&
           request.resource.data.reviewStatus in ['pending', 'reviewing', 'archived'] && request.resource.data.reviewedByUid == request.auth.uid && request.resource.data.reviewedAt == request.time &&
           resource.data.revisionId == get(sharePath(planId)).data.revisionId && resource.data.shareToken == get(sharePath(planId)).data.shareToken &&
           logged(planId, 'review', request.resource.data.lastEventId));
@@ -430,7 +511,7 @@ service cloud.firestore {
                 ((request.resource.data.action in ['share', 'reshare'] && !exists(sharePath(planId))) || (request.resource.data.action == 'update' && exists(sharePath(planId))))) ||
               (request.resource.data.action == 'unshare' && ownsPlan(request.resource.data) && !existsAfter(sharePath(planId)) &&
                 request.resource.data.reviewStatus == 'unshared' && request.resource.data.revisionId == get(sharePath(planId)).data.revisionId && request.resource.data.shareToken == get(sharePath(planId)).data.shareToken) ||
-              (request.resource.data.action == 'review' && isSchoolAdmin(schoolId) &&
+              (request.resource.data.action == 'review' && assignedReviewer(planId) && reviewTransition(get(inboxPath(planId)).data.reviewStatus, request.resource.data.reviewStatus) &&
                 getAfter(inboxPath(planId)).data.lastEventId == eventId && request.resource.data.reviewStatus == getAfter(inboxPath(planId)).data.reviewStatus &&
                 request.resource.data.revisionId == get(sharePath(planId)).data.revisionId && request.resource.data.shareToken == get(sharePath(planId)).data.shareToken)
             )));
@@ -440,20 +521,24 @@ service cloud.firestore {
 
       // Lesson Plan Templates
       match /templates/{templateId} {
-        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
-        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
+        allow read, delete: if lessonAuthor() && resource.data.ownerUid == request.auth.uid;
+        allow create: if lessonAuthor() && request.resource.data.ownerUid == request.auth.uid;
+        allow update: if lessonAuthor() && resource.data.ownerUid == request.auth.uid && request.resource.data.ownerUid == resource.data.ownerUid;
       }
 
       // Lesson Reusable Entries
       match /reusableEntries/{entryId} {
-        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
-        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
+        allow read, delete: if lessonAuthor() && resource.data.ownerUid == request.auth.uid;
+        allow create: if lessonAuthor() && request.resource.data.ownerUid == request.auth.uid;
+        allow update: if lessonAuthor() && resource.data.ownerUid == request.auth.uid && request.resource.data.ownerUid == resource.data.ownerUid;
       }
 
       // Topics
       match /topics/{topicId} {
-        allow read: if canUseModule(schoolId, 'lesson-plans', true, false);
-        allow write: if isSchoolTeacherOrAdmin(schoolId) && canUseModule(schoolId, 'lesson-plans', true, false);
+        allow read: if lessonAuthor() && (resource.data.get('scope','')=='school' || resource.data.ownerUid==request.auth.uid);
+        allow create: if lessonAuthor() && (request.resource.data.get('scope','')=='school'?isSchoolAdmin(schoolId):request.resource.data.ownerUid==request.auth.uid);
+        allow update: if lessonAuthor() && (resource.data.get('scope','')=='school'?isSchoolAdmin(schoolId):resource.data.ownerUid==request.auth.uid) && request.resource.data.get('scope','')==resource.data.get('scope','') && request.resource.data.get('ownerUid','')==resource.data.get('ownerUid','');
+        allow delete: if lessonAuthor() && (resource.data.get('scope','')=='school'?isSchoolAdmin(schoolId):resource.data.ownerUid==request.auth.uid);
       }
 
       // School curriculum mappings
@@ -508,7 +593,21 @@ service cloud.firestore {
 
       // Tasks
       match /tasks/{taskId} {
-        allow read, write: if canUseModule(schoolId, 'tasks', true, true);
+        function taskReader(data) {
+          return canUseModule(schoolId, 'tasks', true, true) &&
+            (isSchoolAdmin(schoolId) || getMemberRole(schoolId) != 'student' || data.get('role','') == 'student');
+        }
+        function validTask() {
+          let data=request.resource.data;
+          return data.content is string && data.content.size()>0 && data.content.size()<=4000 &&
+            data.status in ['todo','inprogress','done'] && data.priority in ['low','medium','high'] &&
+            data.role is string && data.role.size()<=60;
+        }
+        allow read, delete: if taskReader(resource.data);
+        allow create: if taskReader(request.resource.data) && validTask() && request.resource.data.createdByUid==request.auth.uid;
+        allow update: if taskReader(resource.data) && validTask() &&
+          request.resource.data.get('createdByUid','')==resource.data.get('createdByUid','') &&
+          (request.resource.data.role==resource.data.role || isSchoolAdmin(schoolId) || getMemberRole(schoolId)!='student');
       }
 
       // Mood entries: each member writes only their own `<uid>_<date>` entry.

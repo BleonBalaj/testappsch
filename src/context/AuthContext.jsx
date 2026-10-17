@@ -1,6 +1,9 @@
 import { applyTheme } from '../features/theme/themeStore';
 import { writeNaturePhasePref, writeNatureSeason } from '../features/theme/nature-phase';
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { dataScope } from '../features/dataScope';
+import { useScopedState } from '../features/useScopedState';
+import { storageRead, storageWrite, storageRemove } from '../features/safeStorage';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
@@ -19,7 +22,8 @@ import {
   setDoc, 
   getDoc,
   updateDoc,
-  serverTimestamp 
+  serverTimestamp,
+  writeBatch
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../services/firebase';
@@ -38,61 +42,58 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [idToken, setIdToken] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [schoolLinks, setSchoolLinks] = useState(() => {
-    try {
-      const cached = localStorage.getItem('lumi-cached-school-links');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
+  const accountScope = dataScope(currentUser?.uid);
+  const [schoolLinks, setSchoolLinks] = useScopedState(accountScope, []);
   const [loadedUid, setLoadedUid] = useState(null);
   const schoolLinksLoaded = Boolean(currentUser?.uid && loadedUid === currentUser.uid);
-  const [activeSchoolId, setActiveSchoolId] = useState(() => localStorage.getItem('lumi-active-school-id') || null);
-  const [activeSchoolDoc, setActiveSchoolDoc] = useState(() => {
-    try {
-      const cached = localStorage.getItem('lumi-cached-active-school-doc');
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [activeMembership, setActiveMembership] = useState(null);
+  const [activeSchoolId, setActiveSchoolId] = useState(() => storageRead('lumi-active-school-id') || null);
+  const schoolScope = dataScope(currentUser?.uid,activeSchoolId);
+  const [activeSchoolDoc, setActiveSchoolDoc] = useScopedState(schoolScope, null);
+  const [activeMembership, setActiveMembership] = useScopedState(schoolScope, null);
   // School whose membership snapshot has arrived, so the role is known for it.
-  const [membershipSchoolId, setMembershipSchoolId] = useState(null);
-  const [globalPreferences, setGlobalPreferences] = useState({ theme: 'dark', language: 'en' });
-  const [schoolPreferences, setSchoolPreferences] = useState({});
-  const [pendingInvitations, setPendingInvitations] = useState([]);
-  const [invitationsLoading, setInvitationsLoading] = useState(false);
-  const [userDocData, setUserDocData] = useState(null);
+  const [membershipSchoolId, setMembershipSchoolId] = useScopedState(schoolScope, null);
+  const [globalPreferences, setGlobalPreferences] = useScopedState(accountScope, { theme: 'system', language: 'en' });
+  const [schoolPreferences, setSchoolPreferences] = useScopedState(schoolScope, {});
+  const [pendingInvitations, setPendingInvitations] = useScopedState(accountScope, []);
+  const [invitationsLoading, setInvitationsLoading] = useScopedState(accountScope,false);
+  const [userDocData, setUserDocData] = useScopedState(accountScope, null);
+  const authGeneration = useRef(0);
 
   // Helper to get fresh ID token
   const getIdTokenSafe = useCallback(async () => {
     if (!auth.currentUser) return null;
-    const token = await auth.currentUser.getIdToken(true);
+    const user=auth.currentUser;
+    const token = await user.getIdToken(true);
+    if(auth.currentUser?.uid!==user.uid)return null;
     setIdToken(token);
     return token;
   }, []);
 
   // 1. Listen to Firebase Auth state
   useEffect(() => {
+    let active=true;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if(!active)return;
+      const generation = ++authGeneration.current;
       setCurrentUser(user);
       if (user) {
         try {
           const token = await user.getIdToken();
+          if(!active||generation!==authGeneration.current)return;
           setIdToken(token);
         } catch (e) {
           console.error('Error fetching token:', e);
         }
+        if(!active||generation!==authGeneration.current)return;
         // Immediate cache restore for this specific user
         try {
-          const userCache = localStorage.getItem(`lumi-cached-school-links-${user.uid}`) || localStorage.getItem('lumi-cached-school-links');
+          const userCache = storageRead(`lumi-cached-school-links-${user.uid}`);
           if (userCache) {
             const parsed = JSON.parse(userCache);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setSchoolLinks(parsed);
-              const storedId = localStorage.getItem('lumi-active-school-id');
+              // The new account's listener restores links. Never call a setter
+              // captured from a previous account's render here.
+              const storedId = storageRead('lumi-active-school-id');
               const match = parsed.find(l => l.schoolId === storedId);
               const targetId = match ? match.schoolId : parsed[0].schoolId;
               setActiveSchoolId(targetId);
@@ -101,20 +102,16 @@ export const AuthProvider = ({ children }) => {
         } catch { /* Local cache is optional. */ }
       } else {
         setIdToken(null);
-        setSchoolLinks([]);
         setLoadedUid(null);
-        setActiveSchoolDoc(null);
-        setActiveMembership(null);
         setActiveSchoolId(null);
-        setPendingInvitations([]);
-        localStorage.removeItem('lumi-cached-school-links');
-        localStorage.removeItem('lumi-cached-active-school-doc');
-        localStorage.removeItem('lumi-active-school-id');
+        storageRemove('lumi-cached-school-links');
+        storageRemove('lumi-cached-active-school-doc');
+        storageRemove('lumi-active-school-id');
       }
       setAuthLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => { active=false;unsubscribe(); };
   }, []);
 
   // 2. Listen to user's school links in real-time: users/{uid}/schoolLinks
@@ -125,9 +122,11 @@ export const AuthProvider = ({ children }) => {
     }
 
     const uid = currentUser.uid;
+    let active = true, revision = 0;
     const linksCol = collection(db, 'users', uid, 'schoolLinks');
 
     const unsubscribe = onSnapshot(linksCol, async (snapshot) => {
+      const latest = ++revision;
       const links = [];
       snapshot.forEach((docSnap) => {
         links.push({ id: docSnap.id, ...docSnap.data() });
@@ -139,6 +138,7 @@ export const AuthProvider = ({ children }) => {
           const { query: fsQuery, where: fsWhere, getDocs: fsGetDocs } = await import('firebase/firestore');
           const q = fsQuery(collection(db, 'schools'), fsWhere('creatorUid', '==', uid));
           const schoolSnap = await fsGetDocs(q);
+          if(!active || latest!==revision)return;
           if (!schoolSnap.empty) {
             const firstSchool = schoolSnap.docs[0];
             const schoolData = firstSchool.data();
@@ -160,36 +160,40 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
+      if(!active || latest!==revision)return;
+
       setSchoolLinks(links);
       setLoadedUid(uid);
 
       try {
-        localStorage.setItem(`lumi-cached-school-links-${uid}`, JSON.stringify(links));
-        localStorage.setItem('lumi-cached-school-links', JSON.stringify(links));
+        storageWrite(`lumi-cached-school-links-${uid}`, JSON.stringify(links));
+        storageWrite('lumi-cached-school-links', JSON.stringify(links));
       } catch { /* Local cache is optional. */ }
 
       // Auto-select school if none selected or if previously selected is invalid
       if (links.length > 0) {
-        const storedId = localStorage.getItem('lumi-active-school-id');
+        const storedId = storageRead('lumi-active-school-id');
         const match = links.find(l => l.schoolId === storedId);
         const chosenId = match ? match.schoolId : links[0].schoolId;
         setActiveSchoolId(chosenId);
-        localStorage.setItem('lumi-active-school-id', chosenId);
+        storageWrite('lumi-active-school-id', chosenId);
       } else {
         setActiveSchoolId(null);
-        localStorage.removeItem('lumi-active-school-id');
+        storageRemove('lumi-active-school-id');
       }
     }, (err) => {
+      if(!active)return;
       console.error('Error listening to school links:', err);
+      setSchoolLinks([]);setActiveSchoolId(null);
       setLoadedUid(uid);
     });
 
-    return () => unsubscribe();
-  }, [currentUser?.uid]);
+    return () => { active=false;revision++;unsubscribe(); };
+  }, [currentUser?.uid,setSchoolLinks]);
 
   // 3. Listen to active school details
   useEffect(() => {
-    if (!activeSchoolId) {
+    if (!activeSchoolId || !currentUser?.uid) {
       setActiveSchoolDoc(null);
       return;
     }
@@ -200,18 +204,19 @@ export const AuthProvider = ({ children }) => {
         const data = { id: docSnap.id, ...docSnap.data() };
         setActiveSchoolDoc(data);
         try {
-          localStorage.setItem('lumi-cached-active-school-doc', JSON.stringify(data));
+          storageWrite('lumi-cached-active-school-doc', JSON.stringify(data));
         } catch { /* Local cache is optional. */ }
       } else {
         setActiveSchoolDoc(null);
-        localStorage.removeItem('lumi-cached-active-school-doc');
+        storageRemove('lumi-cached-active-school-doc');
       }
     }, (err) => {
       console.warn('Notice listening to active school doc:', err.message);
+      setActiveSchoolDoc(null);storageRemove('lumi-cached-active-school-doc');
     });
 
     return () => unsubscribe();
-  }, [activeSchoolId]);
+  }, [activeSchoolId,currentUser?.uid,setActiveSchoolDoc]);
 
   // A school link powers the switcher; the membership document determines authority.
   useEffect(() => {
@@ -228,7 +233,7 @@ export const AuthProvider = ({ children }) => {
       setActiveMembership(null);
       setMembershipSchoolId(activeSchoolId);
     });
-  }, [activeSchoolId, currentUser?.uid]);
+  }, [activeSchoolId, currentUser?.uid,setActiveMembership,setMembershipSchoolId]);
 
   // 3b. Listen to user profile document in Firestore: users/{uid}
   useEffect(() => {
@@ -239,10 +244,8 @@ export const AuthProvider = ({ children }) => {
 
     const userDocRef = doc(db, 'users', currentUser.uid);
     let profileChecked = false;
-    const unsubscribe = onSnapshot(userDocRef, (snap) => {
-      if (snap.exists()) {
-        setUserDocData(snap.data());
-      }
+    const unsubscribe = onSnapshot(userDocRef, { includeMetadataChanges: true }, (snap) => {
+      setUserDocData(snap.exists()?snap.data():null);
       // Every account gets a users/{uid} profile. Decide only on a server
       // snapshot so an empty offline cache never looks like a missing profile.
       if (profileChecked || snap.metadata.fromCache || auth.currentUser?.uid !== userDocRef.id) return;
@@ -255,11 +258,11 @@ export const AuthProvider = ({ children }) => {
           .catch(err => console.warn('Could not complete user profile:', err.message));
       }
     }, (err) => {
-      console.warn('Notice listening to user doc:', err.message);
+      console.warn('Notice listening to user doc:', err.message);setUserDocData(null);
     });
 
     return () => unsubscribe();
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid,setUserDocData]);
 
   // 4. Listen to global user preferences: users/{uid}/preferences/app
   useEffect(() => {
@@ -272,8 +275,8 @@ export const AuthProvider = ({ children }) => {
         setGlobalPreferences(prev => ({ ...prev, ...data }));
         
         // Use the same resolver for local, system, and cloud-selected themes.
-        writeNaturePhasePref(data.nature?.phase || 'auto');
-        writeNatureSeason(data.nature?.season || 'auto');
+        if(data.nature?.phase)writeNaturePhasePref(data.nature.phase);
+        if(data.nature?.season)writeNatureSeason(data.nature.season);
         if (data.theme) applyTheme(data.theme);
       }
     }, (err) => {
@@ -281,7 +284,7 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid,setGlobalPreferences]);
 
   // 5. Listen to per-school user preferences: users/{uid}/schoolPreferences/{schoolId}
   useEffect(() => {
@@ -298,15 +301,15 @@ export const AuthProvider = ({ children }) => {
         setSchoolPreferences({});
       }
     }, (err) => {
-      console.warn('Notice listening to school preferences:', err.message);
+      console.warn('Notice listening to school preferences:', err.message);setSchoolPreferences({});
     });
 
     return () => unsubscribe();
-  }, [currentUser?.uid, activeSchoolId]);
+  }, [currentUser?.uid, activeSchoolId,setSchoolPreferences]);
 
   // 6. Fetch pending invitations for user
   const refreshPendingInvitations = useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser?.uid) return;
     try {
       setInvitationsLoading(true);
       const result = await listMyInvitationsCallable();
@@ -316,7 +319,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setInvitationsLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser?.uid,setPendingInvitations,setInvitationsLoading]);
 
   useEffect(() => {
     if (currentUser?.email) {
@@ -438,7 +441,7 @@ const DEFAULT_SCHOOL_ROLES = [
 
     // 5. Global preferences
     await setDoc(doc(db, 'users', user.uid, 'preferences', 'app'), {
-      theme: localStorage.getItem('lumi-theme-mode') || 'system',
+      theme: storageRead('lumi-theme-mode') || 'system',
       language: 'en'
     }, { merge: true });
 
@@ -451,7 +454,7 @@ const DEFAULT_SCHOOL_ROLES = [
     }, { merge: true });
 
     setActiveSchoolId(schoolId);
-    localStorage.setItem('lumi-active-school-id', schoolId);
+    storageWrite('lumi-active-school-id', schoolId);
 
     return { user, school: { schoolId, schoolName: cleanSchoolName } };
   };
@@ -536,7 +539,7 @@ const DEFAULT_SCHOOL_ROLES = [
     }, { merge: true });
 
     setActiveSchoolId(schoolId);
-    localStorage.setItem('lumi-active-school-id', schoolId);
+    storageWrite('lumi-active-school-id', schoolId);
 
     return { schoolId, schoolName: cleanSchoolName };
   };
@@ -586,7 +589,7 @@ const DEFAULT_SCHOOL_ROLES = [
     }
     await refreshPendingInvitations();
     setActiveSchoolId(schoolId);
-    localStorage.setItem('lumi-active-school-id', schoolId);
+    storageWrite('lumi-active-school-id', schoolId);
     return data;
   };
 
@@ -608,7 +611,7 @@ const DEFAULT_SCHOOL_ROLES = [
       return;
     }
     setActiveSchoolId(schoolId);
-    localStorage.setItem('lumi-active-school-id', schoolId);
+    storageWrite('lumi-active-school-id', schoolId);
   }, [schoolLinks]);
 
   // Update global preferences (users/{uid}/preferences/app)
@@ -636,7 +639,7 @@ const DEFAULT_SCHOOL_ROLES = [
   // Sign out
   const logoutUser = async () => {
     await signOut(auth);
-    localStorage.removeItem('lumi-active-school-id');
+    storageRemove('lumi-active-school-id');
     setActiveSchoolId(null);
   };
 
@@ -686,29 +689,22 @@ const DEFAULT_SCHOOL_ROLES = [
   const updateUserPhoto = async (photoDataUrl) => {
     if (!currentUser?.uid) return;
     
-    // 1. Save to local storage for instant sync across tabs and reloads
+    // Apply the profile and school mirror together before caching success.
+    const uid=currentUser.uid,batch=writeBatch(db);
+    batch.set(doc(db,'users',uid),{photoURL:photoDataUrl||null,updatedAt:serverTimestamp()},{merge:true});
+    if(activeSchoolId)batch.set(doc(db,'schools',activeSchoolId,'members',uid),{photoURL:photoDataUrl||null},{merge:true});
+    await batch.commit();
+    if(auth.currentUser?.uid!==uid)return;
+
+    // Cache only after Firestore confirms the profile and membership writes.
     try {
       if (photoDataUrl) {
-        localStorage.setItem('lumi-user-avatar', photoDataUrl);
+        storageWrite(`lumi-user-avatar-${currentUser.uid}`, photoDataUrl);
       } else {
-        localStorage.removeItem('lumi-user-avatar');
+        storageRemove(`lumi-user-avatar-${currentUser.uid}`);
       }
     } catch (e) {
       console.warn('LocalStorage avatar notice:', e);
-    }
-
-    // 2. Save to Firestore users/{uid}
-    await setDoc(doc(db, 'users', currentUser.uid), {
-      photoURL: photoDataUrl || null,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-
-    // 3. Update member record in active school if exists
-    if (activeSchoolId) {
-      const memberRef = doc(db, 'schools', activeSchoolId, 'members', currentUser.uid);
-      await setDoc(memberRef, {
-        photoURL: photoDataUrl || null
-      }, { merge: true });
     }
 
     // 4. Update Firebase Auth profile (clear if empty, or update if short non-base64 URL)
@@ -734,7 +730,7 @@ const DEFAULT_SCHOOL_ROLES = [
 
   const effectiveUser = useMemo(() => {
     if (!currentUser) return null;
-    const localAvatar = typeof localStorage !== 'undefined' ? localStorage.getItem('lumi-user-avatar') : null;
+    const localAvatar = storageRead(`lumi-user-avatar-${currentUser.uid}`);
     let photoURL = null;
     if (userDocData && userDocData.photoURL !== undefined) {
       photoURL = userDocData.photoURL;

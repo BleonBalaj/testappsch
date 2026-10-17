@@ -1,3 +1,4 @@
+import DialogPortal from '../DialogPortal';
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowDownRight, ArrowUpRight, Check, ChevronLeft, ChevronRight, Copy, Minus, X } from 'lucide-react';
@@ -106,14 +107,26 @@ export function CopyButton({ value, label }) {
 
 /** Standard app dialog shell (see .agents/agents.md §4): one scrolling body. */
 export function Dialog({ title, subtitle, onClose, wide = false, children }) {
+  const dialog = useRef(null);
   useEffect(() => {
+    dialog.current?.focus({ preventScroll: true });
     const onKey = event => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <DialogPortal><div className="modal-overlay" onClick={onClose}>
       <motion.div
+        ref={dialog}
+        tabIndex={-1}
+        onKeyDown={event => {
+          if (event.key !== 'Tab') return;
+          const nodes = [...dialog.current.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]')].filter(node => node.getClientRects().length);
+          const first = nodes[0], last = nodes.at(-1);
+          if (!first) { event.preventDefault(); return; }
+          if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog.current)) { event.preventDefault(); first.focus(); }
+        }}
         className={`modal-content padm-dialog ${wide ? 'padm-dialog-wide' : ''}`}
         role="dialog"
         aria-modal="true"
@@ -132,6 +145,6 @@ export function Dialog({ title, subtitle, onClose, wide = false, children }) {
         </div>
         <div className="modal-body">{children}</div>
       </motion.div>
-    </div>
+    </div></DialogPortal>
   );
 }

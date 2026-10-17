@@ -361,6 +361,33 @@
   color: hsl(var(--muted-foreground));
 }
 
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.22rem 0.65rem;
+  border-radius: 2rem;
+  font-size: 0.73rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.priority-badge.priority-low {
+  color: hsl(var(--mood-happy));
+  background: hsl(var(--mood-happy) / 0.16);
+  border-color: hsl(var(--mood-happy) / 0.32);
+}
+.priority-badge.priority-medium {
+  color: hsl(var(--mood-neutral));
+  background: hsl(var(--mood-neutral) / 0.16);
+  border-color: hsl(var(--mood-neutral) / 0.32);
+}
+.priority-badge.priority-high {
+  color: hsl(var(--mood-sad));
+  background: hsl(var(--mood-sad) / 0.16);
+  border-color: hsl(var(--mood-sad) / 0.32);
+}
+
 .task-notes-preview {
   font-size: 0.75rem;
   color: hsl(var(--muted-foreground));

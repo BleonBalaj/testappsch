@@ -7,6 +7,13 @@ const filters = patch => ({ ...HISTORY_FILTER_DEFAULTS, ...patch });
 const event = (id, minute, extra = {}) => ({ eventId: id, at: new Date(Date.UTC(2026, 9, 15, 21, minute)), actorUid: 'author', actorName: 'Shqipe', actorEmail: 'shqipe@school.test', action: 'update', shareToken: 's', reviewStatus: 'pending', plan: { homework: id, lessonUnit: 'Bashkësitë', subject: 'Matematikë' }, ...extra });
 const rows = [event('last', 30), event('middle', 20, { plan: { homework: 'Krahaso elementet', lessonUnit: 'Bashkësitë', subject: 'Matematikë' } }), event('first', 10), event('shared', 0, { action: 'share', plan: { homework: 'Fillimi', lessonUnit: 'Bashkësitë' } })];
 
+test('one Comments filter includes new messages and earlier feedback/replies without mixing review actions',()=>{
+ const groups=groupHistoryEvents(['comment','feedback','reply','review'].map((action,index)=>event(action,30-index,{action,feedback:{message:'A message'}})));
+ const found=filterHistoryGroups(groups,filters({action:'comment'}));
+ assert.deepEqual(found.map(group=>group.latest.action),['comment','feedback','reply']);
+ assert.equal(filterHistoryGroups(groups,filters({action:'comment',search:'message'})).length,3);
+});
+
 test('history search matches Albanian accents, person/email, translated fields and intermediate changed text', () => {
   const groups = groupHistoryEvents(rows);
   assert.equal(filterHistoryGroups(groups, filters({ search: 'bashkesite' }), { language: 'sq' }).length, 2);

@@ -11,7 +11,7 @@ import { useSchoolData } from '../context/SchoolDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { Avatar } from '../components/Avatar';
 import { SUBJECTS } from '../features/lessonPlans/catalog';
 import { translateCatalogValue } from '../features/lessonPlans/i18n';
@@ -19,6 +19,10 @@ import { courseMatchesReference, isStudentEnrolledInCourse } from '../features/e
 import { classGroupForItem, classGroupsById } from '../features/classGroups';
 import { normalizeSearchText } from '../features/students/studentSearch';
 import { mergeCourseSchedule, scheduleStartMinutes, weeklyScheduleForCourse } from '../features/courseSchedule';
+import { applyDatedCoverage } from '../features/schoolWorkflows/datedSchedule';
+import { WorkflowBadge } from '../components/workflows/WorkflowUI';
+import { useWorkflowCollection } from '../features/schoolWorkflows/cloud';
+import ReadStatus from '../components/ReadStatus';
 import './Schedule.css';
 
 const containerVariants = {
@@ -78,6 +82,7 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot,
           {item.room && <span className="class-room"><MapPin size={12} /> {item.room}</span>}
         </div>
         <h3>{item.subject}</h3>
+        {item.coverage && <div className="workflow-inline"><WorkflowBadge language={isAlbanian ? 'sq' : 'en'} status={item.coverage.status}/><small>{item.coverage.date}{item.coverage.substituteName ? ` · ${isAlbanian ? 'Zëvendësuesi' : 'Cover'}: ${item.coverage.substituteName}` : ''}</small></div>}
         <div className="schedule-footer">
           {(item.isEvent || item.teacher) && <div className="teacher-small">
             <div className="avatar-xs">
@@ -91,7 +96,7 @@ const ScheduleItem = ({ item, delay, onClick, activeTab, userRole, onDeleteSlot,
             </div>
             <span className="teacher-name">{item.isEvent ? (item.attendees == null ? (isAlbanian ? 'Ngjarje e shkollës' : 'School event') : (isAlbanian ? `${item.attendees} Të Regjistruar` : `${item.attendees} Registered`)) : item.teacher}</span>
           </div>}
-          {['admin', 'teacher', 'dept_head'].includes(userRole) && !item.isEvent && item.source !== 'course' && onDeleteSlot && (
+          {['admin', 'teacher', 'dept_head'].includes(userRole) && !item.isEvent && !['course','coverage'].includes(item.source) && onDeleteSlot && (
             <button 
               type="button" 
               className="icon-action-btn delete glass"
@@ -152,11 +157,12 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   const { staffList = [], classesList = [], classesLoaded, classesError, classGroups = [], myStudentRecord } = useSchoolData();
   const { activeSchoolId, currentUser } = useAuth();
   const { t, isAlbanian } = useLanguage();
-  const [savedSchedule, setSavedSchedule] = useState({ schoolId: null, entries: [], error: null, loaded: false });
+  const scheduleData=useWorkflowCollection(activeSchoolId,'scheduleEntries');
+  const savedSchedule=useMemo(()=>({schoolId:activeSchoolId,entries:scheduleData.rows,error:scheduleData.error,loaded:scheduleData.hasLoaded}),[activeSchoolId,scheduleData.rows,scheduleData.error,scheduleData.hasLoaded]);
   const groupsById = useMemo(() => classGroupsById(classGroups), [classGroups]);
   // Every lesson carries its class: the course's linked class, the slot's own
   // link, or an older free-text label matched to a class by grade and section.
-  const scheduleState = useMemo(() => {
+  const weeklyScheduleState = useMemo(() => {
     const merged = mergeCourseSchedule(classesLoaded ? classesList : [], savedSchedule.schoolId === activeSchoolId ? savedSchedule.entries : []);
     const coursesById = new Map(classesList.map(course => [String(course.id), course]));
     return Object.fromEntries(Object.entries(merged).map(([day, items]) => [day, items.map(item => {
@@ -168,23 +174,6 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   }, [classesLoaded, classesList, savedSchedule, activeSchoolId, classGroups, groupsById]);
   const scheduleError = savedSchedule.schoolId === activeSchoolId ? savedSchedule.error : null;
   const scheduleLoading = !classesLoaded || (activeSchoolId && (savedSchedule.schoolId !== activeSchoolId || !savedSchedule.loaded));
-
-  useEffect(() => {
-    if (!activeSchoolId) return undefined;
-    let active = true;
-
-    const entriesCol = collection(db, 'schools', activeSchoolId, 'scheduleEntries');
-    const unsubscribe = onSnapshot(entriesCol, (snapshot) => {
-      if (!active) return;
-      setSavedSchedule({ schoolId: activeSchoolId, entries: snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), error: null, loaded: true });
-    }, (err) => {
-      if (!active) return;
-      console.warn('Notice listening to schedule entries:', err.message);
-      setSavedSchedule({ schoolId: activeSchoolId, entries: [], error: err, loaded: true });
-    });
-
-    return () => { active = false; unsubscribe(); };
-  }, [activeSchoolId]);
 
   // The filter a page opened this timetable with is applied once at mount.
   useEffect(() => {
@@ -253,6 +242,9 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
   const days = DAYS;
 
   const weekMonday = useMemo(() => mondayForWeek(weekOffset), [weekOffset]);
+  const weekStart = dateForDay(weekMonday,'Monday'), weekEnd = dateForDay(weekMonday,'Friday');
+  const datedState=useWorkflowCollection(activeSchoolId,'lessonCoverage',[['date','>=',weekStart],['date','<=',weekEnd]]);
+  const scheduleState = useMemo(() => applyDatedCoverage(weeklyScheduleState,datedState.rows,Object.fromEntries(DAYS.map(day=>[day,dateForDay(weekMonday,day)]))), [weeklyScheduleState,datedState.rows,weekMonday]);
 
   // A selected weekday is resolved against the displayed week, including week navigation.
   const weekDateString = useMemo(() => {
@@ -291,6 +283,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
     if (item.isEvent) return true;
 
     if (userRole === 'teacher' || userRole === 'dept_head') {
+      if (item.coverage?.substituteUid === currentUser?.uid) return true;
       // 1. Direct creator / teacher ID match
       if (item.createdByUid && item.createdByUid === currentUser?.uid) return true;
       if (item.teacherId && (item.teacherId === currentUser?.uid || (currentStaff && (item.teacherId === currentStaff.id || item.teacherId === currentStaff.staffId)))) return true;
@@ -418,6 +411,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         (item.subject || '').toLowerCase().includes(query) ||
         (item.room && item.room.toLowerCase().includes(query)) ||
         (item.teacher && item.teacher.toLowerCase().includes(query)) ||
+        (item.coverage?.substituteName || '').toLowerCase().includes(query) ||
         (item.classLabel && item.classLabel.toLowerCase().includes(query));
 
       const matchesTeacher = teacherFilter === 'all' || item.teacher === teacherFilter;
@@ -636,12 +630,14 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         </div>
       </motion.header>
 
+      <ReadStatus state={scheduleData} language={isAlbanian?'sq':'en'}/><ReadStatus state={datedState} language={isAlbanian?'sq':'en'} loadingText={isAlbanian?'Duke ngarkuar ndryshimet sipas datës…':'Loading dated changes…'}/>{(scheduleError||datedState.error)&&<button type="button" className="btn-secondary" onClick={()=>{scheduleData.retry();datedState.retry();}}>{isAlbanian?'Provo përsëri':'Try again'}</button>}
       {scheduleError && <div role="alert" className="schedule-source-notice glass">
         {isAlbanian ? 'Orët e ruajtura veçmas nuk mund të ngarkohen. Orari i lëndëve vazhdon të shfaqet.' : 'Separate schedule entries could not be loaded. Course timetable entries are still shown.'}
       </div>}
       {classesError && <div role="alert" className="schedule-source-notice glass">
         {isAlbanian ? 'Lëndët nuk mund të ngarkohen për këtë shkollë. Kontrolloni lejet e qasjes.' : 'Courses could not be loaded for this school. Check course access permissions.'}
       </div>}
+      {datedState.error && <div role="alert" className="schedule-source-notice glass">{isAlbanian ? 'Ndryshimet sipas datës nuk mund të ngarkohen. Orari javor më poshtë mund të mos pasqyrojë zëvendësimet.' : 'Dated changes could not be loaded. The weekly timetable below may not reflect substitute arrangements.'}</div>}
 
       {unscheduledCourses.length > 0 && <section className="schedule-unscheduled glass">
         <div>
@@ -799,7 +795,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         </div>
 
         <div className="schedule-list">
-          {scheduleLoading ? <div className="empty-schedule-card glass"><p>{isAlbanian ? 'Po ngarkohet orari...' : 'Loading schedule...'}</p></div> : currentSchedule.length === 0 ? (
+          {scheduleLoading||datedState.loading||((scheduleData.refreshing||datedState.refreshing)&&currentSchedule.length===0) ? null : currentSchedule.length === 0&&!scheduleError&&!classesError&&!datedState.error ? (
             <div className="empty-schedule-card glass">
               <div className="empty-icon-wrap glass">
                 <Calendar size={32} />
@@ -1065,7 +1061,7 @@ const Schedule = ({ userRole = 'student', lessonLanguage = 'en', onCreateLessonP
         onClose={() => setIsDetailOpen(false)} 
         classInfo={selectedClass} 
         userRole={userRole}
-        onCreateLessonPlan={selectedClass && selectedClass.classLabel && lessonSubjectFor(selectedClass) && (userRole === 'admin' || (['teacher', 'dept_head'].includes(userRole) && isItemInMySchedule(selectedClass))) ? handleCreateLessonPlan : undefined}
+        onCreateLessonPlan={selectedClass?.coverage?.status !== 'cancelled' && selectedClass && selectedClass.classLabel && lessonSubjectFor(selectedClass) && (userRole === 'admin' || (['teacher', 'dept_head'].includes(userRole) && isItemInMySchedule(selectedClass))) ? handleCreateLessonPlan : undefined}
         lessonLanguage={lessonLanguage}
       />
     </motion.div>
